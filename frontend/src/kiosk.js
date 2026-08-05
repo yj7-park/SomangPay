@@ -1021,11 +1021,41 @@ function verifyKioskAdminPin() {
   }
 }
 
+// 화면 방향 강제 전환 (Screen Orientation API) - 안드로이드에서 홈 화면에 설치된 앱(PWA)
+// 상태일 때만 동작함. 일반 브라우저 탭에서는 lock()이 지원되지 않아 실패할 수 있음.
+function setKioskOrientation(mode) {
+  if (!screen.orientation || typeof screen.orientation.lock !== "function") {
+    appendDebugLog("[화면 방향] 이 환경에서는 화면 방향 고정을 지원하지 않습니다.", "WARN");
+    alert("화면 방향 전환은 홈 화면에 설치된 앱 상태에서만 지원됩니다.");
+    return;
+  }
+
+  screen.orientation.lock(mode).then(() => {
+    appendDebugLog(`[화면 방향] ${mode === "portrait" ? "세로" : "가로"} 모드로 전환되었습니다.`, "SUCCESS");
+    updateKioskOrientationButtonsUI(mode);
+  }).catch(err => {
+    appendDebugLog(`[화면 방향] 전환 실패: ${err.name} - ${err.message}`, "ERROR");
+    alert(`화면 방향 전환에 실패했습니다. (${err.name})\n홈 화면에 설치된 앱 상태인지 확인해주세요.`);
+  });
+}
+
+function updateKioskOrientationButtonsUI(activeMode) {
+  const portraitBtn = document.getElementById("k-orientation-portrait-btn");
+  const landscapeBtn = document.getElementById("k-orientation-landscape-btn");
+  [[portraitBtn, "portrait"], [landscapeBtn, "landscape"]].forEach(([btn, mode]) => {
+    if (!btn) return;
+    const active = mode === activeMode;
+    btn.style.background = active ? "var(--accent-cyan)" : "rgba(255,255,255,0.1)";
+    btn.style.color = active ? "#001318" : "#fff";
+  });
+}
+
 function openKioskAdminModal() {
   kioskShowModal("kiosk-admin-modal");
   renderKioskAdminProducts();
   updateCameraConcurrentToggleAvailability();
   updateKioskTestModeUI();
+  updateKioskOrientationButtonsUI(screen.orientation ? screen.orientation.type.split("-")[0] : null);
 }
 
 function closeKioskAdminModal() {
@@ -1434,6 +1464,16 @@ async function startKioskNfcScan(silent = false) {
 
   const btnText = document.getElementById("nfc-status-btn-text");
   const btnElem = document.getElementById("nfc-activate-btn");
+  let scanTimeoutId = null;
+
+  // "⏳ NFC 권한 요청 중..." 문구에 영원히 멈춰있지 않도록, 실패/타임아웃 시 항상 대기 버튼으로 복구
+  const resetNfcButton = () => {
+    if (btnText) btnText.innerText = "📲 NFC 센서 활성화";
+    if (btnElem) {
+      btnElem.style.background = "rgba(16,185,129,0.2)";
+      btnElem.style.borderColor = "#10b981";
+    }
+  };
 
   try {
     kioskNdefReader = new NDEFReader();
@@ -1506,7 +1546,17 @@ async function startKioskNfcScan(silent = false) {
       triggerKioskPayment(rawHceToken);
     });
 
-    await kioskNdefReader.scan({ signal: kioskNfcAbortController.signal });
+    // scan()이 하드웨어 미지원이나 권한 대화상자 먹통 등으로 영영 응답하지 않을 경우를 대비한 안전장치.
+    // 8초 안에 성공/실패 응답이 없으면 타임아웃으로 간주하고 버튼을 복구한다.
+    const timeoutPromise = new Promise((_, reject) => {
+      scanTimeoutId = setTimeout(() => reject(Object.assign(new Error("NFC 권한 요청 응답 시간 초과"), { name: "TimeoutError" })), 8000);
+    });
+
+    await Promise.race([
+      kioskNdefReader.scan({ signal: kioskNfcAbortController.signal }),
+      timeoutPromise
+    ]);
+    clearTimeout(scanTimeoutId);
 
     currentReaderMode = "WEB_NFC";
     updateCameraConcurrentToggleAvailability();
@@ -1517,21 +1567,29 @@ async function startKioskNfcScan(silent = false) {
       btnElem.style.borderColor = "#10b981";
     }
   } catch (err) {
+    clearTimeout(scanTimeoutId);
     kioskNdefReader = null;
     kioskNfcAbortController = null;
     if (err.name === 'AbortError') {
       // 카메라 사용을 위해 의도적으로 중단시킨 경우 - 에러로 취급하지 않음
       appendDebugLog("[Web NFC] 카메라 사용을 위해 일시 중단되었습니다.", "INFO");
+      resetNfcButton();
+    } else if (err.name === 'TimeoutError') {
+      appendDebugLog("[Web NFC] NFC 권한 요청이 응답 없이 시간 초과되었습니다. 기기의 NFC 지원 여부/설정을 확인해주세요.", "ERROR");
+      if (!silent) alert("NFC 권한 요청이 응답하지 않았습니다.\n\n기기에 NFC가 없거나 꺼져 있을 수 있습니다.\n설정 > 연결 항목에서 NFC를 켠 뒤 다시 시도해주세요.");
+      resetNfcButton();
     } else if (err.name === 'NotAllowedError' || String(err).includes('permission')) {
-      // 자동 시작 시도(silent=true)에서는 조용히 실패 → 버튼 대기 상태 유지
+      // 자동 시작 시도(silent=true)에서는 조용히 실패 → 버튼 대기 상태로 복구만 하고 알림 없음
       if (!silent) {
         appendDebugLog(`[Web NFC] NFC 권한이 거부되었습니다. 버튼을 눌러 권한을 허용해 주세요.`, "WARN");
       } else {
         appendDebugLog("[Web NFC] 상단 [📲 NFC 센서 권한 활성화] 버튼을 터치하여 NFC를 가동하세요.", "INFO");
       }
+      resetNfcButton();
     } else {
       appendDebugLog(`[Web NFC] 오류: ${err}`, "ERROR");
       console.error("NFC scan error:", err);
+      resetNfcButton();
     }
   }
 }

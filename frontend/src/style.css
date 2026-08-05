@@ -551,9 +551,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
    leaving large stretches of empty space below the compact mobile-sized layout. */
 @media screen and (min-width: 768px) and (min-height: 700px) {
   /* 스타일시트 전반이 rem/clamp(rem,vw,rem) 단위를 쓰고 있어서, 루트 폰트 크기를 키우면
-     개별 요소를 일일이 손보지 않아도 전체 글씨가 비례적으로 커진다. */
+     개별 요소를 일일이 손보지 않아도 전체 글씨가 비례적으로 커진다.
+     22px 고정값은 1920px 폭 태블릿 기준으로 잡은 값이라 1280px처럼 더 좁은 가로 태블릿에서는
+     글자가 상대적으로 너무 커서 잘리거나 줄바꿈이 생긴다 - 폭에 비례해 17~22px 사이로 스케일. */
   html {
-    font-size: 22px;
+    font-size: clamp(17px, 1.15vw, 22px);
   }
 
   .kiosk-body {
@@ -687,6 +689,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .recent-payments-title {
@@ -811,11 +814,27 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   #kiosk-checkout-camera-dock {
     flex: 1;
     min-height: 0;
+  }
+
+  /* 세로 모드는 좌우 2분할 때문에 카메라 컬럼 폭이 가로 모드보다 훨씬 좁아서,
+     테스트 모드 시뮬레이션 버튼 3개를 가로로 나란히 두면 글자가 넘친다 - 세로로 쌓는다. */
+  #kiosk-test-mode-btn-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 최근 결제 내역 한 줄 항목도 좁은 컬럼 기준으로 살짝 축소 (가로 모드 700px+ 확대 폰트 기준 대비) */
+  .recent-payment-row {
+    font-size: 0.95rem !important;
+  }
+
+  .recent-payment-amount {
+    font-size: 1.05rem !important;
   }
 }
 

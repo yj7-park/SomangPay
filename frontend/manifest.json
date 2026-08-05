@@ -4,7 +4,7 @@
   "description": "NFC 및 교인증 QR 코드 기반 무인 결제 PWA 웹앱",
   "start_url": "/kiosk",
   "display": "fullscreen",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#090d16",
   "theme_color": "#06b6d4",
   "icons": [
