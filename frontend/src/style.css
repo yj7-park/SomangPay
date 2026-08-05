@@ -1,0 +1,717 @@
+/* ==========================================================================
+   SomangPay Zero-Clipping Responsive Design System (v7.0 Final)
+   Ensures absolute zero visual clipping or truncation on all device viewports
+   ========================================================================== */
+
+/* Noto Sans KR을 로컬에서 서빙 (외부 CDN 의존 제거 - 키오스크 네트워크 불안정/차단 대비) */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/NotoSansKR-400.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/NotoSansKR-500.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/NotoSansKR-700.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('./fonts/NotoSansKR-900.ttf') format('truetype');
+}
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
+
+:root {
+  --bg-dark: #070a12;
+  --bg-card: rgba(15, 23, 42, 0.88);
+  --bg-card-hover: rgba(30, 41, 59, 0.95);
+  --border-glass: rgba(255, 255, 255, 0.14);
+  --border-active: #06b6d4;
+
+  --accent-cyan: #06b6d4;
+  --accent-cyan-glow: rgba(6, 182, 212, 0.35);
+  --accent-blue: #3b82f6;
+  --accent-indigo: #6366f1;
+  --accent-senior: #f59e0b;
+  --accent-success: #10b981;
+  --accent-danger: #ef4444;
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --font-family: 'Noto Sans KR', 'Outfit', system-ui, -apple-system, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+
+  --shadow-subtle: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --backdrop-blur: blur(16px);
+}
+
+/* Global Reset & Protection against Overflow */
+*, *::before, *::after {
+  box-sizing: border-box !important;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  line-height: 1.4;
+  overflow-x: hidden !important; /* Block horizontal scrollbars */
+  word-break: keep-all !important; /* Keep Korean words intact */
+  word-wrap: break-word !important;
+}
+
+/* Flexible App Header - Wraps gracefully on mobile */
+.app-header, .kiosk-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  padding: clamp(0.4rem, 1.2vh, 0.85rem) clamp(0.5rem, 1.5vw, 1.2rem);
+  padding-top: max(clamp(0.4rem, 1.2vh, 0.85rem), env(safe-area-inset-top));
+  background: var(--bg-card);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border-bottom: 1px solid var(--border-glass);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Outfit', var(--font-family);
+  font-size: clamp(1rem, 2.5vw, 1.35rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #38bdf8, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand-logo .logo-icon {
+  font-size: clamp(1.1rem, 2.8vw, 1.5rem);
+  background: var(--accent-cyan-glow);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent-cyan);
+}
+
+.nav-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.2rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-glass);
+}
+
+.nav-item {
+  padding: 0.35rem 0.75rem;
+  font-size: clamp(0.72rem, 1.2vw, 0.82rem);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.nav-item.active, .nav-item:hover {
+  color: #fff;
+  background: var(--accent-cyan);
+}
+
+/* Layout Containers */
+.container {
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: clamp(0.5rem, 1.5vw, 1.2rem);
+}
+
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: clamp(0.85rem, 2vw, 1.4rem);
+  box-shadow: var(--shadow-subtle);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Global Mobile Touch & Button Protection against Event Blocking */
+button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .btn-kakaopay, select, input, .nav-item {
+  touch-action: manipulation !important; /* Eliminate 300ms touch delay */
+  -webkit-tap-highlight-color: rgba(6, 182, 212, 0.3) !important;
+  pointer-events: auto !important; /* Force click/touchability */
+  cursor: pointer !important;
+  position: relative;
+  z-index: 20 !important;
+}
+
+button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .btn-kakaopay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: clamp(0.5rem, 1.2vh, 0.75rem) clamp(0.75rem, 1.5vw, 1.1rem);
+  font-size: clamp(0.8rem, 1.2vw, 0.92rem);
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo));
+  border: none;
+  border-radius: var(--radius-md);
+  white-space: nowrap !important; /* Never break button text into lines */
+  word-break: keep-all !important;
+  max-width: 100%;
+  min-height: 42px;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #06b6d4, #3b82f6);
+}
+
+.btn-senior {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.form-control {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: clamp(0.85rem, 1.2vw, 0.92rem);
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  outline: none;
+  min-height: 42px;
+}
+
+/* Zero-Clipping Modal Dialog System */
+.modal-overlay, [role="dialog"] {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: clamp(0.5rem, 2vw, 1rem);
+}
+
+.modal-overlay.active {
+  display: flex;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-content, .modal-box-large {
+  background: #0f172a;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  width: min(94vw, 480px) !important;
+  max-width: 100% !important;
+  max-height: 86vh !important;
+  max-height: 86dvh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+.modal-body {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  padding-right: 0.25rem;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* Responsive Grid Layouts */
+.grid-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+/* Screen Size Media Queries */
+@media screen and (max-width: 480px) {
+  .grid-menu {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .nav-pills {
+    display: none; /* Hide top pills on tiny portrait screens to save header space */
+  }
+  .btn-action {
+    width: 100%;
+  }
+}
+
+@media screen and (min-width: 768px) {
+  .kiosk-body {
+    display: grid !important;
+    grid-template-columns: 1.6fr 1fr !important;
+    height: calc(100vh - 56px) !important;
+    overflow: hidden !important;
+    gap: 0.85rem !important;
+    padding: 0.85rem !important;
+  }
+  .kiosk-menu-section, .kiosk-checkout-section {
+    height: 100% !important;
+    overflow-y: auto !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Galaxy S25 Ultra Landscape Mode (Low Height) Optimization */
+@media screen and (min-width: 768px) and (max-height: 500px) {
+  .kiosk-body {
+    height: calc(100vh - 46px) !important;
+    padding: 0.5rem !important;
+    gap: 0.6rem !important;
+  }
+  .kiosk-checkout-section {
+    padding: 0.75rem !important;
+    overflow-y: hidden !important;
+  }
+  .section-title {
+    font-size: 0.95rem !important;
+    margin-bottom: 0.4rem !important;
+  }
+}
+
+/* Payment Success Screen Edge Green Glow Animation */
+@keyframes greenEdgePulse {
+  0% { box-shadow: inset 0 0 0px rgba(16, 185, 129, 0); }
+  35% { box-shadow: inset 0 0 80px rgba(16, 185, 129, 0.95), 0 0 40px rgba(16, 185, 129, 0.8); }
+  100% { box-shadow: inset 0 0 0px rgba(16, 185, 129, 0); }
+}
+.success-glow-active {
+  animation: greenEdgePulse 1.4s ease-out forwards;
+}
+
+/* Unregistered Card / Error Edge Red Glow Animation */
+@keyframes redEdgePulse {
+  0% { box-shadow: inset 0 0 0px rgba(239, 68, 68, 0); }
+  35% { box-shadow: inset 0 0 80px rgba(239, 68, 68, 0.95), 0 0 40px rgba(239, 68, 68, 0.8); }
+  100% { box-shadow: inset 0 0 0px rgba(239, 68, 68, 0); }
+}
+.error-glow-active {
+  animation: redEdgePulse 1.4s ease-out forwards;
+}
+
+/* Insufficient Balance Edge Yellow Glow Animation */
+@keyframes yellowEdgePulse {
+  0% { box-shadow: inset 0 0 0px rgba(245, 158, 11, 0); }
+  35% { box-shadow: inset 0 0 80px rgba(245, 158, 11, 0.95), 0 0 40px rgba(245, 158, 11, 0.8); }
+  100% { box-shadow: inset 0 0 0px rgba(245, 158, 11, 0); }
+}
+.warning-glow-active {
+  animation: yellowEdgePulse 1.4s ease-out forwards;
+}
+
+.kiosk-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+}
+
+.kiosk-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  overflow-y: auto;
+}
+
+/* Redesigned Section Title Wording Style */
+.section-title {
+  font-size: 1.15rem !important;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 0.75rem;
+  border-left: 3px solid var(--accent-cyan);
+  padding-left: 0.5rem;
+  line-height: 1.2;
+}
+
+/* Checkout cart and scanning boxes layout styling */
+.kiosk-checkout-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.85rem !important;
+  padding: 1rem !important;
+  justify-content: flex-start !important;
+}
+
+.checkout-cart-box {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  border: 1px solid var(--border-glass);
+}
+
+.checkout-scan-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.desc-text-senior {
+  font-size: 0.82rem !important;
+  color: var(--accent-senior) !important;
+  margin-top: 0.35rem;
+  text-align: right;
+  font-weight: 500;
+}
+
+.scanner-title {
+  font-size: 1.18rem !important;
+  color: #fff !important;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.desc-text {
+  color: var(--text-muted) !important;
+  font-size: 0.85rem !important;
+  margin-bottom: 0.75rem;
+}
+
+.camera-scanner-panel {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(6, 182, 212, 0.25) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.65rem !important;
+  text-align: center;
+}
+
+.scanner-live-badge {
+  font-size: 0.78rem;
+  color: #67e8f9;
+  font-weight: 700;
+  background: rgba(6, 182, 212, 0.12);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.status-msg-text {
+  font-size: 0.78rem !important;
+  color: var(--text-dim) !important;
+  margin-top: 0.35rem;
+}
+
+/* Admin Scan Grid - Vertical stack on mobile to prevent touch element overlap */
+.admin-scan-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media screen and (min-width: 768px) {
+  .admin-scan-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem;
+  }
+}
+
+/* 전면 카메라 미러 모드 - .mirror-mode 클래스가 붙은 video 요소만 좌우반전 */
+.mirror-mode {
+  transform: scaleX(-1);
+  -webkit-transform: scaleX(-1);
+}
+
+/* Kiosk Menu Card Aspect Ratio & Compact Button Fix */
+.menu-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  gap: 0.75rem !important;
+}
+
+.menu-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 0.85rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  height: auto !important;
+  min-height: 145px !important;
+  max-height: 200px !important;
+  box-shadow: var(--shadow-subtle);
+}
+
+.menu-card .menu-name {
+  font-size: 0.95rem !important;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+  color: #fff;
+}
+
+.menu-card .menu-price {
+  font-size: 0.82rem !important;
+  color: var(--text-muted);
+}
+
+.menu-card .menu-price-senior {
+  font-size: 0.82rem !important;
+  color: var(--accent-senior);
+  font-weight: 500;
+}
+
+.touch-qty-box {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  background: rgba(0, 0, 0, 0.4) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 0.2rem !important;
+  margin-top: 0.6rem !important;
+}
+
+.touch-qty-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  font-size: 1.1rem !important;
+  font-weight: bold !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Large Kiosk Tablet Landscape Optimization (e.g. Galaxy Tab A11+ SM-X236, 1920x1200)
+   Mobile/short-landscape layouts above are untouched by this block (min-height gate excludes them).
+   Placed at end of file so it wins cascade ties (same specificity + !important) against the
+   unconditional base rules defined earlier (e.g. .kiosk-checkout-section's justify-content).
+   Spreads checkout content top-to-bottom and enlarges touch targets/typography instead of
+   leaving large stretches of empty space below the compact mobile-sized layout. */
+@media screen and (min-width: 768px) and (min-height: 700px) {
+  /* 스타일시트 전반이 rem/clamp(rem,vw,rem) 단위를 쓰고 있어서, 루트 폰트 크기를 키우면
+     개별 요소를 일일이 손보지 않아도 전체 글씨가 비례적으로 커진다. */
+  html {
+    font-size: 22px;
+  }
+
+  .kiosk-body {
+    grid-template-columns: 1.5fr 1fr !important;
+    gap: 1.5rem !important;
+    padding: 1.75rem !important;
+  }
+
+  .kiosk-menu-section .section-title,
+  .kiosk-checkout-section .section-title {
+    font-size: 1.75rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  /* 메뉴 그리드 영역 자체가 타이틀 아래 남는 세로 공간을 전부 차지하도록 늘림.
+     실제 열/행 개수(grid-template-columns/rows)는 renderKioskProducts()가 상품 개수에 따라
+     JS에서 인라인 !important로 직접 지정한다 (applyKioskMenuGridLayout, kiosk.js). */
+  #kiosk-menu-content-wrap {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+  }
+
+  .menu-grid {
+    gap: 1.25rem !important;
+    flex: 1;
+  }
+
+  /* 카드가 그리드 셀 전체(가로/세로)를 꽉 채우도록 - 기존 height:auto/max-height 캡을 해제 */
+  .menu-card {
+    height: 100% !important;
+    max-height: none !important;
+    padding: 1.4rem !important;
+  }
+
+  .menu-card .menu-name {
+    font-size: 1.5rem !important;
+    margin-bottom: 0.6rem !important;
+  }
+
+  .menu-card .menu-price,
+  .menu-card .menu-price-senior {
+    font-size: 1.2rem !important;
+  }
+
+  .touch-qty-box {
+    padding: 0.4rem !important;
+  }
+
+  .touch-qty-btn {
+    width: 68px !important;
+    height: 68px !important;
+    min-height: 68px !important;
+    font-size: 2.1rem !important;
+  }
+
+  .touch-qty-val {
+    font-size: 1.7rem !important;
+    font-weight: 800;
+  }
+
+  /* 결제 금액 / 카메라 스캔 / 최근 결제 내역 3분할 — 세 블록 모두 flex:1로 균등 배분.
+     기존 .kiosk-checkout-section 규칙의 justify-content:flex-start는 더 이상 필요 없음
+     (flex:1 자식들이 이미 전체 높이를 나눠 채움). */
+  .kiosk-checkout-section {
+    justify-content: flex-start !important;
+    padding: 1.75rem !important;
+    gap: 1.25rem !important;
+  }
+
+  .kiosk-checkout-section > #kiosk-checkout-amount-block,
+  .kiosk-checkout-section > #kiosk-checkout-camera-slot,
+  .kiosk-checkout-section > #kiosk-checkout-recent-block {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .checkout-cart-box {
+    padding: 1.5rem !important;
+  }
+
+  #kiosk-total-price {
+    font-size: 3rem !important;
+  }
+
+  /* 결제 금액 블록: 제목 아래 그리드 영역이 남는 세로 공간을 채우도록 */
+  #kiosk-checkout-amount-grid {
+    flex: 1;
+    min-height: 0;
+  }
+
+  #cart-items-container {
+    max-height: none !important;
+    flex: 1;
+  }
+
+  /* 카메라 슬롯: 버튼/상태 텍스트는 제자리, 도킹 포인트가 남는 공간을 채워 실제 영상이 보이는 영역이 됨 */
+  #kiosk-checkout-camera-dock {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  #camera-toggle-btn {
+    min-height: 76px !important;
+    font-size: 1.5rem !important;
+    border-radius: 16px !important;
+  }
+
+  /* 최근 결제 내역 블록: 컨테이너 자체를 flex:1로 늘리고 내부 리스트가 그 공간을 채움 */
+  #kiosk-checkout-recent-block {
+    display: flex !important;
+  }
+
+  #recent-payments-container {
+    padding: 1.2rem 1.4rem !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #recent-payments-list {
+    max-height: none !important;
+    flex: 1;
+  }
+
+  .recent-payments-title {
+    font-size: 1.25rem !important;
+  }
+
+  .recent-payments-subtitle {
+    font-size: 1rem !important;
+  }
+
+  .recent-payment-row {
+    font-size: 1.15rem !important;
+    padding: 0.6rem 0.8rem !important;
+    gap: 0.6rem;
+  }
+
+  .recent-payment-time {
+    font-size: 1rem !important;
+  }
+
+  .recent-payment-name {
+    font-size: 1.2rem !important;
+  }
+
+  .recent-payment-badge {
+    font-size: 1rem !important;
+    padding: 0.15rem 0.6rem !important;
+  }
+
+  .recent-payment-amount {
+    font-size: 1.4rem !important;
+  }
+
+  .recent-payment-empty {
+    font-size: 1.2rem !important;
+  }
+}
+

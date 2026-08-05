@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>소망페이 (SomangPay) - 종합 NFC 페이먼트 서비스 포털</title>
+  <link rel="stylesheet" href="src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+
+  <div class="glass-container" style="max-width: 900px; width: 90%; padding: 3rem; text-align: center;">
+    <div style="font-size: 4rem; margin-bottom: 0.5rem;">💳</div>
+    <h1 style="font-size: 2.8rem; font-weight: 900; background: linear-gradient(135deg, #a5b4fc, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;">
+      소망페이 (SomangPay)
+    </h1>
+    <p style="font-size: 1.2rem; color: var(--text-muted); margin-bottom: 2.5rem;">
+      아동, 노인을 위한 NFC 충전 & 무인 결제 서비스 포털
+    </p>
+
+    <!-- 3 Independent Service Portal Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; text-align: left;">
+      
+      <!-- Kiosk Card -->
+      <div class="menu-card" style="min-height: 220px; padding: 1.8rem;" onclick="location.href='/kiosk'">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🏪</div>
+        <h2 style="font-size: 1.4rem; color: var(--accent-cyan); margin-bottom: 0.4rem;">무인 결제 단말기</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+          안드로이드 태블릿 풀스크린 전용 UI. 메뉴 선택, 시니어 할인가 자동 차감, NFC 태깅 결제.
+        </p>
+
+        <button class="btn-action btn-emerald" style="margin-top: auto;">단말기 실행 (/kiosk)</button>
+      </div>
+
+      <!-- Mobile User Card -->
+      <div class="menu-card" style="min-height: 220px; padding: 1.8rem;" onclick="location.href='/user'">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📱</div>
+        <h2 style="font-size: 1.4rem; color: var(--primary); margin-bottom: 0.4rem;">개인 사용자 웹</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+          스마트폰 전용 모바일 웹. 보유 잔액 확인, 토스/카카오페이 1초 간편 충전, NFC 카드 등록.
+        </p>
+
+        <button class="btn-action btn-primary" style="margin-top: auto;">모바일 웹 접속 (/user)</button>
+      </div>
+
+      <!-- Admin Dashboard Card -->
+      <div class="menu-card" style="min-height: 220px; padding: 1.8rem;" onclick="location.href='/admin'">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⚙️</div>
+        <h2 style="font-size: 1.4rem; color: var(--accent-amber); margin-bottom: 0.4rem;">통합 관리자 대시보드</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+          어린이/노인 회원 대리 가입, 수동 직권 충전, 단말기 메뉴 세팅, 농협 입금 매칭 시뮬레이터.
+        </p>
+
+        <button class="btn-action" style="margin-top: auto; background: var(--accent-amber); color: #000; font-weight: bold;">관리자 모드 (/admin)</button>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>

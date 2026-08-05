@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: somangpay-db
+    environment:
+      - POSTGRES_USER=somanguser
+      - POSTGRES_PASSWORD=somangpass
+      - POSTGRES_DB=somangdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: somangpay-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://somanguser:somangpass@db:5432/somangdb
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: somangpay-frontend
+    ports:
+      - "3000:3000"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_data:
