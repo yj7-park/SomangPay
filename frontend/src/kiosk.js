@@ -39,6 +39,29 @@ function shouldPauseReaderForCamera() {
   return isInternalReaderActive() || !allowCameraReaderConcurrent;
 }
 
+// "QR 스캐너 항상 켜기" 설정 On/Off에 맞춰 수동 토글 버튼 표시 여부와 카메라 구동 상태를 즉시 반영
+function applyAlwaysOnCameraMode() {
+  const toggleBtn = document.getElementById("camera-toggle-btn");
+  if (toggleBtn) toggleBtn.style.display = allowCameraReaderConcurrent ? "none" : "inline-flex";
+
+  if (allowCameraReaderConcurrent) {
+    maybeAutoStartAlwaysOnCamera();
+  } else if (isCameraScanning) {
+    stopCameraScanner();
+  }
+}
+
+// 상시 켜기 모드에서 결제/모달 처리로 잠시 꺼졌던 카메라를 다시 구동 (다른 모달이 열려있으면 대기)
+function maybeAutoStartAlwaysOnCamera() {
+  if (!allowCameraReaderConcurrent || isCameraScanning || isKioskPaymentProcessing) return;
+  const blockingModalIds = ["repeat-pay-modal", "kiosk-admin-modal", "kiosk-pin-modal"];
+  for (const id of blockingModalIds) {
+    const el = document.getElementById(id);
+    if (el && (el.style.display === "flex" || el.classList.contains("active"))) return;
+  }
+  startCameraScanner(true);
+}
+
 // 테스트 모드: 카메라/리더 하드웨어 없이 결제 흐름을 시연/테스트하기 위한 기기 로컬 설정
 // (서버에 저장하지 않음 - 이 브라우저/기기에서만 유지되는 localStorage 값)
 let kioskTestMode = false;
@@ -52,6 +75,7 @@ function toggleKioskTestMode(enabled) {
   kioskTestMode = !!enabled;
   localStorage.setItem("somang_kiosk_test_mode", kioskTestMode ? "true" : "false");
   updateKioskTestModeUI();
+  updateCameraConcurrentToggleAvailability();
   appendDebugLog(`🧪 [테스트 모드] ${kioskTestMode ? "활성화" : "비활성화"}됨`, kioskTestMode ? "WARN" : "INFO");
 }
 
@@ -237,7 +261,7 @@ async function startCameraScanner(silent = false, facingMode) {
     isCameraScanning = true;
     kioskFacingMode = fm;
 
-    // 🔴 버튼 상태를 '✕ QR 스캔 취소' 스타일로 변경
+    // 🔴 버튼 상태를 '✕ QR 스캔 취소' 스타일로 변경 (상시 켜기 모드에서는 버튼 자체가 숨겨져 있음)
     if (toggleBtn) {
       toggleBtn.innerText = "✕ QR 스캔 취소";
       toggleBtn.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
@@ -247,29 +271,34 @@ async function startCameraScanner(silent = false, facingMode) {
     appendDebugLog("📷 [웹캠 스캐너] 웹 카메라 구동 완료. 좌측 메인 뷰포트 전체에 QR 스캐너 표시 중.");
 
     // ⏱️ 30초간 미입력 시 자동 취소 타이머 및 카운트다운 생성
+    // "QR 스캐너 항상 켜기" 모드에서는 취소 개념이 없으므로 타이머를 만들지 않고 계속 켜둔다.
     clearInterval(window.kioskCameraInterval);
-    let secondsLeft = 30;
-    if (statusText) {
-      statusText.innerText = `${secondsLeft}초 후 자동 취소`;
-    }
-
-    window.kioskCameraInterval = setInterval(() => {
-      secondsLeft--;
+    if (!allowCameraReaderConcurrent) {
+      let secondsLeft = 30;
       if (statusText) {
         statusText.innerText = `${secondsLeft}초 후 자동 취소`;
       }
-      if (secondsLeft <= 0) {
-        clearInterval(window.kioskCameraInterval);
-        appendDebugLog("📷 [웹캠 스캐너] 30초 경과로 QR 스캐너를 자동 취소하고 메뉴 선택 화면으로 복원합니다.");
-        stopCameraScanner();
-      }
-    }, 1000);
+
+      window.kioskCameraInterval = setInterval(() => {
+        secondsLeft--;
+        if (statusText) {
+          statusText.innerText = `${secondsLeft}초 후 자동 취소`;
+        }
+        if (secondsLeft <= 0) {
+          clearInterval(window.kioskCameraInterval);
+          appendDebugLog("📷 [웹캠 스캐너] 30초 경과로 QR 스캐너를 자동 취소하고 메뉴 선택 화면으로 복원합니다.");
+          stopCameraScanner();
+        }
+      }, 1000);
+    } else if (statusText) {
+      statusText.innerText = "";
+    }
 
     requestAnimationFrame(scanQRCodeLoop);
   } catch (err) {
     console.warn("Camera init error:", err);
     appendDebugLog(`📷 [웹캠 에러] 카메라 구동 실패: ${err.name} - ${err.message}`, "ERROR");
-    alert(`💡 [카메라 켜기 실패 안내]\n에러 타입: ${err.name}\n에러 메시지: ${err.message}\n\n* 만약 'NotAllowedError'인 경우 기기 설정이나 권한 허용을 다시 체크해 주세요.`);
+    if (!silent) alert(`💡 [카메라 켜기 실패 안내]\n에러 타입: ${err.name}\n에러 메시지: ${err.message}\n\n* 만약 'NotAllowedError'인 경우 기기 설정이나 권한 허용을 다시 체크해 주세요.`);
     if (statusText) statusText.innerText = "[카메라 오류] 카메라 사용 승인 또는 설정을 체크해 주세요.";
   }
 }
@@ -382,8 +411,12 @@ function scanQRCodeLoop() {
           const detectedQr = code.data.trim();
           qrScanCooldown = true;
 
-          // QR 스캔 성공 즉시 카메라 및 타이머를 셧다운하여 NFC 센서 우선권 복구
-          stopCameraScanner();
+          // "QR 스캐너 항상 켜기" 모드에서는 결제 처리 중에도 카메라 화면을 계속 띄워둬서
+          // 화면 깜빡임 없이 다음 고객을 바로 이어서 스캔할 수 있게 한다.
+          // 수동 모드에서는 기존처럼 스캔 즉시 카메라를 끄고 NFC 센서 우선권을 복구한다.
+          if (!allowCameraReaderConcurrent) {
+            stopCameraScanner();
+          }
 
           // 📡 실시간 디버그 콘솔 로그 및 시각 효과 전송
           appendDebugLog(`📷 [웹캠 QR 실시간 감지 완료!] QR 코드 데이터: ${detectedQr}`, "SUCCESS");
@@ -441,6 +474,7 @@ async function initDeviceUUID() {
       allowCameraReaderConcurrent = !!data.allow_camera_reader_concurrent;
       updateDeviceHeaderUI();
       updateCameraConcurrentToggleAvailability();
+      applyAlwaysOnCameraMode();
       appendDebugLog(`[DEVICE] 단말기 설정 복원 완료: "${currentDeviceName}" (기본 결제 상품 ID: ${currentDefaultProductId || "없음"})`, "SUCCESS");
     }
   } catch (err) {
@@ -448,22 +482,11 @@ async function initDeviceUUID() {
   }
 }
 
-// 리더 모드/화면 상태에 따라 "카메라+리더 동시 사용" 체크박스의 조작 가능 여부와 표시 값을 갱신
+// "QR 스캐너 항상 켜기" 체크박스의 현재 상태 표시값을 갱신 (하드웨어 리더 유무와 무관하게 항상 선택 가능)
 function updateCameraConcurrentToggleAvailability() {
   const checkbox = document.getElementById("k-allow-camera-concurrent-input");
-  const hint = document.getElementById("k-allow-camera-concurrent-hint");
   if (!checkbox) return;
-
-  const externalActive = isExternalReaderActive();
-  checkbox.disabled = !externalActive;
   checkbox.checked = allowCameraReaderConcurrent;
-
-  if (hint) {
-    hint.innerText = externalActive
-      ? "외부 리더가 감지되었습니다. 체크 후 저장하면 카메라와 동시 사용이 가능합니다."
-      : "외부 USB NFC 리더가 연결되어 있어야 켤 수 있습니다. (내장 NFC 사용 중에는 항상 카메라와 배타적으로 동작)";
-    hint.style.color = externalActive ? "#67e8f9" : "var(--text-muted)";
-  }
 }
 
 function updateDeviceHeaderUI() {
@@ -480,20 +503,20 @@ function updateDeviceHeaderUI() {
   }
 }
 
+// 단말기 명칭 / 기본 자동 결제 메뉴 / QR 스캐너 항상 켜기 - 셋 다 별도 저장 버튼 없이
+// 값이 바뀌는 즉시(입력창은 blur, 선택/체크박스는 change) 호출되어 곧바로 DB에 반영됨
 async function saveKioskDeviceSettings() {
-  const newName = document.getElementById("k-device-name-input").value.trim();
+  const nameInput = document.getElementById("k-device-name-input");
+  const newName = nameInput ? nameInput.value.trim() : "";
   if (!newName) {
-    alert("단말기 명칭을 입력하세요.");
+    // 빈 값으로 지우다 만 상태로 저장되지 않도록 건너뜀 (기존 값 유지)
     return;
   }
 
   const defaultProductSelect = document.getElementById("k-default-product-select");
   const defaultProductId = defaultProductSelect ? defaultProductSelect.value : "";
   const concurrentCheckbox = document.getElementById("k-allow-camera-concurrent-input");
-  // 체크박스가 비활성화(외부 리더 없음) 상태면 기존 저장값을 그대로 유지 - 강제로 끄지 않음
-  const concurrentValue = (concurrentCheckbox && !concurrentCheckbox.disabled)
-    ? concurrentCheckbox.checked
-    : allowCameraReaderConcurrent;
+  const concurrentValue = concurrentCheckbox ? concurrentCheckbox.checked : allowCameraReaderConcurrent;
 
   try {
     const res = await fetch(`${API_BASE}/kiosk/device/sync`, {
@@ -513,14 +536,29 @@ async function saveKioskDeviceSettings() {
       allowCameraReaderConcurrent = concurrentValue;
       updateDeviceHeaderUI();
       updateCameraConcurrentToggleAvailability();
+      applyAlwaysOnCameraMode();
       resetCart(); // 새로운 기본 결제 상품으로 화면 및 선택 메뉴 즉시 동기화
-      appendDebugLog(`[DEVICE] 단말기 명칭 및 기본 결제 설정 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"})`, "SUCCESS");
-      alert(`🎉 단말기 설정이 저장되었습니다!`);
+      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, QR 상시켜기: ${allowCameraReaderConcurrent})`, "SUCCESS");
+      flashDeviceSaveStatus(true);
+    } else {
+      flashDeviceSaveStatus(false);
     }
   } catch (err) {
     console.error("Save device settings error:", err);
     appendDebugLog("단말기 설정 저장 실패", "ERROR");
+    flashDeviceSaveStatus(false);
   }
+}
+
+// 저장 버튼이 없어진 대신 "기본 결제 설정" 제목 옆에 잠깐 뜨는 저장 결과 표시
+function flashDeviceSaveStatus(success) {
+  const el = document.getElementById("k-device-save-status");
+  if (!el) return;
+  el.innerText = success ? "✓ 저장됨" : "⚠ 저장 실패";
+  el.style.color = success ? "#10b981" : "#ef4444";
+  el.style.opacity = "1";
+  clearTimeout(window._kDeviceSaveStatusTimer);
+  window._kDeviceSaveStatusTimer = setTimeout(() => { el.style.opacity = "0"; }, 1600);
 }
 
 // Debug Logger Function
@@ -687,7 +725,11 @@ function updateCheckoutSummary() {
 
 // 테스트 모드 결제 시뮬레이션 - 실제 서버 API를 호출하지 않고 성공/실패 UI만 재현한다.
 function simulateKioskPayment(outcome) {
-  stopCameraScanner(); // 시뮬레이션 오버레이 닫고 리더 재활성화까지 기존 로직 재사용
+  // 상시 켜기 모드에서는 시뮬레이션 후에도 카메라(테스트) 화면을 계속 띄워둔다.
+  // 수동 모드에서는 기존처럼 오버레이를 닫고 리더 재활성화까지 기존 로직 재사용.
+  if (!allowCameraReaderConcurrent) {
+    stopCameraScanner();
+  }
 
   let total = 0;
   for (const [pid, qty] of Object.entries(cart)) {
@@ -719,9 +761,15 @@ function simulateKioskPayment(outcome) {
     triggerErrorEdgeGlow();
     playSpeech("등록되지 않은 카드입니다.");
   }
+
+  maybeAutoStartAlwaysOnCamera();
 }
 
 async function triggerKioskPayment(cardUid, forceConfirm = false) {
+  // 재결제 확인 팝업으로 넘어간 경우엔 그 팝업이 닫힐 때 카메라를 재개해야 하므로,
+  // 이 함수 종료 시 상시 켜기 모드의 카메라 자동 재개를 건너뛴다.
+  let deferCameraResume = false;
+
   // 1. 이미 결제 요청이 처리 중이거나 결과 팝업창이 열려 있으면 추가적인 태깅/스캔 무시
   if (isKioskPaymentProcessing) {
     console.log("Payment already in progress. Ignoring duplicate tag.");
@@ -777,6 +825,7 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     // ─── 200 OK 이지만 재결제 확인 필요 (30초 이내 동일 회원) ───
     if (res.ok && data.status === "CONFIRM_REQUIRED") {
       isKioskPaymentProcessing = false;
+      deferCameraResume = true;
       appendDebugLog(`[30초 재결제 감지] ${data.user_name} — 커스텀 확인 팝업 표시`, "WARN");
       showRepeatPayModal(data.user_name, cardUid);
       return;
@@ -821,6 +870,8 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     playSpeech("서버 연결에 실패했습니다.");
   } finally {
     isKioskPaymentProcessing = false;
+    // 상시 켜기 모드면 결제 처리로 잠시 꺼졌던 카메라를 다음 고객을 위해 다시 켠다
+    if (!deferCameraResume) maybeAutoStartAlwaysOnCamera();
   }
 }
 
@@ -848,6 +899,7 @@ function closeRepeatPayModal(confirmed) {
     triggerKioskPayment(capturedUid, true);
   } else {
     appendDebugLog(`[재결제 취소]`, "WARN");
+    maybeAutoStartAlwaysOnCamera();
   }
 }
 
@@ -937,6 +989,9 @@ function kioskHideModal(id) {
 }
 
 function openKioskAdminPinModal() {
+  // 설정 화면으로 들어가는 동안엔 상시 켜기 카메라를 잠시 꺼둔다 (모달 닫을 때 다시 켜짐)
+  if (isCameraScanning) stopCameraScanner();
+
   if (sessionStorage.getItem("kiosk_admin_auth") === "true") {
     openKioskAdminModal();
     return;
@@ -948,6 +1003,7 @@ function openKioskAdminPinModal() {
 
 function closeKioskPinModal() {
   kioskHideModal("kiosk-pin-modal");
+  maybeAutoStartAlwaysOnCamera();
 }
 
 function verifyKioskAdminPin() {
@@ -974,6 +1030,7 @@ function openKioskAdminModal() {
 
 function closeKioskAdminModal() {
   kioskHideModal("kiosk-admin-modal");
+  maybeAutoStartAlwaysOnCamera();
 }
 
 function switchKioskAdminTab(tabName) {
