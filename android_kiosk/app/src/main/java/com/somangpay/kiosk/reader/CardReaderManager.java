@@ -34,7 +34,13 @@ public class CardReaderManager {
     // USB-IF에 공식 상수가 없는 CCID(스마트카드) 인터페이스 클래스 코드
     private static final int USB_CLASS_CCID = 0x0B;
 
-    private enum ActiveMode { NONE, USB_CCID, USB_HID_KEYBOARD, BUILTIN_NFC }
+    // 일부 태블릿의 USB 호스트 드라이버가 bulkTransfer() 타임아웃을 지키지 않고 커널
+    // 레벨에서 무한정 블록되는 경우가 있어(usb_start_wait_urb), 이를 감지해 연결을
+    // 강제로 닫고 재시작하는 워치독 주기/임계값
+    private static final long VENDOR_HID_WATCHDOG_INTERVAL_MS = 2_000L;
+    private static final long VENDOR_HID_STUCK_THRESHOLD_MS = 4_000L;
+
+    private enum ActiveMode { NONE, USB_CCID, USB_VENDOR_HID_NFC, USB_HID_KEYBOARD, BUILTIN_NFC }
 
     private final Activity activity;
     private final WebView webView;
@@ -57,6 +63,30 @@ public class CardReaderManager {
     private Thread ccidThread;
     private UsbDevice pendingPermissionDevice;
 
+    // 벤더 HID(NFC-X) 세션 상태
+    private UsbDevice activeVendorHidDevice;
+    private UsbDeviceConnection activeVendorHidConnection;
+    private UsbInterface activeVendorHidInterface;
+    private VendorHidUidReader activeVendorHidReader;
+    private Thread vendorHidThread;
+
+    private final Runnable vendorHidWatchdogTask = new Runnable() {
+        @Override
+        public void run() {
+            if (activeVendorHidReader == null) return; // 세션이 이미 종료됨 - 재스케줄 불필요
+
+            long idleMs = activeVendorHidReader.millisSinceLastActivity();
+            if (idleMs > VENDOR_HID_STUCK_THRESHOLD_MS) {
+                Log.w(TAG, "Vendor HID reader stuck for " + idleMs + "ms (bulkTransfer timeout not honored by driver); forcing reconnect");
+                stopVendorHidSession();
+                currentMode = ActiveMode.NONE;
+                evaluateAndActivate();
+                return;
+            }
+            mainHandler.postDelayed(this, VENDOR_HID_WATCHDOG_INTERVAL_MS);
+        }
+    };
+
     // HID 키보드형 리더는 OS가 이미 키 입력을 처리하므로 존재 감지/로깅만 수행
     private UsbDevice lastLoggedHidDevice;
 
@@ -69,6 +99,14 @@ public class CardReaderManager {
         this.nfcController = nfcController;
     }
 
+    // JS가 페이지 로드 시점에 현재 리더 상태를 바로 조회할 수 있도록 제공.
+    // onCardReaderModeChanged() push 콜백은 evaluateJavascript가 페이지 JS 준비 전에
+    // 호출되면 유실될 수 있어(window.onCardReaderModeChanged 미정의 시 조용히 무시됨),
+    // 이 getter로 pull 방식 조회를 병행한다.
+    public String getCurrentModeName() {
+        return currentMode.name();
+    }
+
     public void onResume() {
         registerReceiversIfNeeded();
         evaluateAndActivate();
@@ -76,6 +114,7 @@ public class CardReaderManager {
 
     public void onPause() {
         stopCcidSession();
+        stopVendorHidSession();
         nfcController.disable();
         unregisterReceivers();
         currentMode = ActiveMode.NONE;
@@ -116,24 +155,36 @@ public class CardReaderManager {
     // USB 장치 목록을 훑어 CCID > HID 키보드 > 내장 NFC > 에러 순으로 활성화한다.
     public void evaluateAndActivate() {
         UsbDevice ccidDevice = null;
+        UsbDevice vendorHidDevice = null;
         UsbDevice hidDevice = null;
 
         for (UsbDevice device : usbManager.getDeviceList().values()) {
             UsbDeviceClassifier.Type type = UsbDeviceClassifier.classify(device);
             if (type == UsbDeviceClassifier.Type.CCID && ccidDevice == null) {
                 ccidDevice = device;
+            } else if (type == UsbDeviceClassifier.Type.VENDOR_HID_NFC && vendorHidDevice == null) {
+                vendorHidDevice = device;
             } else if (type == UsbDeviceClassifier.Type.HID_KEYBOARD && hidDevice == null) {
                 hidDevice = device;
             }
         }
 
         if (ccidDevice != null) {
+            stopVendorHidSession();
             activateCcid(ccidDevice);
             return;
         }
 
         // CCID 리더가 더 이상 없으면 기존 세션 정리
         stopCcidSession();
+
+        if (vendorHidDevice != null) {
+            activateVendorHid(vendorHidDevice);
+            return;
+        }
+
+        // 벤더 HID 리더가 더 이상 없으면 기존 세션 정리
+        stopVendorHidSession();
 
         if (hidDevice != null) {
             activateHidPassive(hidDevice);
@@ -182,7 +233,11 @@ public class CardReaderManager {
         pendingPermissionDevice = null;
 
         if (granted) {
-            openCcidConnection(device);
+            if (UsbDeviceClassifier.classify(device) == UsbDeviceClassifier.Type.VENDOR_HID_NFC) {
+                openVendorHidConnection(device);
+            } else {
+                openCcidConnection(device);
+            }
         } else {
             Log.w(TAG, "USB permission denied for " + device.getDeviceName() + "; re-evaluating readers");
             currentMode = ActiveMode.NONE;
@@ -289,6 +344,123 @@ public class CardReaderManager {
         activeCcidDevice = null;
     }
 
+    private void activateVendorHid(UsbDevice device) {
+        if (currentMode == ActiveMode.USB_VENDOR_HID_NFC) {
+            if (device.equals(activeVendorHidDevice)) return; // 이미 스트리밍 중
+            if (device.equals(pendingPermissionDevice)) return; // 권한 응답 대기 중
+        }
+
+        nfcController.disable();
+        currentMode = ActiveMode.USB_VENDOR_HID_NFC;
+
+        if (usbManager.hasPermission(device)) {
+            openVendorHidConnection(device);
+        } else {
+            requestUsbPermission(device);
+        }
+    }
+
+    private void openVendorHidConnection(UsbDevice device) {
+        UsbInterface hidInterface = findVendorHidInterface(device);
+        if (hidInterface == null) {
+            Log.e(TAG, "No HID interface found on vendor NFC device");
+            currentMode = ActiveMode.NONE;
+            evaluateAndActivate();
+            return;
+        }
+
+        UsbDeviceConnection connection = usbManager.openDevice(device);
+        if (connection == null || !connection.claimInterface(hidInterface, true)) {
+            Log.e(TAG, "Failed to open/claim vendor HID interface");
+            currentMode = ActiveMode.NONE;
+            evaluateAndActivate();
+            return;
+        }
+
+        UsbEndpoint endpointIn = null;
+        UsbEndpoint endpointOut = null;
+        for (int i = 0; i < hidInterface.getEndpointCount(); i++) {
+            UsbEndpoint ep = hidInterface.getEndpoint(i);
+            if (ep.getType() != UsbConstants.USB_ENDPOINT_XFER_INT) continue;
+            if (ep.getDirection() == UsbConstants.USB_DIR_IN) {
+                endpointIn = ep;
+            } else {
+                endpointOut = ep;
+            }
+        }
+
+        if (endpointIn == null || endpointOut == null) {
+            Log.e(TAG, "Vendor HID interrupt endpoints not found");
+            connection.releaseInterface(hidInterface);
+            connection.close();
+            currentMode = ActiveMode.NONE;
+            evaluateAndActivate();
+            return;
+        }
+
+        activeVendorHidDevice = device;
+        activeVendorHidConnection = connection;
+        activeVendorHidInterface = hidInterface;
+
+        activeVendorHidReader = new VendorHidUidReader(connection, hidInterface, endpointIn, endpointOut,
+                new VendorHidUidReader.Callback() {
+                    @Override
+                    public void onUidRead(String hexUid) {
+                        mainHandler.post(() -> {
+                            Log.d(TAG, "Vendor HID UID read: " + hexUid);
+                            if (webView != null) {
+                                webView.evaluateJavascript("window.onAndroidNfcScanned('" + hexUid + "');", null);
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onSessionFailed() {
+                        mainHandler.post(() -> {
+                            Log.w(TAG, "Vendor HID session failed, re-evaluating readers");
+                            stopVendorHidSession();
+                            currentMode = ActiveMode.NONE;
+                            evaluateAndActivate();
+                        });
+                    }
+                });
+
+        vendorHidThread = new Thread(activeVendorHidReader, "VendorHidUidReaderThread");
+        vendorHidThread.start();
+        mainHandler.postDelayed(vendorHidWatchdogTask, VENDOR_HID_WATCHDOG_INTERVAL_MS);
+        Log.d(TAG, "Vendor HID (NFC-X) session started on " + device.getDeviceName());
+        notifyModeChange("USB_VENDOR_HID_NFC");
+    }
+
+    private UsbInterface findVendorHidInterface(UsbDevice device) {
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface iface = device.getInterface(i);
+            if (iface.getInterfaceClass() == UsbConstants.USB_CLASS_HID) return iface;
+        }
+        return null;
+    }
+
+    private void stopVendorHidSession() {
+        mainHandler.removeCallbacks(vendorHidWatchdogTask);
+        if (activeVendorHidReader != null) {
+            activeVendorHidReader.stop();
+            activeVendorHidReader = null;
+        }
+        if (vendorHidThread != null) {
+            vendorHidThread.interrupt();
+            vendorHidThread = null;
+        }
+        if (activeVendorHidConnection != null) {
+            if (activeVendorHidInterface != null) {
+                activeVendorHidConnection.releaseInterface(activeVendorHidInterface);
+            }
+            activeVendorHidConnection.close();
+            activeVendorHidConnection = null;
+        }
+        activeVendorHidInterface = null;
+        activeVendorHidDevice = null;
+    }
+
     private void activateHidPassive(UsbDevice device) {
         if (currentMode == ActiveMode.USB_HID_KEYBOARD && device.equals(lastLoggedHidDevice)) {
             return;
@@ -329,6 +501,9 @@ public class CardReaderManager {
         }
         if (device.equals(activeCcidDevice)) {
             stopCcidSession();
+            currentMode = ActiveMode.NONE;
+        } else if (device.equals(activeVendorHidDevice)) {
+            stopVendorHidSession();
             currentMode = ActiveMode.NONE;
         } else if (device.equals(lastLoggedHidDevice)) {
             lastLoggedHidDevice = null;

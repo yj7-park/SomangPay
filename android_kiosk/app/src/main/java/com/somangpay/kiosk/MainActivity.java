@@ -75,6 +75,22 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         webView.setWebChromeClient(new KioskWebChromeClient());
 
         webView.setWebViewClient(new KioskWebViewClient());
+
+        // 서비스워커(sw.js) 등록/fetch는 WebViewClient.shouldInterceptRequest를 타지 않고
+        // 별도의 ServiceWorkerClientCompat 경로로만 들어오기 때문에, 이것도 같은 ngrok
+        // 바이패스 로직으로 가로채지 않으면 sw.js가 인터스티셜 HTML(text/html)을 받아
+        // "unsupported MIME type" 에러로 등록에 실패한다.
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.SERVICE_WORKER_BASIC_USAGE)
+                && androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
+            androidx.webkit.ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(
+                    new androidx.webkit.ServiceWorkerClientCompat() {
+                        @Override
+                        public android.webkit.WebResourceResponse shouldInterceptRequest(android.webkit.WebResourceRequest request) {
+                            return KioskWebViewClient.fetchWithNgrokBypass(request);
+                        }
+                    });
+        }
+
         // ngrok 인터스티셜 페이지 바이패스 헤더 추가
         Map<String, String> extraHeaders = new HashMap<>();
         extraHeaders.put("ngrok-skip-browser-warning", "true");
@@ -139,6 +155,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     // 카메라 시작 시 JS가 리더 일시정지를 요청할 때 KioskWebAppInterface에서 호출
     void pauseCardReaderForCamera() {
         cardReaderManager.pauseBuiltinNfcForCamera();
+    }
+
+    // JS가 페이지 로드 시점에 현재 카드 리더 상태를 동기적으로 조회할 때 KioskWebAppInterface에서 호출
+    String getCurrentCardReaderMode() {
+        return cardReaderManager.getCurrentModeName();
     }
 
     public void enableNativeNfcReaderMode() {
@@ -266,10 +287,82 @@ class KioskWebChromeClient extends android.webkit.WebChromeClient {
 
 // D8 컴파일러 호환성 확보를 위해 WebViewClient를 상속받는 명명 클래스 정의
 class KioskWebViewClient extends android.webkit.WebViewClient {
+
+    private static final String TAG = "KioskWebViewClient";
+
     @Override
     public void onReceivedSslError(android.webkit.WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
         // 사설 SSL 인증서(Self-Signed Certificate) 오류 무시하고 https 접속 진행
         handler.proceed();
+    }
+
+    // WebView.loadUrl()의 추가 헤더는 최초 진입 페이지 요청에만 적용되고 그 페이지가
+    // 불러오는 <script src>, sw.js 등 하위 리소스 요청에는 전달되지 않는다. ngrok 무료
+    // 터널은 이 헤더가 없는 모든 요청에 경고 인터스티셜(HTML)을 끼워 넣어서, 정적 JS
+    // 파일이 "Unexpected token '<'" 파싱 에러로 깨지는 원인이 된다. 모든 GET 리소스
+    // 요청을 직접 가로채 헤더를 붙여 재요청하는 방식으로 우회한다.
+    // (WebView는 POST 요청에는 이 콜백을 호출하지 않으므로 POST API 호출에는 적용되지 않음)
+    @Override
+    public android.webkit.WebResourceResponse shouldInterceptRequest(
+            android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+        return fetchWithNgrokBypass(request);
+    }
+
+    // 일반 페이지 리소스(shouldInterceptRequest)와 서비스워커 요청(ServiceWorkerClientCompat)이
+    // 공유하는 실제 fetch 로직. 서비스워커 등록/fetch는 WebViewClient가 아니라 별도의
+    // ServiceWorkerClientCompat 경로를 타기 때문에 이 메서드를 양쪽에서 재사용한다.
+    static android.webkit.WebResourceResponse fetchWithNgrokBypass(android.webkit.WebResourceRequest request) {
+        String scheme = request.getUrl().getScheme();
+        if (!"http".equals(scheme) && !"https".equals(scheme)) {
+            return null;
+        }
+        if (!"GET".equalsIgnoreCase(request.getMethod())) {
+            // WebResourceRequest는 POST 등 비-GET 요청의 바디를 노출하지 않아 여기서
+            // 안전하게 재현(replay)할 방법이 없다. ngrok 인터스티셜은 정적 리소스
+            // GET 요청에서만 문제가 되었으므로, GET만 가로채고 그 외(특히 결제 API
+            // POST 호출)는 WebView 기본 네트워크 스택으로 그대로 흘려보낸다.
+            return null;
+        }
+
+        java.net.HttpURLConnection connection = null;
+        try {
+            java.net.URL url = new java.net.URL(request.getUrl().toString());
+            connection = (java.net.HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(10_000);
+            connection.setReadTimeout(10_000);
+
+            Map<String, String> requestHeaders = request.getRequestHeaders();
+            if (requestHeaders != null) {
+                for (Map.Entry<String, String> header : requestHeaders.entrySet()) {
+                    connection.setRequestProperty(header.getKey(), header.getValue());
+                }
+            }
+            connection.setRequestProperty("ngrok-skip-browser-warning", "true");
+
+            int statusCode = connection.getResponseCode();
+            java.io.InputStream stream = statusCode >= 400 ? connection.getErrorStream() : connection.getInputStream();
+
+            String contentType = connection.getContentType();
+            String mimeType = "application/octet-stream";
+            String encoding = "utf-8";
+            if (contentType != null) {
+                String[] parts = contentType.split(";");
+                mimeType = parts[0].trim();
+                for (String part : parts) {
+                    String trimmed = part.trim();
+                    if (trimmed.toLowerCase(Locale.US).startsWith("charset=")) {
+                        encoding = trimmed.substring("charset=".length()).trim();
+                    }
+                }
+            }
+
+            return new android.webkit.WebResourceResponse(mimeType, encoding, stream);
+        } catch (Exception e) {
+            Log.w(TAG, "fetchWithNgrokBypass failed for " + request.getUrl() + ": " + e.getMessage());
+            if (connection != null) connection.disconnect();
+            return null;
+        }
     }
 }
 
@@ -285,6 +378,11 @@ class KioskWebAppInterface implements Runnable {
     public void reenableNfcReader() {
         // 카메라 종료 후 수신된 요청을 UI 스레드에서 안전하게 실행하여 NFC 리더 재등록
         activity.runOnUiThread(this);
+    }
+
+    @android.webkit.JavascriptInterface
+    public String getCurrentReaderMode() {
+        return activity.getCurrentCardReaderMode();
     }
 
     @android.webkit.JavascriptInterface

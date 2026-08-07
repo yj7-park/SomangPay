@@ -86,10 +86,53 @@ function updateKioskTestModeUI() {
   if (checkbox) checkbox.checked = kioskTestMode;
 }
 
+// 리더 활성 모드에 따라 상단 NFC 상태 버튼 문구/색상을 갱신한다.
+function updateNfcReaderStatusUI(mode) {
+  const btnText = document.getElementById("nfc-status-btn-text");
+  const btnElem = document.getElementById("nfc-activate-btn");
+  if (!btnText || !btnElem) return;
+
+  const setStyle = (bg, border) => {
+    btnElem.style.background = bg;
+    btnElem.style.borderColor = border;
+  };
+
+  switch (mode) {
+    case "USB_CCID":
+      btnText.innerText = "🟢 무인 태깅 작동 중 (USB 카드 리더)";
+      setStyle("rgba(16,185,129,0.3)", "#10b981");
+      break;
+    case "USB_VENDOR_HID_NFC":
+      btnText.innerText = "🟢 무인 태깅 작동 중 (USB NFC 리더)";
+      setStyle("rgba(16,185,129,0.3)", "#10b981");
+      break;
+    case "USB_HID_KEYBOARD":
+      btnText.innerText = "🟢 무인 태깅 작동 중 (USB 바코드/키보드 리더)";
+      setStyle("rgba(16,185,129,0.3)", "#10b981");
+      break;
+    case "BUILTIN_NFC":
+      btnText.innerText = "🟢 NFC 무인 태깅 작동 중 (내장 NFC)";
+      setStyle("rgba(16,185,129,0.3)", "#10b981");
+      break;
+    case "WEB_NFC":
+      btnText.innerText = "🟢 NFC 무인 태깅 작동 중";
+      setStyle("rgba(16,185,129,0.3)", "#10b981");
+      break;
+    case "NONE":
+      btnText.innerText = "🔴 카드 리더 연결 안 됨";
+      setStyle("rgba(239,68,68,0.25)", "#ef4444");
+      break;
+    default:
+      btnText.innerText = "⏳ 리더 상태 확인 중...";
+      setStyle("rgba(148,163,184,0.2)", "#94a3b8");
+  }
+}
+
 window.onCardReaderModeChanged = function (mode) {
   currentReaderMode = mode;
   appendDebugLog(`🔧 [카드 리더] 활성 모드 변경: ${mode}`, "INFO");
   updateCameraConcurrentToggleAvailability();
+  updateNfcReaderStatusUI(mode);
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -855,8 +898,20 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
       return;
     }
 
-    // ─── 결제 성공 ─── 팝업 없이 글로우 + TTS + 최근 결제 내역 갱신
-    appendDebugLog(`결제 성공! 회원: ${data.user_name} (${data.user_type}), 차감금액: ${data.total_amount.toLocaleString()}원, 남은잔액: ${data.balance_after.toLocaleString()}원`, "SUCCESS");
+    // ─── 결제 성공 ─── status가 명시적으로 SUCCESS일 때만 성공 처리.
+    // (res.ok && !CONFIRM_REQUIRED라고 해서 무조건 성공으로 취급하면, 예상 밖의
+    // 2xx 응답(프록시/캐시 오작동 등)을 성공으로 오인해 미등록 카드가 "회원, 0원
+    // 결제"로 잘못 표시되는 사고가 날 수 있다.)
+    if (data.status !== "SUCCESS") {
+      appendDebugLog(`예상치 못한 결제 응답: ${JSON.stringify(data)}`, "ERROR");
+      console.error("Kiosk Payment unexpected response:", data);
+      playSpeech("결제에 실패했습니다.");
+      triggerErrorEdgeGlow();
+      isKioskPaymentProcessing = false;
+      return;
+    }
+
+    appendDebugLog(`결제 성공! 회원: ${data.user_name} (${data.user_type}), 차감금액: ${(data.total_amount ?? 0).toLocaleString()}원, 남은잔액: ${(data.balance_after ?? 0).toLocaleString()}원`, "SUCCESS");
     triggerSuccessEdgeGlow();
     playSpeech("감사합니다.");
     addRecentPayment(data);
@@ -941,8 +996,8 @@ function addRecentPayment(data) {
     time: timeStr,
     userName: data.user_name || "회원",
     userType: data.user_type || "일반",
-    amount: data.total_amount,
-    balance: data.balance_after
+    amount: data.total_amount ?? 0,
+    balance: data.balance_after ?? 0
   });
   if (recentPaymentsList.length > 5) recentPaymentsList.pop();
   renderRecentPaymentsUI();
@@ -1408,7 +1463,7 @@ function triggerKioskDetectionFeedback() {
 
     osc.type = "sine";
     osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
 
     osc.connect(gain);
@@ -1426,14 +1481,12 @@ async function requestNfcPermissionByUserGesture() {
   const btnText = document.getElementById("nfc-status-btn-text");
   const btnElem = document.getElementById("nfc-activate-btn");
 
-  // Android 네이티브 앱 환경 감지 시 Web NFC를 우회하고 바로 하드웨어 NFC 알림 표시
+  // Android 네이티브 앱 환경 감지 시 Web NFC를 우회하고 바로 하드웨어 리더 상태 표시
   if (window.AndroidInterface) {
-    appendDebugLog("[NFC] Android 네이티브 앱 감지 - 하드웨어 NFC가 이미 백그라운드에서 상시 작동 중입니다.", "SUCCESS");
-    if (btnText) btnText.innerText = "🟢 NFC 무인 태깅 작동 중";
-    if (btnElem) {
-      btnElem.style.background = "rgba(16,185,129,0.3)";
-      btnElem.style.borderColor = "#10b981";
-    }
+    const mode = queryAndroidReaderMode();
+    currentReaderMode = mode;
+    appendDebugLog(`[NFC] Android 네이티브 앱 감지 - 하드웨어 리더가 백그라운드에서 상시 작동 중입니다. 현재 모드: ${mode}`, "SUCCESS");
+    updateNfcReaderStatusUI(mode);
     return;
   }
 
@@ -1604,18 +1657,26 @@ function stopKioskNfcScan() {
 }
 
 
+// Android 네이티브 브릿지에 현재 리더 모드를 동기 조회 (getCurrentReaderMode 미지원 구버전 APK 대비 방어)
+function queryAndroidReaderMode() {
+  if (window.AndroidInterface && typeof window.AndroidInterface.getCurrentReaderMode === "function") {
+    try {
+      return window.AndroidInterface.getCurrentReaderMode();
+    } catch (e) {
+      appendDebugLog(`⚠️ [Android Native] 리더 상태 조회 실패: ${e}`, "WARN");
+    }
+  }
+  return "UNKNOWN";
+}
+
 function initWebNFC() {
   // Android 네이티브 앱 환경 감지 (AndroidInterface 존재 여부)
   // WebView는 Web NFC scan()을 지원 안 함 — 하드웨어 NFC 전용
   if (window.AndroidInterface) {
-    const btnText = document.getElementById("nfc-status-btn-text");
-    const btnElem = document.getElementById("nfc-activate-btn");
-    if (btnText) btnText.innerText = "🟢 NFC 무인 태깅 작동 중";
-    if (btnElem) {
-      btnElem.style.background = "rgba(16,185,129,0.3)";
-      btnElem.style.borderColor = "#10b981";
-    }
-    appendDebugLog("🎉 [Android Native App] 네이티브 하드웨어 NFC 리더 가동 완료! (카드를 갖다 대세요)", "SUCCESS");
+    const mode = queryAndroidReaderMode();
+    currentReaderMode = mode;
+    updateNfcReaderStatusUI(mode);
+    appendDebugLog(`🎉 [Android Native App] 네이티브 하드웨어 리더 가동 완료! 현재 모드: ${mode}`, "SUCCESS");
     return;
   }
 
@@ -1648,6 +1709,9 @@ window.onAndroidNfcScanned = function (rawHexUid) {
   kioskNfcScanCooldown = true;
   setTimeout(() => { kioskNfcScanCooldown = false; }, 3000);
 
+  // 결제 API 응답(네트워크 왕복)을 기다리지 않고, 태그 인식 즉시 진동+삑 소리로 피드백
+  triggerKioskDetectionFeedback();
+
   appendDebugLog(`⚡ [Android Native App] 하드웨어 레벨 NFC 태그 스캔 성공!`, "SUCCESS");
   appendDebugLog(`  ├─ 💳 원시 하드웨어 UID (Raw Hex): ${rawHexUid}`, "WARN");
   appendDebugLog(`  └─ ⏱️ 수신 시각: ${new Date().toLocaleTimeString()}`, "INFO");
@@ -1667,6 +1731,8 @@ window.onAndroidNfcScanned = function (rawHexUid) {
 // Android Native App Card Reader Unavailable Notice (USB/내장 NFC 모두 없음)
 window.onKioskReaderError = function (message) {
   appendDebugLog(`⚠️ [Android Native] 카드 리더 사용 불가: ${message}`, "ERROR");
+  currentReaderMode = "NONE";
+  updateNfcReaderStatusUI("NONE");
 };
 
 // Check Native App Environment on Load
