@@ -162,6 +162,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         return cardReaderManager.getCurrentModeName();
     }
 
+    // JS의 화면 방향 전환 요청 처리 - Screen Orientation API의 lock()은 전체화면(Fullscreen API) 상태가
+    // 아니면 WebView에서 지원되지 않아 실패하므로, 이미 시작 시점에 쓰던 setRequestedOrientation()을
+    // 그대로 재사용해 네이티브 레벨에서 처리한다. 설치 여부와 무관하게 항상 동작한다.
+    void setKioskOrientation(String mode) {
+        if ("portrait".equals(mode)) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        } else if ("landscape".equals(mode)) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        }
+    }
+
     public void enableNativeNfcReaderMode() {
         if (nfcAdapter != null) {
             int flags = NfcAdapter.FLAG_READER_NFC_A |
@@ -383,6 +394,12 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public String getCurrentReaderMode() {
         return activity.getCurrentCardReaderMode();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void setOrientation(String mode) {
+        // Activity API는 메인 스레드에서만 호출 가능 - JS 인터페이스 콜백은 별도 스레드에서 실행됨
+        activity.runOnUiThread(() -> activity.setKioskOrientation(mode));
     }
 
     @android.webkit.JavascriptInterface

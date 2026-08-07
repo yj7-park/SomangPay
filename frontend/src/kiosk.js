@@ -22,7 +22,9 @@ let lastQrDecodeTime = 0; // QR 실시간 연산 쓰로틀링을 위한 최종 �
 // 현재 활성화된 카드 리더 종류: "WEB_NFC" | "BUILTIN_NFC" | "USB_CCID" | "USB_HID_KEYBOARD" | "NONE" | "UNKNOWN"
 // Android 래퍼 안에서는 window.onCardReaderModeChanged가, 일반 브라우저에서는 Web NFC 성공 시 직접 갱신한다.
 let currentReaderMode = "UNKNOWN";
-// 관리자 설정: 외부 리더 사용 시 카메라와 동시 사용을 허용할지 여부 (서버에서 로드, 기본값 false)
+// 관리자 설정 "QR 스캐너 켜기" - QR 인식 기능 자체의 유일한 on/off 스위치.
+// 켜지면 화면 표시 없이 백그라운드에서 카메라가 계속 QR을 읽고, 꺼지면 QR 인식을 하지 않는다.
+// (서버에서 로드, 기본값 false)
 let allowCameraReaderConcurrent = false;
 
 function isInternalReaderActive() {
@@ -39,15 +41,33 @@ function shouldPauseReaderForCamera() {
   return isInternalReaderActive() || !allowCameraReaderConcurrent;
 }
 
-// "QR 스캐너 항상 켜기" 설정 On/Off에 맞춰 수동 토글 버튼 표시 여부와 카메라 구동 상태를 즉시 반영
+// "QR 스캐너 켜기" 설정 On/Off에 맞춰 카메라 구동 상태를 즉시 반영 (수동 버튼 없이 이 설정이 유일한 스위치)
 function applyAlwaysOnCameraMode() {
-  const toggleBtn = document.getElementById("camera-toggle-btn");
-  if (toggleBtn) toggleBtn.style.display = allowCameraReaderConcurrent ? "none" : "inline-flex";
-
+  updateQrScanStatusUI();
   if (allowCameraReaderConcurrent) {
     maybeAutoStartAlwaysOnCamera();
   } else if (isCameraScanning) {
     stopCameraScanner();
+  }
+}
+
+// 상단 헤더의 QR 상태 배지 갱신 - 화면에 카메라 미리보기를 띄우지 않으므로 이 배지가
+// 사용자에게 QR 인식이 실제로 켜져 있는지 알려주는 유일한 표시다.
+function updateQrScanStatusUI() {
+  const textElem = document.getElementById("qr-status-text");
+  const wrapElem = document.getElementById("qr-status-indicator");
+  if (!textElem || !wrapElem) return;
+
+  if (isCameraScanning) {
+    textElem.innerText = "QR 스캔 활성화";
+    wrapElem.style.background = "rgba(16,185,129,0.2)";
+    wrapElem.style.borderColor = "#10b981";
+    wrapElem.style.color = "#10b981";
+  } else {
+    textElem.innerText = "QR 스캔 비활성";
+    wrapElem.style.background = "rgba(148,163,184,0.15)";
+    wrapElem.style.borderColor = "#94a3b8";
+    wrapElem.style.color = "#94a3b8";
   }
 }
 
@@ -86,45 +106,25 @@ function updateKioskTestModeUI() {
   if (checkbox) checkbox.checked = kioskTestMode;
 }
 
-// 리더 활성 모드에 따라 상단 NFC 상태 버튼 문구/색상을 갱신한다.
+// 리더 활성 모드에 따라 상단 NFC 상태 배지 문구/색상을 갱신한다.
+// 리더 종류별 상세 문구 대신, 켜짐/꺼짐만 짧게 표시한다 (초록 = 활성화, 회색 = 비활성).
 function updateNfcReaderStatusUI(mode) {
   const btnText = document.getElementById("nfc-status-btn-text");
   const btnElem = document.getElementById("nfc-activate-btn");
   if (!btnText || !btnElem) return;
 
-  const setStyle = (bg, border) => {
-    btnElem.style.background = bg;
-    btnElem.style.borderColor = border;
-  };
+  const active = ["USB_CCID", "USB_VENDOR_HID_NFC", "USB_HID_KEYBOARD", "BUILTIN_NFC", "WEB_NFC"].includes(mode);
 
-  switch (mode) {
-    case "USB_CCID":
-      btnText.innerText = "🟢 무인 태깅 작동 중 (USB 카드 리더)";
-      setStyle("rgba(16,185,129,0.3)", "#10b981");
-      break;
-    case "USB_VENDOR_HID_NFC":
-      btnText.innerText = "🟢 무인 태깅 작동 중 (USB NFC 리더)";
-      setStyle("rgba(16,185,129,0.3)", "#10b981");
-      break;
-    case "USB_HID_KEYBOARD":
-      btnText.innerText = "🟢 무인 태깅 작동 중 (USB 바코드/키보드 리더)";
-      setStyle("rgba(16,185,129,0.3)", "#10b981");
-      break;
-    case "BUILTIN_NFC":
-      btnText.innerText = "🟢 NFC 무인 태깅 작동 중 (내장 NFC)";
-      setStyle("rgba(16,185,129,0.3)", "#10b981");
-      break;
-    case "WEB_NFC":
-      btnText.innerText = "🟢 NFC 무인 태깅 작동 중";
-      setStyle("rgba(16,185,129,0.3)", "#10b981");
-      break;
-    case "NONE":
-      btnText.innerText = "🔴 카드 리더 연결 안 됨";
-      setStyle("rgba(239,68,68,0.25)", "#ef4444");
-      break;
-    default:
-      btnText.innerText = "⏳ 리더 상태 확인 중...";
-      setStyle("rgba(148,163,184,0.2)", "#94a3b8");
+  if (active) {
+    btnText.innerText = "NFC 스캔 활성화";
+    btnElem.style.background = "rgba(16,185,129,0.2)";
+    btnElem.style.borderColor = "#10b981";
+    btnElem.style.color = "#10b981";
+  } else {
+    btnText.innerText = "NFC 스캔 비활성";
+    btnElem.style.background = "rgba(148,163,184,0.15)";
+    btnElem.style.borderColor = "#94a3b8";
+    btnElem.style.color = "#94a3b8";
   }
 }
 
@@ -183,55 +183,30 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 });
 
-// 태블릿 전용 3분할 레이아웃(결제금액/카메라/최근내역) 브레이크포인트와 동일한 조건 - style.css 참고
+// 메뉴 그리드 열/행 계산에 쓰이는 태블릿 판별 - style.css 브레이크포인트와 동일한 조건
 function isKioskTabletLayout() {
   return window.matchMedia('(min-width: 768px) and (min-height: 700px)').matches;
 }
 
-// 카메라 뷰포트를 태블릿에서는 체크아웃 패널의 도킹 슬롯으로, 모바일에서는 원래 위치(메뉴 영역 전체 오버레이)로 이동
-function dockCameraViewport(cameraBox) {
-  if (!cameraBox) return;
-  const dock = document.getElementById("kiosk-checkout-camera-dock");
-
-  if (isKioskTabletLayout() && dock) {
-    if (cameraBox.parentElement !== dock) dock.appendChild(cameraBox);
-    cameraBox.style.position = "relative";
-    cameraBox.style.inset = "auto";
-    cameraBox.style.width = "100%";
-    cameraBox.style.height = "100%";
-    return true; // 도킹됨 - 좌측 메뉴는 그대로 보여도 됨
-  }
-
-  const menuSection = document.querySelector(".kiosk-menu-section");
-  if (menuSection && cameraBox.parentElement !== menuSection) menuSection.appendChild(cameraBox);
-  cameraBox.style.position = "absolute";
-  cameraBox.style.inset = "0";
-  return false; // 도킹 안 됨 - 기존처럼 메뉴 영역을 전체 오버레이로 대체해야 함
-}
-
 // Camera WebCam Realtime QR Decoder (jsQR)
-// 테스트 모드: 실제 getUserMedia 없이 카메라 뷰포트만 띄우고 시뮬레이션 버튼을 보여줌
+// 테스트 모드: 실제 getUserMedia 없이 카메라 뷰포트만 띄우고 시뮬레이션 버튼을 보여줌.
+// 실제 카메라는 화면에 표시되지 않으므로(백그라운드 인식) 체크아웃 레이아웃에 전용 자리를
+// 두지 않고, 테스트 모드일 때만 메뉴 영역 위에 전체 오버레이로 띄운다.
 function startTestModeCameraView() {
   const cameraBox = document.getElementById("kiosk-camera-viewport-container");
-  const menuContentWrap = document.getElementById("kiosk-menu-content-wrap");
-  const statusText = document.getElementById("camera-status-text");
-  const toggleBtn = document.getElementById("camera-toggle-btn");
   const testOverlay = document.getElementById("kiosk-camera-test-overlay");
+  const menuSection = document.querySelector(".kiosk-menu-section");
 
-  const docked = dockCameraViewport(cameraBox);
-  if (menuContentWrap) menuContentWrap.style.display = docked ? "block" : "none";
-  if (cameraBox) cameraBox.style.display = "flex";
+  if (cameraBox) {
+    if (menuSection && cameraBox.parentElement !== menuSection) menuSection.appendChild(cameraBox);
+    cameraBox.style.position = "absolute";
+    cameraBox.style.inset = "0";
+    cameraBox.style.display = "flex";
+  }
   if (testOverlay) testOverlay.style.display = "flex";
 
   isCameraScanning = true;
-
-  if (toggleBtn) {
-    toggleBtn.innerText = "✕ QR 스캔 취소";
-    toggleBtn.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
-    toggleBtn.style.boxShadow = "0 4px 15px rgba(239, 68, 68, 0.4)";
-  }
-  // 오버레이 안에 이미 "테스트 모드" 안내가 있으므로 상태 텍스트는 비워 카메라 슬롯 공간을 최대한 확보
-  if (statusText) statusText.innerText = "";
+  updateQrScanStatusUI();
   appendDebugLog("🧪 [테스트 모드] 카메라 시뮬레이션 뷰 표시 (실제 카메라 미사용)", "WARN");
 
   // 리더 일시정지 로직은 실제 카메라와 동일하게 적용 (테스트 중에도 동시사용 정책을 검증할 수 있도록)
@@ -244,6 +219,8 @@ function startTestModeCameraView() {
   }
 }
 
+// 실제 QR 스캐너 - 관리자 설정("QR 스캐너 켜기")이 켜져 있는 동안 화면에 아무것도 띄우지 않고
+// 백그라운드에서 카메라 프레임을 계속 읽어 QR 코드를 인식한다.
 async function startCameraScanner(silent = false, facingMode) {
   if (kioskTestMode) {
     startTestModeCameraView();
@@ -251,12 +228,6 @@ async function startCameraScanner(silent = false, facingMode) {
   }
 
   const video = document.getElementById("qr-video");
-  const cameraBox = document.getElementById("kiosk-camera-viewport-container");
-  const menuGrid = document.getElementById("kiosk-menu-grid");
-  const leftTitle = document.getElementById("kiosk-left-title");
-  const statusText = document.getElementById("camera-status-text");
-  const toggleBtn = document.getElementById("camera-toggle-btn");
-  const flipBtn = document.getElementById("kiosk-camera-flip-btn");
   const fm = facingMode || kioskFacingMode;
 
   // 전면 카메라일 때만 .mirror-mode 클래스로 좌우반전 적용
@@ -270,7 +241,7 @@ async function startCameraScanner(silent = false, facingMode) {
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     if (!silent) alert("현재 브라우저 환경에서 카메라 접근을 지원하지 않습니다.");
-    if (statusText) statusText.innerText = "[카메라 안내] USB 바코드/QR 스캐너 입력을 사용하세요.";
+    appendDebugLog("[카메라] 이 환경은 카메라 접근을 지원하지 않습니다. USB 바코드/QR 스캐너 입력을 사용하세요.", "WARN");
     return;
   }
 
@@ -294,82 +265,31 @@ async function startCameraScanner(silent = false, facingMode) {
       }
     }
 
-    // 태블릿: 카메라를 체크아웃 패널 중앙 슬롯에 도킹(좌측 메뉴는 계속 보임)
-    // 모바일: 기존처럼 좌측 메뉴 선택 및 식권 카드 전체 구역을 카메라 뷰포트로 완전 대체
-    const menuContentWrap = document.getElementById("kiosk-menu-content-wrap");
-    const docked = dockCameraViewport(cameraBox);
-    if (menuContentWrap) menuContentWrap.style.display = docked ? "block" : "none";
-    if (cameraBox) cameraBox.style.display = "flex";
-
     isCameraScanning = true;
     kioskFacingMode = fm;
-
-    // 🔴 버튼 상태를 '✕ QR 스캔 취소' 스타일로 변경 (상시 켜기 모드에서는 버튼 자체가 숨겨져 있음)
-    if (toggleBtn) {
-      toggleBtn.innerText = "✕ QR 스캔 취소";
-      toggleBtn.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
-      toggleBtn.style.boxShadow = "0 4px 15px rgba(239, 68, 68, 0.4)";
-    }
-    if (flipBtn) flipBtn.style.display = "inline-flex";
-    appendDebugLog("📷 [웹캠 스캐너] 웹 카메라 구동 완료. 좌측 메인 뷰포트 전체에 QR 스캐너 표시 중.");
-
-    // ⏱️ 30초간 미입력 시 자동 취소 타이머 및 카운트다운 생성
-    // "QR 스캐너 항상 켜기" 모드에서는 취소 개념이 없으므로 타이머를 만들지 않고 계속 켜둔다.
-    clearInterval(window.kioskCameraInterval);
-    if (!allowCameraReaderConcurrent) {
-      let secondsLeft = 30;
-      if (statusText) {
-        statusText.innerText = `${secondsLeft}초 후 자동 취소`;
-      }
-
-      window.kioskCameraInterval = setInterval(() => {
-        secondsLeft--;
-        if (statusText) {
-          statusText.innerText = `${secondsLeft}초 후 자동 취소`;
-        }
-        if (secondsLeft <= 0) {
-          clearInterval(window.kioskCameraInterval);
-          appendDebugLog("📷 [웹캠 스캐너] 30초 경과로 QR 스캐너를 자동 취소하고 메뉴 선택 화면으로 복원합니다.");
-          stopCameraScanner();
-        }
-      }, 1000);
-    } else if (statusText) {
-      statusText.innerText = "";
-    }
+    updateQrScanStatusUI();
+    appendDebugLog("📷 [QR 스캐너] 백그라운드 QR 스캐너 구동 완료.");
 
     requestAnimationFrame(scanQRCodeLoop);
   } catch (err) {
     console.warn("Camera init error:", err);
     appendDebugLog(`📷 [웹캠 에러] 카메라 구동 실패: ${err.name} - ${err.message}`, "ERROR");
     if (!silent) alert(`💡 [카메라 켜기 실패 안내]\n에러 타입: ${err.name}\n에러 메시지: ${err.message}\n\n* 만약 'NotAllowedError'인 경우 기기 설정이나 권한 허용을 다시 체크해 주세요.`);
-    if (statusText) statusText.innerText = "[카메라 오류] 카메라 사용 승인 또는 설정을 체크해 주세요.";
+    updateQrScanStatusUI();
   }
-}
-
-async function flipKioskCamera() {
-  const newFacing = (kioskFacingMode === "user") ? "environment" : "user";
-  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
-  isCameraScanning = false;
-  await startCameraScanner(false, newFacing);
 }
 
 function stopCameraScanner() {
   const cameraBox = document.getElementById("kiosk-camera-viewport-container");
-  const menuContentWrap = document.getElementById("kiosk-menu-content-wrap");
-  const statusText = document.getElementById("camera-status-text");
-  const toggleBtn = document.getElementById("camera-toggle-btn");
-  const flipBtn = document.getElementById("kiosk-camera-flip-btn");
-
-  // 30초 카운트다운 타이머 해제
-  clearInterval(window.kioskCameraInterval);
 
   if (videoStream) {
     videoStream.getTracks().forEach(track => track.stop());
     videoStream = null;
   }
   isCameraScanning = false;
+  updateQrScanStatusUI();
 
-  // 📺 좌측 영역 전체를 다시 메뉴 선택 및 식권 카드 화면으로 복원 + 도킹됐던 카메라 뷰포트를 원래 자리로 되돌림
+  // 테스트 모드가 띄웠을 수 있는 뷰포트/시뮬레이션 오버레이를 다시 숨기고 원래 자리로 되돌림
   if (cameraBox) {
     cameraBox.style.display = "none";
     const menuSection = document.querySelector(".kiosk-menu-section");
@@ -377,23 +297,10 @@ function stopCameraScanner() {
     cameraBox.style.position = "absolute";
     cameraBox.style.inset = "0";
   }
-  if (menuContentWrap) menuContentWrap.style.display = "block";
-
-  // 테스트 모드 시뮬레이션 오버레이도 함께 닫기
   const testOverlay = document.getElementById("kiosk-camera-test-overlay");
   if (testOverlay) testOverlay.style.display = "none";
 
-  // 🔵 버튼 상태를 '📷 교인증 QR 코드 스캔' 스타일로 복원
-  if (toggleBtn) {
-    toggleBtn.innerText = "📷 교인증 QR 코드 스캔";
-    toggleBtn.style.background = "linear-gradient(135deg, #06b6d4, #3b82f6)";
-    toggleBtn.style.boxShadow = "0 4px 15px rgba(6, 182, 212, 0.3)";
-  }
-  if (flipBtn) flipBtn.style.display = "none"; // 카메라 끄면 전환 버튼 숨김
-  if (statusText) {
-    statusText.innerText = "";
-  }
-  appendDebugLog("📷 [웹캠 스캐너] 웹 카메라 구동 중지 (메뉴 선택 뷰 복원 & NFC 활성화).");
+  appendDebugLog("📷 [QR 스캐너] 카메라 구동 중지.");
 
   // 카메라 드라이버 완전 해제 후 500ms 지연 후 리더 재활성화
   setTimeout(() => {
@@ -407,14 +314,6 @@ function stopCameraScanner() {
       appendDebugLog("⚡ [Web NFC] 카메라 종료 - NFC 스캔 재가동.", "SUCCESS");
     }
   }, 500);
-}
-
-function toggleCameraScanner() {
-  if (isCameraScanning) {
-    stopCameraScanner();
-  } else {
-    startCameraScanner(false);
-  }
 }
 
 function scanQRCodeLoop() {
@@ -454,25 +353,12 @@ function scanQRCodeLoop() {
           const detectedQr = code.data.trim();
           qrScanCooldown = true;
 
-          // "QR 스캐너 항상 켜기" 모드에서는 결제 처리 중에도 카메라 화면을 계속 띄워둬서
-          // 화면 깜빡임 없이 다음 고객을 바로 이어서 스캔할 수 있게 한다.
-          // 수동 모드에서는 기존처럼 스캔 즉시 카메라를 끄고 NFC 센서 우선권을 복구한다.
-          if (!allowCameraReaderConcurrent) {
-            stopCameraScanner();
-          }
-
           // 📡 실시간 디버그 콘솔 로그 및 시각 효과 전송
           appendDebugLog(`📷 [웹캠 QR 실시간 감지 완료!] QR 코드 데이터: ${detectedQr}`, "SUCCESS");
           console.log(`[QR Auto Detect] Data: ${detectedQr}`);
 
-          // 진동 피드백 (모바일 지원 기기용)
-          if (navigator.vibrate) {
-            try {
-              navigator.vibrate(100);
-            } catch (e) {
-              console.log("Vibration blocked or unsupported:", e);
-            }
-          }
+          // 진동 + 삑 소리 피드백 (NFC 태깅과 동일하게 즉시 재생)
+          triggerKioskDetectionFeedback();
 
           // Autofill inside admin card modal if open
           const cardUidInput = document.getElementById("kiosk-scanned-card-uid");
@@ -581,7 +467,7 @@ async function saveKioskDeviceSettings() {
       updateCameraConcurrentToggleAvailability();
       applyAlwaysOnCameraMode();
       resetCart(); // 새로운 기본 결제 상품으로 화면 및 선택 메뉴 즉시 동기화
-      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, QR 상시켜기: ${allowCameraReaderConcurrent})`, "SUCCESS");
+      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, QR 스캐너 켜기: ${allowCameraReaderConcurrent})`, "SUCCESS");
       flashDeviceSaveStatus(true);
     } else {
       flashDeviceSaveStatus(false);
@@ -829,14 +715,12 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     if (qty > 0) items.push({ product_id: parseInt(pid), quantity: qty });
   }
 
+  // 기본 메뉴는 장바구니 "초기화" 시점(최초 로딩, 결제 후 리셋)에만 자동 선택되는
+  // 값이다 - 사용자가 수량을 직접 0으로 바꿔 장바구니를 비운 경우까지 결제 시점에
+  // 기본 메뉴로 되돌려 대신 결제해버리면 안 된다. 비어있으면 그냥 선택을 요구한다.
   if (items.length === 0) {
-    if (currentDefaultProductId) {
-      items.push({ product_id: currentDefaultProductId, quantity: 1 });
-      appendDebugLog(`[결제] 선택된 메뉴 없음. 기본 자동 결제 메뉴로 결제 요청 (ID: ${currentDefaultProductId})`, "INFO");
-    } else {
-      alert("결제하실 메뉴의 수량을 먼저 선택해주세요.");
-      return;
-    }
+    showNoMenuModal();
+    return;
   }
 
   // 결제 락 활성화
@@ -887,6 +771,7 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
       else if (detail.includes("잔액")) {
         playSpeech("잔액이 부족합니다.");
         triggerWarningEdgeGlow();
+        resetCart(); // 다음 고객을 위해 메뉴 선택을 기본 메뉴로 복원
       }
       // ─── 그 외 오류 ───
       else {
@@ -938,7 +823,7 @@ function showRepeatPayModal(userName, cardUid) {
   _repeatPayCardUid = cardUid;
   const modal = document.getElementById("repeat-pay-modal");
   const msg = document.getElementById("repeat-pay-msg");
-  if (msg) msg.innerText = `「${userName}」님이 방금 결제하셨습니다.\n동일 메뉴를 한 번 더 결제합니다.`;
+  if (msg) msg.innerText = `「${userName}」님이 방금 결제하셨습니다.`;
   if (modal) { modal.style.display = "flex"; modal.classList.add("active"); }
   playSpeech("추가 결제 하시겠습니까?");
 }
@@ -950,12 +835,27 @@ function closeRepeatPayModal(confirmed) {
   const capturedUid = _repeatPayCardUid;
   _repeatPayCardUid = null;
   if (confirmed && capturedUid) {
+    // 실제 결제 결과(성공/잔액부족/실패)에 따른 TTS는 triggerKioskPayment 내부에서
+    // 처리한다 - 여기서 미리 "감사합니다"를 재생하면 결제가 실패해도 성공 TTS가 먼저
+    // 나가버리거나, 성공 시 TTS가 중복 재생되는 문제가 있었다.
     appendDebugLog(`[재결제 확인] force_confirm=true 재결제 시도: ${capturedUid}`, "INFO");
     triggerKioskPayment(capturedUid, true);
   } else {
     appendDebugLog(`[재결제 취소]`, "WARN");
     maybeAutoStartAlwaysOnCamera();
   }
+}
+
+function showNoMenuModal() {
+  const modal = document.getElementById("no-menu-modal");
+  if (modal) { modal.style.display = "flex"; modal.classList.add("active"); }
+  playSpeech("메뉴를 선택하세요.");
+}
+
+function closeNoMenuModal() {
+  const modal = document.getElementById("no-menu-modal");
+  if (modal) { modal.style.display = "none"; modal.classList.remove("active"); }
+  resetCart(); // 다음 시도를 위해 메뉴 선택을 기본 메뉴로 복원
 }
 
 // ================= SUCCESS GLOW & RECENT PAYMENTS =================
@@ -1076,9 +976,23 @@ function verifyKioskAdminPin() {
   }
 }
 
-// 화면 방향 강제 전환 (Screen Orientation API) - 안드로이드에서 홈 화면에 설치된 앱(PWA)
-// 상태일 때만 동작함. 일반 브라우저 탭에서는 lock()이 지원되지 않아 실패할 수 있음.
+// 화면 방향 강제 전환.
+// Android 네이티브 래퍼 안에서는 Screen Orientation API의 lock()이 전체화면(Fullscreen API)
+// 상태가 아니면 지원되지 않아 항상 실패하므로, AndroidInterface.setOrientation()으로
+// 네이티브 Activity.setRequestedOrientation()을 직접 호출한다 (설치 여부와 무관하게 동작).
+// 일반 브라우저(홈 화면에 설치된 PWA 등)에서는 기존처럼 Screen Orientation API를 사용한다.
 function setKioskOrientation(mode) {
+  if (window.AndroidInterface && typeof window.AndroidInterface.setOrientation === "function") {
+    try {
+      window.AndroidInterface.setOrientation(mode);
+      appendDebugLog(`[화면 방향] ${mode === "portrait" ? "세로" : "가로"} 모드로 전환 요청 (Android 네이티브)`, "SUCCESS");
+      updateKioskOrientationButtonsUI(mode);
+    } catch (e) {
+      appendDebugLog(`[화면 방향] Android 네이티브 전환 실패: ${e}`, "ERROR");
+    }
+    return;
+  }
+
   if (!screen.orientation || typeof screen.orientation.lock !== "function") {
     appendDebugLog("[화면 방향] 이 환경에서는 화면 방향 고정을 지원하지 않습니다.", "WARN");
     alert("화면 방향 전환은 홈 화면에 설치된 앱 상태에서만 지원됩니다.");
@@ -1479,7 +1393,6 @@ function triggerKioskDetectionFeedback() {
 // 수동 버튼 클릭 시 호출 (사용자 제스처가 필요한 최초 권한 요청)
 async function requestNfcPermissionByUserGesture() {
   const btnText = document.getElementById("nfc-status-btn-text");
-  const btnElem = document.getElementById("nfc-activate-btn");
 
   // Android 네이티브 앱 환경 감지 시 Web NFC를 우회하고 바로 하드웨어 리더 상태 표시
   if (window.AndroidInterface) {
@@ -1493,11 +1406,7 @@ async function requestNfcPermissionByUserGesture() {
   if (!('NDEFReader' in window)) {
     // Web NFC 미지원 환경 (일부 WebView) — Android Native NFC는 별도로 항상 가동 중
     appendDebugLog("[Web NFC] 이 환경에서는 Web NFC API가 지원되지 않습니다. Android Native NFC로 동작합니다.", "WARN");
-    if (btnText) btnText.innerText = "🟢 NFC 무인 태깅 작동 중 (Native)";
-    if (btnElem) {
-      btnElem.style.background = "rgba(16,185,129,0.3)";
-      btnElem.style.borderColor = "#10b981";
-    }
+    updateNfcReaderStatusUI("BUILTIN_NFC");
     return;
   }
 
@@ -1515,18 +1424,10 @@ async function requestNfcPermissionByUserGesture() {
 async function startKioskNfcScan(silent = false) {
   if (kioskNdefReader) return; // 이미 실행 중
 
-  const btnText = document.getElementById("nfc-status-btn-text");
-  const btnElem = document.getElementById("nfc-activate-btn");
   let scanTimeoutId = null;
 
-  // "⏳ NFC 권한 요청 중..." 문구에 영원히 멈춰있지 않도록, 실패/타임아웃 시 항상 대기 버튼으로 복구
-  const resetNfcButton = () => {
-    if (btnText) btnText.innerText = "📲 NFC 센서 활성화";
-    if (btnElem) {
-      btnElem.style.background = "rgba(16,185,129,0.2)";
-      btnElem.style.borderColor = "#10b981";
-    }
-  };
+  // "⏳ NFC 권한 요청 중..." 문구에 영원히 멈춰있지 않도록, 실패/타임아웃 시 항상 비활성 상태로 복구
+  const resetNfcButton = () => updateNfcReaderStatusUI("NONE");
 
   try {
     kioskNdefReader = new NDEFReader();
@@ -1581,7 +1482,7 @@ async function startKioskNfcScan(silent = false) {
     kioskNdefReader.addEventListener("readingerror", event => {
       if (kioskNfcScanCooldown) return;
       kioskNfcScanCooldown = true;
-      setTimeout(() => { kioskNfcScanCooldown = false; }, 2000);
+      setTimeout(() => { kioskNfcScanCooldown = false; }, 3000);
 
       const rawHceToken = `HCE_EVENT_TOKEN_${Math.floor(event.timeStamp || Date.now())}`;
 
@@ -1614,11 +1515,7 @@ async function startKioskNfcScan(silent = false) {
     currentReaderMode = "WEB_NFC";
     updateCameraConcurrentToggleAvailability();
     appendDebugLog("🎉 [Web NFC] 안드로이드 NFC 센서 권한 허용 및 스캔 가동 성공!", "SUCCESS");
-    if (btnText) btnText.innerText = "🟢 NFC 무인 태깅 작동 중";
-    if (btnElem) {
-      btnElem.style.background = "rgba(16,185,129,0.3)";
-      btnElem.style.borderColor = "#10b981";
-    }
+    updateNfcReaderStatusUI("WEB_NFC");
   } catch (err) {
     clearTimeout(scanTimeoutId);
     kioskNdefReader = null;

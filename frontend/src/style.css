@@ -617,7 +617,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
     font-weight: 800;
   }
 
-  /* 결제 금액 / 카메라 스캔 / 최근 결제 내역 3분할 — 세 블록 모두 flex:1로 균등 배분.
+  /* 결제 금액 / 최근 결제 내역 2분할 — 카메라는 화면에 표시되지 않으므로 두 블록이 균등 배분.
      기존 .kiosk-checkout-section 규칙의 justify-content:flex-start는 더 이상 필요 없음
      (flex:1 자식들이 이미 전체 높이를 나눠 채움). */
   .kiosk-checkout-section {
@@ -627,7 +627,6 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
   }
 
   .kiosk-checkout-section > #kiosk-checkout-amount-block,
-  .kiosk-checkout-section > #kiosk-checkout-camera-slot,
   .kiosk-checkout-section > #kiosk-checkout-recent-block {
     flex: 1 1 0 !important;
     min-height: 0 !important;
@@ -654,21 +653,6 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
     max-height: none !important;
     flex: 1;
     min-height: 0;
-  }
-
-  /* 카메라 슬롯: 버튼/상태 텍스트는 제자리, 도킹 포인트가 남는 공간을 채워 실제 영상이 보이는 영역이 됨 */
-  #kiosk-checkout-camera-dock {
-    flex: 1;
-    min-height: 0;
-    position: relative;
-    border-radius: 14px;
-    overflow: hidden;
-  }
-
-  #camera-toggle-btn {
-    min-height: 76px !important;
-    font-size: 1.5rem !important;
-    border-radius: 16px !important;
   }
 
   /* 최근 결제 내역 블록: 컨테이너 자체를 flex:1로 늘리고 내부 리스트가 그 공간을 채움 */
@@ -728,27 +712,10 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
   }
 }
 
-/* 태블릿 가로모드 우측 컬럼 표시 순서: QR 스캔 → 결제 금액 → 최근 결제 내역
-   HTML 구조(결제금액 → 카메라 슬롯 → 최근내역)는 그대로 두고 flex order만 재배치.
-   orientation:landscape로 한정해 세로모드(아래 블록의 grid 배치)에는 영향 없음. */
-@media screen and (min-width: 768px) and (orientation: landscape) {
-  .kiosk-checkout-section > #kiosk-checkout-camera-slot {
-    order: 1 !important;
-  }
-
-  .kiosk-checkout-section > #kiosk-checkout-amount-block {
-    order: 2 !important;
-  }
-
-  .kiosk-checkout-section > #kiosk-checkout-recent-block {
-    order: 3 !important;
-  }
-}
-
 /* Tablet Portrait Layout (세로로 긴 태블릿, 예: 800x1280, 810x1080 이상)
    세로로 긴 화면은 폭 조건만 보는 위 min-height:700px 블록에도 걸려 좌우 반쪽 분할이 그대로
    적용되는데, 폭이 좁고 높이가 긴 화면에서는 이 가로 2분할이 부자연스럽다.
-   대신 위(메뉴 선택 전체 폭) / 아래(좌: QR 스캔, 우: 결제금액+최근내역 세로 스택) 구조로 재배치.
+   대신 위(메뉴 선택 전체 폭) / 아래(좌: 결제 금액, 우: 최근 결제 내역) 구조로 재배치.
    이 블록이 캐스케이드상 위 min-height:700px 블록보다 뒤에 있으므로, 동일 특이도(!important)
    조건에서 겹치는 속성은 이 블록이 이긴다. */
 @media screen and (min-width: 768px) and (orientation: portrait) {
@@ -768,38 +735,43 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
     min-height: 0 !important;
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    /* minmax(0, 1fr) — 1fr만 쓰면 이 트랙의 자동 최소 크기가 내용(최근 결제 내역 행 개수)을
-       기준으로 잡혀서, 행이 많아지면 트랙 자체가 늘어나 화면 아래로 넘칠 수 있음.
-       0으로 고정해야 실제로 남는 공간만큼만 차지하고, 넘치는 내용은 리스트 내부 스크롤로 처리됨. */
-    grid-template-rows: auto minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) auto !important;
     gap: 1.25rem !important;
   }
 
-  /* 우측 컬럼: 결제 금액(위) + 최근 결제 내역(아래) 세로 스택 */
+  /* 좌: 결제 금액, 우: 최근 결제 내역 - 카메라가 화면에 표시되지 않으므로 그 자리를
+     결제 금액이 대신 차지하고, 두 블록 모두 이 행의 높이 전체를 채운다. */
   .kiosk-checkout-section > #kiosk-checkout-amount-block {
-    grid-column: 2 !important;
+    grid-column: 1 !important;
     grid-row: 1 !important;
-  }
-
-  .kiosk-checkout-section > #kiosk-checkout-recent-block {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
     min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;
   }
 
-  /* 좌측 컬럼: QR 스캔 버튼 + 카메라 뷰가 우측 두 블록 높이 전체를 차지 */
-  .kiosk-checkout-section > #kiosk-checkout-camera-slot {
-    grid-column: 1 !important;
-    grid-row: 1 / 3 !important;
-    height: 100% !important;
+  .kiosk-checkout-section > #kiosk-checkout-recent-block {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   /* 카드 대리 발급 패널이 열리면 하단에 좌우 폭 전체로 별도 행 추가 (평소엔 숨김 상태라 공간 차지 없음) */
   #admin-tab-card {
     grid-column: 1 / -1 !important;
-    grid-row: 3 !important;
+    grid-row: 2 !important;
+  }
+
+  #kiosk-checkout-amount-grid {
+    flex: 1;
+    min-height: 0;
+  }
+
+  #cart-items-container {
+    max-height: none !important;
+    flex: 1;
+    min-height: 0;
   }
 
   #recent-payments-container {
@@ -815,17 +787,6 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, .btn-toss, .
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-  }
-
-  #kiosk-checkout-camera-dock {
-    flex: 1;
-    min-height: 0;
-  }
-
-  /* 세로 모드는 좌우 2분할 때문에 카메라 컬럼 폭이 가로 모드보다 훨씬 좁아서,
-     테스트 모드 시뮬레이션 버튼 3개를 가로로 나란히 두면 글자가 넘친다 - 세로로 쌓는다. */
-  #kiosk-test-mode-btn-grid {
-    grid-template-columns: 1fr !important;
   }
 
   /* 최근 결제 내역 한 줄 항목도 좁은 컬럼 기준으로 살짝 축소 (가로 모드 700px+ 확대 폰트 기준 대비) */

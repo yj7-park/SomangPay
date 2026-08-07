@@ -385,7 +385,6 @@ def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends(get_d
 
     # 메뉴 미선택(req.items가 비어있음) 시 기본 결제 설정 적용
     effective_items = req.items or []
-    is_default_pay_applied = False
 
     if not effective_items:
         if kiosk_dev and kiosk_dev.default_product_id:
@@ -393,12 +392,15 @@ def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends(get_d
                 product_id=kiosk_dev.default_product_id,
                 quantity=kiosk_dev.default_quantity or 1
             )]
-            is_default_pay_applied = True
         else:
             raise HTTPException(status_code=400, detail="메뉴를 먼저 선택해 주세요. 이 단말기에는 기본 결제 설정이 없습니다.")
 
-    # UC-08: 기본 결제 설정이 있는 키오스크에서 30초 이내 중복 결제 방지 체크
-    if is_default_pay_applied and not req.force_confirm:
+    # UC-08: 30초 이내 동일 회원 중복 결제 방지 체크.
+    # 프론트엔드(kiosk.js)가 화면 로드 시 기본 메뉴를 장바구니에 미리 채워두기 때문에
+    # req.items가 비어서 오는 경우가 사실상 없다 - "기본 결제 적용 여부"로 이 체크를
+    # 게이트하면 메뉴를 직접 선택한 일반적인 태깅에서는 절대 트리거되지 않는다.
+    # 메뉴 선택 여부와 무관하게, 짧은 시간 내 반복 태깅 자체를 감지해야 한다.
+    if not req.force_confirm:
         # 최근 30초 이내에 동일 회원의 SUCCESS 결제 트랜잭션 검사
         thirty_seconds_ago = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
         recent_tx = db.query(models.PaymentTransaction).filter(
