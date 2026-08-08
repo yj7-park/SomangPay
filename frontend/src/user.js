@@ -87,7 +87,9 @@ function onLoginSuccess(user) {
 
 async function loadUsers() {
   try {
-    const res = await fetch(`${API_BASE}/users`);
+    // 전체 회원 목록(전화번호/계좌번호/잔액 등 PII 포함)은 관리자 전용이라, 이 계정 선택
+    // 드롭다운은 이름/구분/아이디만 내려주는 공개 최소 정보 엔드포인트를 쓴다.
+    const res = await fetch(`${API_BASE}/users/public`);
     users = await res.json();
     renderUserSelectOptions();
   } catch (err) {

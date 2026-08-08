@@ -1,11 +1,12 @@
 import datetime
+import hmac
 import random
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Body
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app import models, schemas, security
 from app.database import engine, get_db, init_db
 from app.services.deposit_matcher import process_bank_deposit
 
@@ -23,6 +24,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def require_admin_auth(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> "models.User":
+    """관리자 전용 라우트에 붙이는 의존성. /api/admin/verify-pin(또는 verify-auth)에서
+    발급한 서명 토큰을 'Authorization: Bearer <token>' 헤더로 검증한다."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="관리자 인증이 필요합니다.")
+
+    token = authorization[len("Bearer "):]
+    admin_id = security.verify_admin_token(token)
+    if not admin_id:
+        raise HTTPException(status_code=401, detail="관리자 세션이 만료되었거나 유효하지 않습니다. 다시 인증해 주세요.")
+
+    admin = db.query(models.User).filter(
+        models.User.id == admin_id,
+        models.User.role == "ADMIN",
+        models.User.status == "ACTIVE",
+    ).first()
+    if not admin:
+        raise HTTPException(status_code=401, detail="관리자 권한이 없습니다.")
+    return admin
+
 
 # 초기 시드 데이터 구축
 @app.on_event("startup")
@@ -108,7 +133,13 @@ def read_root():
 # ================= USER & ADMIN APIs =================
 
 @app.get("/api/users", response_model=List[schemas.UserResponse])
-def get_users(db: Session = Depends(get_db)):
+def get_users(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    """전체 회원 목록(전화번호/계좌번호/잔액 등 PII 포함) - 관리자 전용."""
+    return db.query(models.User).all()
+
+@app.get("/api/users/public", response_model=List[schemas.UserPublicResponse])
+def get_users_public(db: Session = Depends(get_db)):
+    """이름/구분만 노출하는 공개용 최소 목록 - 회원 PWA의 "접속할 회원 선택" 드롭다운 등에 사용."""
     return db.query(models.User).all()
 
 @app.get("/api/users/{user_id}", response_model=schemas.UserResponse)
@@ -163,10 +194,14 @@ def user_login(req: schemas.UserLoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="존재하지 않는 회원 아이디 또는 전화번호입니다.")
     
-    # 비밀번호 검증 (기본값 1234 또는 설정한 비밀번호)
-    user_pass = user.password_hash or "1234"
-    if user_pass != req.password:
+    # 비밀번호 검증 (기본값 1234 또는 설정한 비밀번호). 레거시 평문 해시는 검증 성공 시
+    # 그 자리에서 PBKDF2 해시로 자동 승급시켜 저장한다(migrate-on-login).
+    stored_pass = user.password_hash or "1234"
+    if not security.verify_password(req.password, stored_pass):
         raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다. (기본 비밀번호: 1234)")
+    if security.needs_rehash(stored_pass):
+        user.password_hash = security.hash_password(req.password)
+        db.commit()
 
     if user.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="비활성화되거나 정지된 회원 계정입니다.")
@@ -187,7 +222,7 @@ def update_user_info(user_id: int, req: schemas.UserUpdateInfo, db: Session = De
     if req.account_number is not None:
         user.account_number = req.account_number
     if req.new_password:
-        user.password_hash = req.new_password
+        user.password_hash = security.hash_password(req.new_password)
 
     db.commit()
     db.refresh(user)
@@ -195,7 +230,11 @@ def update_user_info(user_id: int, req: schemas.UserUpdateInfo, db: Session = De
 
 
 @app.post("/api/admin/register-user", response_model=schemas.UserResponse)
-def admin_register_user(req: schemas.UserProxyCreate, db: Session = Depends(get_db)):
+def admin_register_user(
+    req: schemas.UserProxyCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
     """관리자 대리 회원 등록 API (어린이, 노인 등)"""
     username = f"user_{random.randint(1000, 9999)}"
 
@@ -206,7 +245,8 @@ def admin_register_user(req: schemas.UserProxyCreate, db: Session = Depends(get_
         user_type=req.user_type,
         bank_name=req.bank_name or "NH농협",
         account_number=req.account_number,
-        credit_balance=req.initial_credit
+        credit_balance=req.initial_credit,
+        password_hash=security.hash_password("1234"),
     )
     db.add(new_user)
     db.commit()
@@ -217,7 +257,8 @@ def admin_register_user(req: schemas.UserProxyCreate, db: Session = Depends(get_
             user_id=new_user.id,
             amount=req.initial_credit,
             deposit_type="ADMIN_MANUAL",
-            memo="신규 등록 관리자 직권 초기 충전"
+            memo="신규 등록 관리자 직권 초기 충전",
+            admin_id=admin.id,
         )
         db.add(deposit)
         db.commit()
@@ -225,8 +266,13 @@ def admin_register_user(req: schemas.UserProxyCreate, db: Session = Depends(get_
     return new_user
 
 @app.post("/api/admin/recharge-credit")
-def admin_recharge_credit(req: schemas.AdminRechargeRequest, db: Session = Depends(get_db)):
-    """관리자 수동 직권 크레딧 충전 API"""
+def admin_recharge_credit(
+    req: schemas.AdminRechargeRequest,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 수동 직권 크레딧 충전 API. amount는 스키마에서 0 초과만 허용
+    (직권 충전으로 위장한 잔액 차감/무한 충전을 막기 위함)."""
     user = db.query(models.User).filter(models.User.id == req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
@@ -236,7 +282,8 @@ def admin_recharge_credit(req: schemas.AdminRechargeRequest, db: Session = Depen
         user_id=user.id,
         amount=req.amount,
         deposit_type="ADMIN_MANUAL",
-        memo=req.memo or "관리자 직권 충전"
+        memo=req.memo or "관리자 직권 충전",
+        admin_id=admin.id,
     )
     db.add(deposit)
     db.commit()
@@ -248,15 +295,43 @@ def admin_recharge_credit(req: schemas.AdminRechargeRequest, db: Session = Depen
         "new_balance": user.credit_balance
     }
 
+@app.post("/api/admin/users/{user_id}/status")
+def update_user_status(
+    user_id: int,
+    req: schemas.UserStatusUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """회원 정지/재활성화. 카드/휴대폰 분실 등으로 결제 자체를 즉시 막아야 할 때 사용."""
+    if req.status not in ("ACTIVE", "SUSPENDED"):
+        raise HTTPException(status_code=400, detail="status는 ACTIVE 또는 SUSPENDED만 가능합니다.")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+    user.status = req.status
+    db.commit()
+    return {"success": True, "message": f"{user.name}님의 상태가 {req.status}로 변경되었습니다.", "status": user.status}
+
 # ================= NFC CARD APIs =================
 
 @app.get("/api/cards", response_model=List[schemas.NFCCardResponse])
-def get_nfc_cards(db: Session = Depends(get_db)):
-    return db.query(models.NFCCard).all()
+def get_nfc_cards(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    cards = db.query(models.NFCCard).all()
+    result = []
+    for c in cards:
+        res = schemas.NFCCardResponse.from_orm(c)
+        owner = db.query(models.User).filter(models.User.id == c.user_id).first()
+        res.user_name = owner.name if owner else "Unknown"
+        result.append(res)
+    return result
 
 @app.post("/api/cards/register", response_model=schemas.NFCCardResponse)
 def register_nfc_card(req: schemas.NFCCardRegister, db: Session = Depends(get_db)):
-    """NFC 카드/태그 신규 등록 및 사용자 1:1 매핑 (기존 카드 재할당 지원)"""
+    """NFC 카드/태그 신규 등록 및 사용자 1:1 매핑 (기존 카드 재할당 지원).
+    회원 PWA(user.js)가 본인 카드를 스스로 등록할 때도 이 엔드포인트를 그대로 쓰기 때문에
+    관리자 인증으로 막지 않았다 - 다만 이는 회원 로그인 자체가 서버 세션으로 검증되지
+    않는다는 더 근본적인 한계에 기대고 있는 것이라, 임의 user_id로 카드를 대리 등록하는
+    행위를 진짜로 막으려면 회원 레벨 인증(세션/토큰)부터 먼저 도입해야 한다."""
     user = db.query(models.User).filter(models.User.id == req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="존재하지 않는 회원입니다.")
@@ -289,6 +364,36 @@ def get_user_cards(user_id: int, db: Session = Depends(get_db)):
     """특정 회원의 등록된 실물 NFC 카드 목록 조회"""
     return db.query(models.NFCCard).filter(models.NFCCard.user_id == user_id, models.NFCCard.is_active == True).all()
 
+@app.post("/api/cards/{card_id}/deactivate", response_model=schemas.NFCCardResponse)
+def deactivate_nfc_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """분실/도난 카드를 결제에 못 쓰도록 즉시 비활성화. UID 자체는 남겨둬서 이력 조회는 유지."""
+    card = db.query(models.NFCCard).filter(models.NFCCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="카드를 찾을 수 없습니다.")
+    card.is_active = False
+    db.commit()
+    db.refresh(card)
+    return card
+
+@app.post("/api/cards/{card_id}/activate", response_model=schemas.NFCCardResponse)
+def activate_nfc_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """비활성화했던 카드를 다시 사용 가능하게 되돌림 (분실 카드를 되찾은 경우 등)."""
+    card = db.query(models.NFCCard).filter(models.NFCCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="카드를 찾을 수 없습니다.")
+    card.is_active = True
+    db.commit()
+    db.refresh(card)
+    return card
+
 # ================= PRODUCTS (MENU) APIs =================
 
 @app.get("/api/products", response_model=List[schemas.ProductResponse])
@@ -296,7 +401,7 @@ def get_products(db: Session = Depends(get_db)):
     return db.query(models.Product).filter(models.Product.is_active == True).all()
 
 @app.post("/api/products", response_model=schemas.ProductResponse)
-def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db)):
+def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     product = models.Product(
         name=req.name,
         price_general=req.price_general,
@@ -309,7 +414,7 @@ def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db)):
     return product
 
 @app.put("/api/products/{product_id}", response_model=schemas.ProductResponse)
-def update_product(product_id: int, req: schemas.ProductUpdate, db: Session = Depends(get_db)):
+def update_product(product_id: int, req: schemas.ProductUpdate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.is_active == True).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -324,7 +429,7 @@ def update_product(product_id: int, req: schemas.ProductUpdate, db: Session = De
     return product
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(product_id: int, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -338,21 +443,33 @@ class AdminAuthVerifyRequest(schemas.BaseModel):
 
 @app.post("/api/admin/verify-pin")
 @app.post("/api/admin/verify-auth")
-def verify_admin_auth(req: AdminAuthVerifyRequest, db: Session = Depends(get_db)):
-    """UC-07: 관리자 보안 인증 API (PIN 코드 또는 관리자 NFC/QR 식별자 다중 매체 인증)"""
-    if req.pin and req.pin == "1234":
-        return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN"}
+def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session = Depends(get_db)):
+    """UC-07: 관리자 보안 인증 API (PIN 코드 또는 관리자 NFC/QR 식별자 다중 매체 인증).
+    성공 시 서명된 세션 토큰을 발급한다 - 이 토큰 없이는 관리자 전용 API를 호출할 수 없다
+    (require_admin_auth 참고). IP당 5분에 5회로 PIN 시도 횟수를 제한해 브루트포스를 억제한다."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not security.register_pin_attempt(client_ip):
+        raise HTTPException(status_code=429, detail="PIN 시도 횟수를 초과했습니다. 5분 후 다시 시도해 주세요.")
+
+    if req.pin and hmac.compare_digest(req.pin, security.ADMIN_PIN):
+        security.clear_pin_attempts(client_ip)
+        admin_user = db.query(models.User).filter(models.User.role == "ADMIN").first()
+        token = security.create_admin_token(admin_user.id if admin_user else 0)
+        return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN", "token": token}
 
     if req.card_uid:
         card = db.query(models.NFCCard).filter(models.NFCCard.card_uid == req.card_uid, models.NFCCard.is_active == True).first()
         if card:
             user = db.query(models.User).filter(models.User.id == card.user_id).first()
             if user and user.role == "ADMIN" and user.status == "ACTIVE":
+                security.clear_pin_attempts(client_ip)
+                token = security.create_admin_token(user.id)
                 return {
                     "success": True,
                     "message": f"관리자({user.name}) 식별자 인증이 완료되었습니다.",
                     "admin_name": user.name,
-                    "auth_type": "CARD_QR"
+                    "auth_type": "CARD_QR",
+                    "token": token
                 }
 
     raise HTTPException(status_code=401, detail="인증 실패: 관리자 PIN이 올바르지 않거나 권한이 없는 식별자입니다.")
@@ -508,7 +625,7 @@ def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends(get_d
 
 class DeeplinkRequest(schemas.BaseModel):
     user_id: int
-    amount: int
+    amount: int = schemas.Field(gt=0)
     provider: str  # TOSS, KAKAOPAY
 
 @app.post("/api/payments/deeplink")
@@ -582,36 +699,48 @@ class NHWebhookPayload(schemas.BaseModel):
     transaction_id: Optional[str] = None
 
 @app.post("/api/nhbank/webhook")
-def nhbank_deposit_webhook(payload: NHWebhookPayload, db: Session = Depends(get_db)):
+async def nhbank_deposit_webhook(request: Request, db: Session = Depends(get_db)):
     """
     NH농협 / PG사 실시간 입금 알림 Webhook API
-    외부 농협 서버가 입금 발생 시 이 엔드포인트로 JSON 전달
+    외부 농협 서버가 입금 발생 시 이 엔드포인트로 JSON 전달.
+    NH_WEBHOOK_SECRET이 설정돼 있으면 'X-NH-Signature' 헤더(원문 바디의 HMAC-SHA256)를
+    검증해서, 계좌번호만 알면 누구나 호출해 충전시킬 수 있는 위조 웹훅을 막는다.
     """
+    raw_body = await request.body()
+    signature = request.headers.get("X-NH-Signature")
+    if not security.verify_webhook_signature(raw_body, signature):
+        raise HTTPException(status_code=401, detail="웹훅 서명 검증에 실패했습니다.")
+
+    payload = NHWebhookPayload.model_validate_json(raw_body)
     result = process_bank_deposit(
         db=db,
         source_account=payload.source_account,
         amount=payload.amount,
-        depositor_name=payload.depositor_name
+        depositor_name=payload.depositor_name,
+        transaction_id=payload.transaction_id
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
 @app.post("/api/nhbank/mock-deposit")
-def mock_nhbank_deposit(payload: NHWebhookPayload, db: Session = Depends(get_db)):
-    """NH농협 계좌 입금 발생 시뮬레이션 API (자동 충전 매칭 엔진 구동)"""
+def mock_nhbank_deposit(payload: NHWebhookPayload, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    """NH농협 계좌 입금 발생 시뮬레이션 API (자동 충전 매칭 엔진 구동).
+    실제 은행 웹훅이 아니라 관리자 대시보드의 데모/테스트 버튼이므로 관리자 인증이 필요하다
+    (그렇지 않으면 계좌번호 패턴만 알아도 누구나 임의 회원에게 무제한 충전시킬 수 있음)."""
     result = process_bank_deposit(
         db=db,
         source_account=payload.source_account,
         amount=payload.amount,
-        depositor_name=payload.depositor_name
+        depositor_name=payload.depositor_name,
+        transaction_id=payload.transaction_id
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
 @app.get("/api/histories/deposits", response_model=List[schemas.DepositHistoryResponse])
-def get_deposit_histories(db: Session = Depends(get_db)):
+def get_deposit_histories(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     histories = db.query(models.DepositHistory).order_by(models.DepositHistory.id.desc()).all()
     # 사용자 이름 매핑
     result = []

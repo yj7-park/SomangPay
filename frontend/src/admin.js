@@ -3,6 +3,23 @@ const API_BASE = "/api";
 let users = [];
 let products = [];
 let isAdminAuthenticated = false;
+let adminToken = null;
+
+// 관리자 전용 API 호출 공통 헬퍼 - Authorization 헤더를 자동으로 붙이고,
+// 토큰이 만료/무효화(401)됐으면 세션을 초기화하고 PIN 재인증을 요구한다.
+async function adminFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {}, adminToken ? { "Authorization": `Bearer ${adminToken}` } : {});
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    adminToken = null;
+    isAdminAuthenticated = false;
+    sessionStorage.removeItem("admin_auth");
+    sessionStorage.removeItem("admin_token");
+    alert("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
+    showModal("admin-pin-modal");
+  }
+  return res;
+}
 
 // 모달 show/hide 헬퍼 (인라인 style + .active 클래스 동시 제어)
 function showModal(id) {
@@ -21,7 +38,9 @@ function hideModal(id) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (sessionStorage.getItem("admin_auth") === "true") {
+  const savedToken = sessionStorage.getItem("admin_token");
+  if (savedToken && sessionStorage.getItem("admin_auth") === "true") {
+    adminToken = savedToken;
     isAdminAuthenticated = true;
     hideModal("admin-pin-modal");
     initAdminDashboard();
@@ -45,13 +64,19 @@ async function submitAdminPin() {
       body: JSON.stringify({ pin: pin })
     });
 
-    if (res.ok) {
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.token) {
+      adminToken = data.token;
       sessionStorage.setItem("admin_auth", "true");
+      sessionStorage.setItem("admin_token", adminToken);
       isAdminAuthenticated = true;
       hideModal("admin-pin-modal");
       initAdminDashboard();
+    } else if (res.status === 429) {
+      alert(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
-      alert("관리자 PIN 번호가 올바르지 않습니다. (초기 PIN: 1234)");
+      alert("관리자 PIN 번호가 올바르지 않습니다.");
       if (pinInput) pinInput.value = "";
     }
   } catch (err) {
@@ -64,6 +89,7 @@ function initAdminDashboard() {
   loadAdminUsers();
   loadAdminProducts();
   loadDepositHistories();
+  loadAdminCards();
   initAdminNfcReader();
 }
 
@@ -339,7 +365,8 @@ function scanAdminQrFrame() {
 
 async function loadAdminUsers() {
   try {
-    const res = await fetch(`${API_BASE}/users`);
+    const res = await adminFetch(`${API_BASE}/users`);
+    if (!res.ok) return;
     users = await res.json();
     renderUsersTable();
     renderUserSelectDropdown();
@@ -360,11 +387,92 @@ async function loadAdminProducts() {
 
 async function loadDepositHistories() {
   try {
-    const res = await fetch(`${API_BASE}/histories/deposits`);
+    const res = await adminFetch(`${API_BASE}/histories/deposits`);
+    if (!res.ok) return;
     const histories = await res.json();
     renderDepositHistoriesTable(histories);
   } catch (err) {
     console.error("Failed to load deposit histories:", err);
+  }
+}
+
+let cards = [];
+
+async function loadAdminCards() {
+  try {
+    const res = await adminFetch(`${API_BASE}/cards`);
+    if (!res.ok) return;
+    cards = await res.json();
+    renderCardsTable();
+  } catch (err) {
+    console.error("Failed to load cards:", err);
+  }
+}
+
+function renderCardsTable() {
+  const tbody = document.getElementById("admin-card-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (cards.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">등록된 카드가 없습니다.</td></tr>`;
+    return;
+  }
+
+  cards.forEach(c => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${c.user_name || '-'}</strong></td>
+      <td style="font-family: monospace;">${c.card_uid}</td>
+      <td>${c.card_type === 'QR_CODE' ? '📷 QR' : '💳 NFC'}</td>
+      <td>${c.card_name || '-'}</td>
+      <td>${c.is_active
+        ? '<span style="color: var(--accent-emerald); font-weight: bold;">활성</span>'
+        : '<span style="color: #ef4444; font-weight: bold;">비활성</span>'}</td>
+      <td>
+        ${c.is_active
+          ? `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="setCardActive(${c.id}, false)">비활성화</button>`
+          : `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(16,185,129,0.2); color: #6ee7b7;" onclick="setCardActive(${c.id}, true)">재활성화</button>`}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function setCardActive(cardId, active) {
+  if (!confirm(active ? "이 카드를 다시 활성화하시겠습니까?" : "이 카드를 비활성화하시겠습니까? 분실/도난 카드는 즉시 결제에 사용할 수 없게 됩니다.")) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/cards/${cardId}/${active ? 'activate' : 'deactivate'}`, { method: "POST" });
+    if (res.ok) {
+      loadAdminCards();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(`처리 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("setCardActive error:", err);
+  }
+}
+
+async function toggleUserStatus(userId, currentStatus) {
+  const newStatus = currentStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+  const label = newStatus === "SUSPENDED" ? "정지" : "재활성화";
+  if (!confirm(`이 회원을 ${label}하시겠습니까? 정지된 회원은 즉시 결제가 차단됩니다.`)) return;
+
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/users/${userId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (res.ok) {
+      loadAdminUsers();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(`처리 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("toggleUserStatus error:", err);
   }
 }
 
@@ -375,14 +483,19 @@ function renderUsersTable() {
 
   users.forEach(u => {
     const tr = document.createElement("tr");
+    const isActive = u.status === "ACTIVE";
     tr.innerHTML = `
       <td><strong>${u.name}</strong></td>
       <td><span class="badge-tag ${u.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}">${u.user_type}</span></td>
       <td>${u.phone || '-'}</td>
       <td>${u.account_number || '-'}</td>
       <td style="color: var(--accent-emerald); font-weight: bold; font-size: 1.1rem;">${u.credit_balance.toLocaleString()}원</td>
-      <td>
+      <td>${isActive
+        ? '<span style="color: var(--accent-emerald); font-weight: bold;">활성</span>'
+        : '<span style="color: #ef4444; font-weight: bold;">정지됨</span>'}</td>
+      <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
         <button class="btn-action btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto;" onclick="quickRecharge(${u.id})">충전</button>
+        <button class="btn-action" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto; background: ${isActive ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}; color: ${isActive ? '#fca5a5' : '#6ee7b7'};" onclick="toggleUserStatus(${u.id}, '${u.status}')">${isActive ? '정지' : '재활성화'}</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -417,7 +530,7 @@ async function adminRegisterCardForUser() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/cards/register`, {
+    const res = await adminFetch(`${API_BASE}/cards/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -432,6 +545,7 @@ async function adminRegisterCardForUser() {
       alert(`🎉 [관리자 식별자 대리 발급 성공!]\n유형: ${cardType === 'QR_CODE' ? '📷 교인증 QR 코드' : '💳 실물 NFC 카드'}\n식별 코드: ${cardUid}\n선택하신 회원 계정에 1:1 대리 발급이 완료되었습니다.`);
       document.getElementById("admin-card-uid-input").value = "";
       loadAdminUsers();
+      loadAdminCards();
     } else {
       const errData = await res.json();
       alert(`식별자 대리 발급 실패: ${errData.detail || '오류 발생'}`);
@@ -488,8 +602,10 @@ async function runNHBankDepositSimulation() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/nhbank/mock-deposit?source_account=${encodeURIComponent(account)}&amount=${amount}`, {
-      method: "POST"
+    const res = await adminFetch(`${API_BASE}/nhbank/mock-deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_account: account, amount: amount })
     });
 
     const data = await res.json();
@@ -519,7 +635,7 @@ async function submitProxyRegister() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/admin/register-user`, {
+    const res = await adminFetch(`${API_BASE}/admin/register-user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -555,7 +671,7 @@ async function submitManualRecharge() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/admin/recharge-credit`, {
+    const res = await adminFetch(`${API_BASE}/admin/recharge-credit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -592,7 +708,7 @@ async function submitAddProduct() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/products`, {
+    const res = await adminFetch(`${API_BASE}/products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

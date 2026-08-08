@@ -29,7 +29,20 @@ class UserProxyCreate(BaseModel):
     user_type: str = "GENERAL" # GENERAL, SENIOR
     bank_name: Optional[str] = "농협"
     account_number: Optional[str] = None
-    initial_credit: int = 0
+    initial_credit: int = Field(default=0, ge=0)
+
+# 회원 선택 드롭다운 등 공개 노출용 최소 정보 (전화번호/계좌번호/잔액 등 PII 제외)
+class UserPublicResponse(BaseModel):
+    id: int
+    username: str
+    name: str
+    user_type: str
+
+    class Config:
+        from_attributes = True
+
+class UserStatusUpdate(BaseModel):
+    status: str  # ACTIVE, SUSPENDED
 
 class UserLoginRequest(BaseModel):
     username: str
@@ -53,7 +66,7 @@ class UserResponse(UserBase):
 # Admin Credit Manual Recharge
 class AdminRechargeRequest(BaseModel):
     user_id: int
-    amount: int
+    amount: int = Field(gt=0)
     memo: Optional[str] = "관리자 직권 충전"
 
 # NFC Card Schemas
@@ -97,6 +110,7 @@ class NFCCardResponse(BaseModel):
     card_name: Optional[str]
     card_type: Optional[str] = "NFC"
     user_id: int
+    user_name: Optional[str] = None
     is_active: bool
     issued_at: datetime
 
@@ -152,6 +166,7 @@ class DepositHistoryResponse(BaseModel):
     amount: int
     deposit_type: str
     source_account: Optional[str]
+    transaction_id: Optional[str] = None
     memo: Optional[str]
     created_at: datetime
 

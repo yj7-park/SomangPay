@@ -943,11 +943,31 @@ function kioskHideModal(id) {
   }
 }
 
+// 서버가 실제로 검증하고 서명한 토큰만 신뢰한다 - 예전엔 pin === "1234"를 로컬에서
+// 비교하기만 해서 개발자도구로 sessionStorage 값만 조작하면 누구나 관리자 모드에
+// 들어갈 수 있었다. 발급받은 토큰은 상품 수정/삭제 등 관리자 전용 API 호출 시 그대로 사용.
+let kioskAdminToken = sessionStorage.getItem("kiosk_admin_token") || null;
+
+// 관리자 전용 API 호출 공통 헬퍼 - Authorization 헤더 자동 첨부, 401이면 세션 초기화
+async function kioskAdminFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {}, kioskAdminToken ? { "Authorization": `Bearer ${kioskAdminToken}` } : {});
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    kioskAdminToken = null;
+    sessionStorage.removeItem("kiosk_admin_auth");
+    sessionStorage.removeItem("kiosk_admin_token");
+    alert("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
+    kioskHideModal("kiosk-admin-modal");
+    kioskShowModal("kiosk-pin-modal");
+  }
+  return res;
+}
+
 function openKioskAdminPinModal() {
   // 설정 화면으로 들어가는 동안엔 상시 켜기 카메라를 잠시 꺼둔다 (모달 닫을 때 다시 켜짐)
   if (isCameraScanning) stopCameraScanner();
 
-  if (sessionStorage.getItem("kiosk_admin_auth") === "true") {
+  if (sessionStorage.getItem("kiosk_admin_auth") === "true" && kioskAdminToken) {
     openKioskAdminModal();
     return;
   }
@@ -961,18 +981,36 @@ function closeKioskPinModal() {
   maybeAutoStartAlwaysOnCamera();
 }
 
-function verifyKioskAdminPin() {
+async function verifyKioskAdminPin() {
   const pinInput = document.getElementById("kiosk-pin-input");
   const pin = pinInput ? pinInput.value.trim() : "";
-  if (pin === "1234") {
-    sessionStorage.setItem("kiosk_admin_auth", "true");
-    closeKioskPinModal();
-    openKioskAdminModal();
-    appendDebugLog("[ADMIN] 단말기 관리자 모드 진입 성공", "SUCCESS");
-  } else {
-    alert("PIN 번호가 올바르지 않습니다.");
-    appendDebugLog("[ADMIN] 잘못된 PIN 입력 시도", "ERROR");
-    if (pinInput) pinInput.value = "";
+  if (!pin) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/verify-pin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: pin })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.token) {
+      kioskAdminToken = data.token;
+      sessionStorage.setItem("kiosk_admin_auth", "true");
+      sessionStorage.setItem("kiosk_admin_token", kioskAdminToken);
+      closeKioskPinModal();
+      openKioskAdminModal();
+      appendDebugLog("[ADMIN] 단말기 관리자 모드 진입 성공", "SUCCESS");
+    } else if (res.status === 429) {
+      alert(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
+    } else {
+      alert("PIN 번호가 올바르지 않습니다.");
+      appendDebugLog("[ADMIN] 잘못된 PIN 입력 시도", "ERROR");
+      if (pinInput) pinInput.value = "";
+    }
+  } catch (err) {
+    console.error("Kiosk admin PIN auth error:", err);
+    alert("서버 연결 오류. 잠시 후 다시 시도하세요.");
   }
 }
 
@@ -1118,14 +1156,14 @@ async function kioskAddProduct() {
     let res;
     if (editingProductId !== null) {
       // 수정 모드
-      res = await fetch(`${API_BASE}/products/${editingProductId}`, {
+      res = await kioskAdminFetch(`${API_BASE}/products/${editingProductId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
     } else {
       // 추가 모드
-      res = await fetch(`${API_BASE}/products`, {
+      res = await kioskAdminFetch(`${API_BASE}/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -1173,7 +1211,7 @@ async function kioskDeleteProduct(id) {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/products/${id}`, {
+    const res = await kioskAdminFetch(`${API_BASE}/products/${id}`, {
       method: "DELETE"
     });
 
@@ -1254,7 +1292,7 @@ async function loadKioskUsersForCardIssue() {
   if (!select) return;
 
   try {
-    const res = await fetch(`${API_BASE}/users`);
+    const res = await kioskAdminFetch(`${API_BASE}/users`);
     if (res.ok) {
       const users = await res.json();
       select.innerHTML = '<option value="">-- 어르신/회원 선택 --</option>' + users.map(u => `<option value="${u.id}">[${u.user_type === 'SENIOR' ? '시니어' : '일반'}] ${u.name} (${u.phone || u.account_number || '연락처없음'})</option>`).join("");

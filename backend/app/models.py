@@ -70,6 +70,8 @@ class DepositHistory(Base):
     amount = Column(Integer, nullable=False)
     deposit_type = Column(String(30), nullable=False) # NH_AUTO_MATCH, VIRTUAL_ACCOUNT, ADMIN_MANUAL
     source_account = Column(String(100), nullable=True)
+    # 은행 웹훅의 거래 고유번호 - 같은 입금 알림이 재전송돼도 중복 충전되지 않도록 대조하는 멱등키
+    transaction_id = Column(String(100), nullable=True, index=True)
     admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     memo = Column(String(200), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

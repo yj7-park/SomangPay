@@ -198,10 +198,36 @@
               <th>연락처</th>
               <th>등록 계좌번호</th>
               <th>현재 잔액</th>
+              <th>상태</th>
               <th>관리</th>
             </tr>
           </thead>
           <tbody id="admin-user-tbody">
+            <!-- Dynamic -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Registered NFC/QR Cards -->
+    <div class="glass-container" style="padding: 1.8rem; margin-bottom: 2rem;">
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem;">💳 등록된 카드/QR 식별자</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        분실/도난 신고가 들어오면 여기서 즉시 비활성화하세요. 비활성화된 식별자는 결제/관리자 인증에 사용할 수 없습니다.
+      </p>
+      <div style="overflow-x: auto;">
+        <table class="table-custom">
+          <thead>
+            <tr>
+              <th>소유 회원</th>
+              <th>식별 코드</th>
+              <th>유형</th>
+              <th>카드명</th>
+              <th>상태</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="admin-card-tbody">
             <!-- Dynamic -->
           </tbody>
         </table>
@@ -271,7 +297,7 @@
     <div class="modal-box-large" style="max-width: 400px; border-color: var(--primary);">
       <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">🔒</div>
       <h2 style="font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">대시보드 접근을 위해 PIN 번호를 입력하세요. (초기: 1234)</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">대시보드 접근을 위해 관리자 PIN 번호를 입력하세요.</p>
 
       <div class="form-group">
         <input type="password" id="admin-pin-input" class="form-control" placeholder="PIN 번호 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.5rem;" maxlength="8" onkeyup="if(event.key==='Enter') submitAdminPin();">

@@ -29,6 +29,7 @@ def init_db():
         db.execute(text("ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS default_product_id INTEGER;"))
         db.execute(text("ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS default_quantity INTEGER DEFAULT 1;"))
         db.execute(text("ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS allow_camera_reader_concurrent BOOLEAN DEFAULT FALSE;"))
+        db.execute(text("ALTER TABLE deposit_histories ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100);"))
         db.commit()
     except Exception as e:
         db.rollback()
