@@ -28,7 +28,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         TextToSpeech.OnInitListener, CardReaderManager.NativeNfcController {
 
     private static final String TAG = "SomangKioskNative";
-    private static final String KIOSK_URL = "https://deeply-concrete-mullet.ngrok-free.app/kiosk";
+    private static final String KIOSK_URL = "https://125.248.31.132/kiosk";
 
     private WebView webView;
     private NfcAdapter nfcAdapter;
