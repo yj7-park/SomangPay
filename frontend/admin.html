@@ -299,6 +299,38 @@
 
   </div>
 
+  <!-- Edit User Info Modal -->
+  <div id="admin-user-edit-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 440px;">
+      <h2 style="font-size: 1.4rem; color: #fff; margin-bottom: 0.3rem;">✏️ 회원 정보 수정</h2>
+      <p id="admin-user-edit-name" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;"></p>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">연락처</label>
+          <input type="text" id="edit-user-phone" class="form-control" placeholder="010-0000-0000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">은행명</label>
+          <input type="text" id="edit-user-bank" class="form-control" placeholder="예: NH농협">
+        </div>
+        <div class="form-group">
+          <label class="form-label">입금 매칭용 계좌번호</label>
+          <input type="text" id="edit-user-account" class="form-control" placeholder="예: 302-1234-5678-01">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">새 비밀번호 (선택 - 비워두면 변경 안 함)</label>
+          <input type="password" id="edit-user-password" class="form-control" placeholder="변경할 경우에만 입력">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="closeEditUserModal()">취소</button>
+        <button id="edit-user-submit-btn" class="btn-action btn-primary" onclick="submitUserInfoEdit(this)">저장</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Admin PIN Auth Modal -->
   <div id="admin-pin-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 400px; border-color: var(--primary);">

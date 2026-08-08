@@ -494,6 +494,62 @@ async function toggleUserStatus(userId, currentStatus) {
   }
 }
 
+let editingUserId = null;
+
+function openEditUserModal(userId) {
+  const user = users.find(u => u.id === userId);
+  if (!user) return;
+  editingUserId = userId;
+
+  document.getElementById("admin-user-edit-name").innerText =
+    `${user.name} (${user.user_type === 'SENIOR' ? '시니어' : '일반'} · 잔액 ${user.credit_balance.toLocaleString()}원)`;
+  document.getElementById("edit-user-phone").value = user.phone || "";
+  document.getElementById("edit-user-bank").value = user.bank_name || "";
+  document.getElementById("edit-user-account").value = user.account_number || "";
+  document.getElementById("edit-user-password").value = "";
+
+  showModal("admin-user-edit-modal");
+}
+
+function closeEditUserModal() {
+  editingUserId = null;
+  hideModal("admin-user-edit-modal");
+}
+
+async function submitUserInfoEdit(btn) {
+  if (!editingUserId) return;
+  const phone = document.getElementById("edit-user-phone").value.trim();
+  const bankName = document.getElementById("edit-user-bank").value.trim();
+  const accountNumber = document.getElementById("edit-user-account").value.trim();
+  const newPassword = document.getElementById("edit-user-password").value.trim();
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/users/${editingUserId}/info`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: phone,
+          bank_name: bankName,
+          account_number: accountNumber,
+          new_password: newPassword || null
+        })
+      });
+
+      if (res.ok) {
+        closeEditUserModal();
+        loadAdminUsers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`수정 실패: ${data.detail || '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("submitUserInfoEdit error:", err);
+      alert("서버 연결에 실패했습니다.");
+    }
+  });
+}
+
 function renderUsersTable() {
   const tbody = document.getElementById("admin-user-tbody");
   if (!tbody) return;
@@ -530,6 +586,7 @@ function renderUsersTable() {
         : '<span style="color: #ef4444; font-weight: bold;">정지됨</span>'}</td>
       <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
         <button class="btn-action btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto;" onclick="quickRecharge(${u.id})">충전</button>
+        <button class="btn-action" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto; background: rgba(59,130,246,0.2); color: #93c5fd;" onclick="openEditUserModal(${u.id})">수정</button>
         <button class="btn-action" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto; background: ${isActive ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}; color: ${isActive ? '#fca5a5' : '#6ee7b7'};" onclick="toggleUserStatus(${u.id}, '${u.status}')">${isActive ? '정지' : '재활성화'}</button>
       </td>
     `;
