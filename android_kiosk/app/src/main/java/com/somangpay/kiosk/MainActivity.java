@@ -1,6 +1,7 @@
 package com.somangpay.kiosk;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -64,6 +65,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         webSettings.setDomStorageEnabled(true);
         webSettings.setAllowFileAccess(true);
         webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+        // 길게 눌러 텍스트 선택/복사 메뉴, 링크·이미지 컨텍스트 메뉴(새 탭에서 열기, 이미지 저장 등)가
+        // 뜨는 것을 차단 - true를 반환해 롱클릭 이벤트를 여기서 소비하고 WebView 기본 동작으로 넘기지 않는다.
+        // (CSS의 user-select:none과 함께 적용해야 선택 핸들 자체가 아예 생기지 않는다 - style.css 참고)
+        webView.setOnLongClickListener(v -> true);
+        webView.setHapticFeedbackEnabled(false);
 
         // 카드 리더 우선순위(USB CCID > USB HID 키보드 > 내장 NFC > 에러) 오케스트레이터 초기화
         cardReaderManager = new CardReaderManager(this, webView, mainHandler,
@@ -129,6 +136,51 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     protected void onPause() {
         super.onPause();
         cardReaderManager.onPause();
+    }
+
+    // 화면 고정(Screen Pinning) 자동 진입 - Device Owner가 아니어도 앱이 스스로 요청 가능한
+    // OS 기본 기능으로, 홈/최근 앱 버튼(제스처)을 비활성화한다. 최초 진입 시 시스템이 짧은
+    // 안내를 보여줄 수 있고, 해제하려면 뒤로가기+최근앱 버튼을 동시에 길게 눌러야 한다
+    // (기기에 화면 잠금 PIN이 설정되어 있으면 해제 시 PIN도 함께 요구하도록 설정 가능 -
+    // 설정 > 보안 > 화면 고정 > "고정 해제 시 PIN 요청").
+    // 이미 고정된 상태에서 다시 호출하면 예외가 발생하므로 현재 상태를 먼저 확인한다.
+    private void enterKioskLockTaskIfNeeded() {
+        ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        if (am == null) return;
+        if (am.getLockTaskModeState() == ActivityManager.LOCK_TASK_MODE_NONE) {
+            try {
+                startLockTask();
+                Log.d(TAG, "화면 고정(Screen Pinning) 진입 요청 완료");
+            } catch (Exception e) {
+                Log.e(TAG, "화면 고정 진입 실패: " + e.getMessage());
+            }
+        }
+    }
+
+    // 시스템 뒤로가기(하단 버튼/제스처)를 완전히 무시 - 키오스크는 단일 화면이라 뒤로 나갈 곳이
+    // 없고, 기본 동작(super 호출)을 두면 액티비티가 그대로 종료되어 앱 밖으로 빠져나가 버린다.
+    @Override
+    public void onBackPressed() {
+        // 의도적으로 아무 것도 하지 않음
+    }
+
+    // 시스템 다이얼로그(권한 요청, 알림 패널 등)로 포커스가 빠졌다가 돌아올 때마다 몰입모드를
+    // 재적용 - onCreate에서 한 번만 걸면 그 사이 상태바/내비게이션 바가 다시 나타난 채로 남는다.
+    // 화면 고정(Screen Pinning) 진입도 여기서 함께 시도한다 - onResume()은 액티비티/태스크가
+    // 아직 시스템에 "포그라운드"로 완전히 인식되기 전에 호출될 수 있어 startLockTask()가
+    // "Invalid task, not in foreground" 예외로 실패하는 경우가 있고, onWindowFocusChanged(true)가
+    // 실제로 화면을 붙잡은(포커스를 얻은) 시점을 더 안정적으로 알려준다.
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            );
+            enterKioskLockTaskIfNeeded();
+        }
     }
 
     // CardReaderManager.NativeNfcController 구현 - 기존 내장 NFC 메서드에 위임

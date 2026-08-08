@@ -5,3 +5,7 @@ local.properties
 .gradle/
 build/
 app/build/
+
+# 릴리스 서명 키 - 항상 GitHub Secrets로만 주입, 저장소에 커밋 금지
+*.keystore
+*.jks
