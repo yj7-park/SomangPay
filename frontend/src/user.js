@@ -354,6 +354,19 @@ async function saveNfcUidToBackend(userId, cardUid, cardName) {
       })
     });
 
+    if (res.ok) {
+      if (statusElem) statusElem.innerText = `✅ 카드가 등록되었습니다! (UID: ${cardUid})`;
+      await fetchUserCards(userId);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (statusElem) statusElem.innerText = `❌ 카드 등록 실패: ${err.detail || '오류 발생'}`;
+    }
+  } catch (e) {
+    console.error("saveNfcUidToBackend error:", e);
+    if (statusElem) statusElem.innerText = "❌ 서버 연결에 실패했습니다.";
+  }
+}
+
 // Save User Info Edit (Phone, Bank, Account, Password)
 async function saveUserInfoEdit() {
   if (!loggedInUser) return;

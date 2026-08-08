@@ -5,6 +5,24 @@ let products = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
 
+// 요청 진행 중 버튼을 비활성화해 두 번 눌러서 중복 충전/중복 등록되는 걸 막는다.
+async function withButtonLock(btn, fn) {
+  if (!btn) return fn();
+  if (btn.disabled) return; // 이미 처리 중이면 무시
+  const originalText = btn.innerText;
+  btn.disabled = true;
+  btn.style.opacity = "0.6";
+  btn.style.cursor = "not-allowed";
+  try {
+    await fn();
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = "";
+    btn.style.cursor = "";
+    btn.innerText = originalText;
+  }
+}
+
 // 관리자 전용 API 호출 공통 헬퍼 - Authorization 헤더를 자동으로 붙이고,
 // 토큰이 만료/무효화(401)됐으면 세션을 초기화하고 PIN 재인증을 요구한다.
 async function adminFetch(url, options = {}) {
@@ -481,7 +499,24 @@ function renderUsersTable() {
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  users.forEach(u => {
+  const searchInput = document.getElementById("admin-user-search");
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+  const filtered = !query ? users : users.filter(u => {
+    const haystack = [u.name, u.phone, u.account_number, u.username].filter(Boolean).join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+
+  const countLabel = document.getElementById("admin-user-count");
+  if (countLabel) {
+    countLabel.innerText = query ? `(검색결과 ${filtered.length}/${users.length}명)` : `(총 ${users.length}명)`;
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">${query ? '검색 결과가 없습니다.' : '등록된 회원이 없습니다.'}</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(u => {
     const tr = document.createElement("tr");
     const isActive = u.status === "ACTIVE";
     tr.innerHTML = `
@@ -515,7 +550,7 @@ function renderUserSelectDropdown() {
 }
 
 // Admin Register Physical NFC Card or Church Member QR Code For User
-async function adminRegisterCardForUser() {
+async function adminRegisterCardForUser(btn) {
   const userId = document.getElementById("admin-card-user-select").value;
   const cardType = adminScanMode === "QR" ? "QR_CODE" : "NFC";
   const cardUid = document.getElementById("admin-card-uid-input").value.trim();
@@ -529,31 +564,33 @@ async function adminRegisterCardForUser() {
     return;
   }
 
-  try {
-    const res = await adminFetch(`${API_BASE}/cards/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        card_uid: cardUid,
-        card_name: cardType === 'QR_CODE' ? "대리 등록 교인증 QR 코드" : "대리 발급 실물 NFC 카드",
-        card_type: cardType,
-        user_id: parseInt(userId)
-      })
-    });
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/cards/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          card_uid: cardUid,
+          card_name: cardType === 'QR_CODE' ? "대리 등록 교인증 QR 코드" : "대리 발급 실물 NFC 카드",
+          card_type: cardType,
+          user_id: parseInt(userId)
+        })
+      });
 
-    if (res.ok) {
-      alert(`🎉 [관리자 식별자 대리 발급 성공!]\n유형: ${cardType === 'QR_CODE' ? '📷 교인증 QR 코드' : '💳 실물 NFC 카드'}\n식별 코드: ${cardUid}\n선택하신 회원 계정에 1:1 대리 발급이 완료되었습니다.`);
-      document.getElementById("admin-card-uid-input").value = "";
-      loadAdminUsers();
-      loadAdminCards();
-    } else {
-      const errData = await res.json();
-      alert(`식별자 대리 발급 실패: ${errData.detail || '오류 발생'}`);
+      if (res.ok) {
+        alert(`🎉 [관리자 식별자 대리 발급 성공!]\n유형: ${cardType === 'QR_CODE' ? '📷 교인증 QR 코드' : '💳 실물 NFC 카드'}\n식별 코드: ${cardUid}\n선택하신 회원 계정에 1:1 대리 발급이 완료되었습니다.`);
+        document.getElementById("admin-card-uid-input").value = "";
+        loadAdminUsers();
+        loadAdminCards();
+      } else {
+        const errData = await res.json();
+        alert(`식별자 대리 발급 실패: ${errData.detail || '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Admin register card error:", err);
+      alert("서버 통신 중 에러가 발생했습니다.");
     }
-  } catch (err) {
-    console.error("Admin register card error:", err);
-    alert("서버 통신 중 에러가 발생했습니다.");
-  }
+  });
 }
 
 function renderProductsTable() {
@@ -568,6 +605,10 @@ function renderProductsTable() {
       <td>${p.price_general.toLocaleString()}원</td>
       <td style="color: var(--accent-amber); font-weight: bold;">${p.price_senior.toLocaleString()}원</td>
       <td><span style="color: var(--accent-emerald);">판매중</span></td>
+      <td style="display: flex; gap: 0.4rem;">
+        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(59,130,246,0.2); color: #93c5fd;" onclick="editAdminProduct(${p.id})">수정</button>
+        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteAdminProduct(${p.id})">삭제</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -592,7 +633,7 @@ function renderDepositHistoriesTable(histories) {
   });
 }
 
-async function runNHBankDepositSimulation() {
+async function runNHBankDepositSimulation(btn) {
   const account = document.getElementById("sim-account").value;
   const amount = parseInt(document.getElementById("sim-amount").value);
 
@@ -601,28 +642,30 @@ async function runNHBankDepositSimulation() {
     return;
   }
 
-  try {
-    const res = await adminFetch(`${API_BASE}/nhbank/mock-deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source_account: account, amount: amount })
-    });
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/nhbank/mock-deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_account: account, amount: amount })
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      alert(`[매칭 실패] ${data.detail}`);
-      return;
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`[매칭 실패] ${data.detail}`);
+        return;
+      }
+
+      alert(`🎉 [NH농협 입금 자동 충전 성공!]\n${data.message}`);
+      loadAdminUsers();
+      loadDepositHistories();
+    } catch (err) {
+      console.error("Simulation error:", err);
     }
-
-    alert(`🎉 [NH농협 입금 자동 충전 성공!]\n${data.message}`);
-    loadAdminUsers();
-    loadDepositHistories();
-  } catch (err) {
-    console.error("Simulation error:", err);
-  }
+  });
 }
 
-async function submitProxyRegister() {
+async function submitProxyRegister(btn) {
   const name = document.getElementById("reg-name").value;
   const phone = document.getElementById("reg-phone").value;
   const userType = document.getElementById("reg-type").value;
@@ -634,33 +677,38 @@ async function submitProxyRegister() {
     return;
   }
 
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/register-user`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name,
-        phone: phone,
-        user_type: userType,
-        account_number: account,
-        initial_credit: credit
-      })
-    });
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/register-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          user_type: userType,
+          account_number: account,
+          initial_credit: credit
+        })
+      });
 
-    if (res.ok) {
-      alert("신규 회원이 대리 등록되었습니다!");
-      document.getElementById("reg-name").value = "";
-      document.getElementById("reg-phone").value = "";
-      document.getElementById("reg-account").value = "";
-      document.getElementById("reg-credit").value = "0";
-      loadAdminUsers();
+      if (res.ok) {
+        alert("신규 회원이 대리 등록되었습니다!");
+        document.getElementById("reg-name").value = "";
+        document.getElementById("reg-phone").value = "";
+        document.getElementById("reg-account").value = "";
+        document.getElementById("reg-credit").value = "0";
+        loadAdminUsers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`등록 실패: ${data.detail || '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Proxy register error:", err);
     }
-  } catch (err) {
-    console.error("Proxy register error:", err);
-  }
+  });
 }
 
-async function submitManualRecharge() {
+async function submitManualRecharge(btn) {
   const userId = document.getElementById("recharge-user-select").value;
   const amount = parseInt(document.getElementById("recharge-amount").value);
   const memo = document.getElementById("recharge-memo").value;
@@ -670,26 +718,31 @@ async function submitManualRecharge() {
     return;
   }
 
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/recharge-credit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: parseInt(userId),
-        amount: amount,
-        memo: memo || "관리자 직권 충전"
-      })
-    });
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/recharge-credit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: parseInt(userId),
+          amount: amount,
+          memo: memo || "관리자 직권 충전"
+        })
+      });
 
-    if (res.ok) {
-      const data = await res.json();
-      alert(data.message);
-      loadAdminUsers();
-      loadDepositHistories();
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        loadAdminUsers();
+        loadDepositHistories();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`충전 실패: ${data.detail ? JSON.stringify(data.detail) : '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Manual recharge error:", err);
     }
-  } catch (err) {
-    console.error("Manual recharge error:", err);
-  }
+  });
 }
 
 function quickRecharge(userId) {
@@ -697,35 +750,90 @@ function quickRecharge(userId) {
   document.getElementById("recharge-amount").focus();
 }
 
-async function submitAddProduct() {
-  const name = document.getElementById("prod-name").value;
+let editingProductId = null;
+
+function editAdminProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  editingProductId = id;
+  document.getElementById("prod-name").value = product.name;
+  document.getElementById("prod-price-gen").value = product.price_general;
+  document.getElementById("prod-price-sen").value = product.price_senior;
+  const submitBtn = document.getElementById("prod-submit-btn");
+  if (submitBtn) submitBtn.innerText = "메뉴 수정 완료";
+  const cancelBtn = document.getElementById("prod-cancel-btn");
+  if (cancelBtn) cancelBtn.style.display = "inline-flex";
+  document.getElementById("prod-name").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelAdminProductEdit() {
+  editingProductId = null;
+  document.getElementById("prod-name").value = "";
+  document.getElementById("prod-price-gen").value = "";
+  document.getElementById("prod-price-sen").value = "";
+  const submitBtn = document.getElementById("prod-submit-btn");
+  if (submitBtn) submitBtn.innerText = "메뉴 추가";
+  const cancelBtn = document.getElementById("prod-cancel-btn");
+  if (cancelBtn) cancelBtn.style.display = "none";
+}
+
+async function deleteAdminProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  if (!confirm(`"${product.name}" 메뉴를 정말 삭제하시겠습니까?`)) return;
+
+  try {
+    const res = await adminFetch(`${API_BASE}/products/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      if (editingProductId === id) cancelAdminProductEdit();
+      loadAdminProducts();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(`삭제 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("Delete product error:", err);
+  }
+}
+
+async function submitAddProduct(btn) {
+  const name = document.getElementById("prod-name").value.trim();
   const genPrice = parseInt(document.getElementById("prod-price-gen").value);
   const senPrice = parseInt(document.getElementById("prod-price-sen").value);
 
-  if (!name || !genPrice) {
+  if (!name || isNaN(genPrice)) {
     alert("메뉴 이름과 일반 가격을 입력하세요.");
     return;
   }
 
-  try {
-    const res = await adminFetch(`${API_BASE}/products`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  await withButtonLock(btn, async () => {
+    try {
+      const payload = {
         name: name,
         price_general: genPrice,
-        price_senior: senPrice || genPrice
-      })
-    });
+        price_senior: isNaN(senPrice) ? genPrice : senPrice
+      };
+      const res = editingProductId !== null
+        ? await adminFetch(`${API_BASE}/products/${editingProductId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          })
+        : await adminFetch(`${API_BASE}/products`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
 
-    if (res.ok) {
-      alert("신규 메뉴가 추가되었습니다!");
-      document.getElementById("prod-name").value = "";
-      document.getElementById("prod-price-gen").value = "";
-      document.getElementById("prod-price-sen").value = "";
-      loadAdminProducts();
+      if (res.ok) {
+        cancelAdminProductEdit();
+        loadAdminProducts();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`처리 실패: ${data.detail || '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Add/edit product error:", err);
     }
-  } catch (err) {
-    console.error("Add product error:", err);
-  }
+  });
 }
