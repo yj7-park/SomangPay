@@ -6,7 +6,7 @@
   <title>소망페이 무인 결제 단말기 (Kiosk PWA)</title>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#06b6d4">
-  <link rel="stylesheet" href="src/style.css?v=20260806_0003">
+  <link rel="stylesheet" href="src/style.css?v=20260808_0002">
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -34,11 +34,11 @@
         </div>
       </div>
       <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; max-width: 100%;">
-        <button id="nfc-activate-btn" onclick="requestNfcPermissionByUserGesture()" style="background: rgba(148,163,184,0.15); border: 1.5px solid #94a3b8; color: #94a3b8; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); cursor: pointer; display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
-          <span>📲</span> <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
-        </button>
+        <span id="nfc-activate-btn" style="background: rgba(148,163,184,0.15); border: 1.5px solid #94a3b8; color: #94a3b8; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
+          <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
+        </span>
         <span id="qr-status-indicator" style="background: rgba(148,163,184,0.15); border: 1.5px solid #94a3b8; color: #94a3b8; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
-          <span>📷</span> <span id="qr-status-text">QR 스캔 비활성</span>
+          <span id="qr-status-text">QR 스캔 비활성</span>
         </span>
         <button onclick="openKioskAdminPinModal()" style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: #fff; padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정">
           ⚙️
@@ -78,7 +78,7 @@
           </div>
         </div>
       </section>
- 
+
       <!-- Right: Checkout & Compact Controls -->
       <section class="glass-container kiosk-checkout-section" style="display: flex; flex-direction: column; justify-content: space-between;">
         <div id="kiosk-checkout-amount-block">
@@ -90,19 +90,19 @@
             </button>
           </div>
 
-          <!-- Split Panel: Left Cart Items List, Right Total Price -->
-          <div id="kiosk-checkout-amount-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.7rem; border: 1px solid var(--border-glass); align-items: center;">
-            <!-- Left Sub-panel: Selected Cart Items List -->
-            <div style="display: flex; flex-direction: column; height: 100%; justify-content: center;">
-              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: bold;">선택된 메뉴</div>
+          <!-- Stacked Panel: Selected Cart Items on top (flexible), Total Price on bottom (fixed height) -->
+          <div id="kiosk-checkout-amount-grid" style="display: flex; flex-direction: column; gap: 0.6rem; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.7rem; border: 1px solid var(--border-glass);">
+            <!-- Top Sub-panel: Selected Cart Items List -->
+            <div style="display: flex; flex-direction: column; justify-content: center; flex: 1 1 auto; min-height: 0;">
+              <div style="font-size: 1rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: bold;">선택된 메뉴</div>
               <div id="cart-items-container" class="cart-list" style="max-height: 110px; overflow-y: auto;">
                 <p style="color: var(--text-muted); text-align: center; margin-top: 1rem; font-size: 0.8rem;">선택된 메뉴가 없습니다.</p>
               </div>
             </div>
 
-            <!-- Right Sub-panel: Total Price Display -->
-            <div style="display: flex; flex-direction: column; justify-content: center; align-items: flex-end; background: rgba(15,23,42,0.7); padding: 0.75rem; border-radius: 10px; border: 1px solid rgba(6,182,212,0.3); height: 100%;">
-              <div style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500;">총 결제 금액</div>
+            <!-- Bottom Sub-panel: Total Price Display (fixed height, never stretches with the list above) -->
+            <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; background: rgba(15,23,42,0.7); padding: 0.75rem; border-radius: 10px; border: 1px solid rgba(6,182,212,0.3); flex: 0 0 auto;">
+              <div style="color: var(--text-muted); font-size: 1rem; font-weight: 500;">결제 금액</div>
               <div id="kiosk-total-price" class="total-price-text" style="font-size: clamp(1.4rem, 2.3vw, 1.85rem); font-weight: 900; color: #67e8f9;">0원</div>
             </div>
           </div>
@@ -287,6 +287,6 @@
     </div>
   </div>
 
-  <script src="src/kiosk.js?v=20260806_0003"></script>
+  <script src="src/kiosk.js?v=20260808_0001"></script>
 </body>
 </html>

@@ -21,6 +21,8 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://somanguser:somangpass@db:5432/somangdb
+      - ADMIN_PIN=${ADMIN_PIN}
+      - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY}
     volumes:
       - ./backend:/app
     depends_on:

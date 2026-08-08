@@ -310,7 +310,7 @@ function stopCameraScanner() {
       appendDebugLog("⚡ [Android Native App] 네이티브 NFC 리더 모드 재활성화(Re-bind) 호출 완료!", "SUCCESS");
     } else if (currentReaderMode === "WEB_NFC" && !kioskNdefReader) {
       // 일반 브라우저: 카메라 사용을 위해 중단했던 Web NFC 스캔 재개
-      startKioskNfcScan(true);
+      startKioskNfcScan();
       appendDebugLog("⚡ [Web NFC] 카메라 종료 - NFC 스캔 재가동.", "SUCCESS");
     }
   }, 500);
@@ -1428,44 +1428,14 @@ function triggerKioskDetectionFeedback() {
   }
 }
 
-// 수동 버튼 클릭 시 호출 (사용자 제스처가 필요한 최초 권한 요청)
-async function requestNfcPermissionByUserGesture() {
-  const btnText = document.getElementById("nfc-status-btn-text");
-
-  // Android 네이티브 앱 환경 감지 시 Web NFC를 우회하고 바로 하드웨어 리더 상태 표시
-  if (window.AndroidInterface) {
-    const mode = queryAndroidReaderMode();
-    currentReaderMode = mode;
-    appendDebugLog(`[NFC] Android 네이티브 앱 감지 - 하드웨어 리더가 백그라운드에서 상시 작동 중입니다. 현재 모드: ${mode}`, "SUCCESS");
-    updateNfcReaderStatusUI(mode);
-    return;
-  }
-
-  if (!('NDEFReader' in window)) {
-    // Web NFC 미지원 환경 (일부 WebView) — Android Native NFC는 별도로 항상 가동 중
-    appendDebugLog("[Web NFC] 이 환경에서는 Web NFC API가 지원되지 않습니다. Android Native NFC로 동작합니다.", "WARN");
-    updateNfcReaderStatusUI("BUILTIN_NFC");
-    return;
-  }
-
-  // 사용자 터치 버튼을 직접 누른 경우, 기존 리더가 있더라도 강제로 자원 해제 후 재생성하여
-  // 브라우저의 사용자 제스처(User Gesture) 락 및 백그라운드 무반응 문제를 확실하게 깨우고 갱신합니다.
-  appendDebugLog("[Web NFC] 사용자 터치 제스처 수신 - NFC 리더 강제 갱신 및 재가동...", "INFO");
-  if (btnText) btnText.innerText = "⏳ NFC 권한 요청 중...";
-  kioskNdefReader = null;
-  await startKioskNfcScan(false);
-}
-
-// 실제 NFC 스캔 가동 핵심 함수 (자동/수동 양쪽에서 호출됨)
-// silent=true: 자동 시도 (권한 거부 시 alert 없이 조용히 실패, 버튼 대기 상태 유지)
-// silent=false: 사용자 버튼 클릭 시 (권한 거부 시 경고 메시지 표시)
-async function startKioskNfcScan(silent = false) {
+// 실제 NFC 스캔 가동 핵심 함수 - 스캐너 연결/권한 상태에 따라 자동으로만 호출됨 (사용자 조작 불필요)
+async function startKioskNfcScan() {
   if (kioskNdefReader) return; // 이미 실행 중
 
   let scanTimeoutId = null;
 
-  // "⏳ NFC 권한 요청 중..." 문구에 영원히 멈춰있지 않도록, 실패/타임아웃 시 항상 비활성 상태로 복구
-  const resetNfcButton = () => updateNfcReaderStatusUI("NONE");
+  // 실패/타임아웃 시 항상 비활성 상태로 복구
+  const resetNfcStatus = () => updateNfcReaderStatusUI("NONE");
 
   try {
     kioskNdefReader = new NDEFReader();
@@ -1561,23 +1531,18 @@ async function startKioskNfcScan(silent = false) {
     if (err.name === 'AbortError') {
       // 카메라 사용을 위해 의도적으로 중단시킨 경우 - 에러로 취급하지 않음
       appendDebugLog("[Web NFC] 카메라 사용을 위해 일시 중단되었습니다.", "INFO");
-      resetNfcButton();
+      resetNfcStatus();
     } else if (err.name === 'TimeoutError') {
       appendDebugLog("[Web NFC] NFC 권한 요청이 응답 없이 시간 초과되었습니다. 기기의 NFC 지원 여부/설정을 확인해주세요.", "ERROR");
-      if (!silent) alert("NFC 권한 요청이 응답하지 않았습니다.\n\n기기에 NFC가 없거나 꺼져 있을 수 있습니다.\n설정 > 연결 항목에서 NFC를 켠 뒤 다시 시도해주세요.");
-      resetNfcButton();
+      resetNfcStatus();
     } else if (err.name === 'NotAllowedError' || String(err).includes('permission')) {
-      // 자동 시작 시도(silent=true)에서는 조용히 실패 → 버튼 대기 상태로 복구만 하고 알림 없음
-      if (!silent) {
-        appendDebugLog(`[Web NFC] NFC 권한이 거부되었습니다. 버튼을 눌러 권한을 허용해 주세요.`, "WARN");
-      } else {
-        appendDebugLog("[Web NFC] 상단 [📲 NFC 센서 권한 활성화] 버튼을 터치하여 NFC를 가동하세요.", "INFO");
-      }
-      resetNfcButton();
+      // 조용히 실패 → 비활성 상태로 복구만 하고 알림 없음 (스캐너/권한이 준비되면 다음 자동 시도에서 가동됨)
+      appendDebugLog("[Web NFC] NFC 권한이 허용되지 않았습니다. 리더 연결 상태를 확인해주세요.", "INFO");
+      resetNfcStatus();
     } else {
       appendDebugLog(`[Web NFC] 오류: ${err}`, "ERROR");
       console.error("NFC scan error:", err);
-      resetNfcButton();
+      resetNfcStatus();
     }
   }
 }
@@ -1621,10 +1586,10 @@ function initWebNFC() {
   }
 
   // Admin.js와 동일한 방식: 권한이 이미 허용되어 있으면 자동 가동됨.
-  // 미허용 시 scan()이 NotAllowedError로 실패하며 kioskNdefReader를 null로 초기화.
-  // 이 경우 버튼이 그대로 남아 사용자가 수동으로 눌러 권한 요청 가능.
+  // 미허용 시 scan()이 NotAllowedError로 실패하며 kioskNdefReader를 null로 초기화되고
+  // 상태 배지는 비활성 상태로 남는다 (스캐너가 연결되면 이후 자동 재시도 경로에서 다시 가동).
   appendDebugLog("[Web NFC] NFC 센서 자동 가동 시도 중...", "INFO");
-  startKioskNfcScan(true);
+  startKioskNfcScan();
 }
 
 // Android Native App Hardware ReaderMode Direct Receiver
