@@ -1,8 +1,8 @@
-name: Build & Release Kiosk APK
+name: Build & Release Kiosk/Admin/User APKs
 
-# main에 머지될 때마다 소망페이 키오스크 안드로이드 앱을 release 빌드로 컴파일해서
-# GitHub Release에 올리고, admin 대시보드가 항상 최신 빌드를 받아가도록
-# frontend/SomangPayKiosk.apk도 함께 갱신해 커밋한다.
+# main에 머지될 때마다 소망페이 키오스크/관리자/회원 안드로이드 앱 세 개를 release
+# 빌드로 컴파일해서 GitHub Release에 올리고, admin 대시보드가 항상 최신 빌드를
+# 받아가도록 frontend/SomangPay{Kiosk,Admin,User}.apk도 함께 갱신해 커밋한다.
 #
 # 이 워크플로우 자신이 만드는 커밋 메시지에는 [skip ci]가 들어있어 무한 재실행을 방지한다
 # (GitHub Actions는 head 커밋 메시지에 [skip ci]/[ci skip]이 있으면 push 트리거를 자동으로 건너뜀).
@@ -41,14 +41,14 @@ jobs:
         run: |
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
 
-      - name: Build release APK
+      - name: Build release APKs (kiosk/admin/user flavors)
         working-directory: android_kiosk
         env:
           RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/android_kiosk/release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease -PappVersionCode=${{ github.run_number }} --console=plain
+        run: ./gradlew assembleKioskRelease assembleAdminRelease assembleUserRelease -PappVersionCode=${{ github.run_number }} --console=plain
 
       - name: Remove decoded keystore
         if: always()
@@ -59,32 +59,39 @@ jobs:
         id: meta
         run: |
           echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "apk_path=${{ github.workspace }}/SomangPayKiosk.apk" >> "$GITHUB_OUTPUT"
-          cp android_kiosk/app/build/outputs/apk/release/app-release.apk "${{ github.workspace }}/SomangPayKiosk.apk"
+          cp android_kiosk/app/build/outputs/apk/kiosk/release/app-kiosk-release.apk "${{ github.workspace }}/SomangPayKiosk.apk"
+          cp android_kiosk/app/build/outputs/apk/admin/release/app-admin-release.apk "${{ github.workspace }}/SomangPayAdmin.apk"
+          cp android_kiosk/app/build/outputs/apk/user/release/app-user-release.apk "${{ github.workspace }}/SomangPayUser.apk"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.meta.outputs.tag }}" \
-            "${{ steps.meta.outputs.apk_path }}" \
-            --title "Kiosk APK build #${{ github.run_number }}" \
+            "${{ github.workspace }}/SomangPayKiosk.apk" \
+            "${{ github.workspace }}/SomangPayAdmin.apk" \
+            "${{ github.workspace }}/SomangPayUser.apk" \
+            --title "Kiosk/Admin/User APK build #${{ github.run_number }}" \
             --notes "커밋 ${{ github.sha }} 기준 자동 빌드 (main 머지 트리거)."
 
-      - name: Publish latest APK to frontend (served by admin download link)
+      - name: Publish latest APKs to frontend (served by admin download links)
         run: |
-          cp "${{ steps.meta.outputs.apk_path }}" frontend/SomangPayKiosk.apk
+          cp "${{ github.workspace }}/SomangPayKiosk.apk" frontend/SomangPayKiosk.apk
+          cp "${{ github.workspace }}/SomangPayAdmin.apk" frontend/SomangPayAdmin.apk
+          cp "${{ github.workspace }}/SomangPayUser.apk" frontend/SomangPayUser.apk
           sed -i -E "s#(/SomangPayKiosk\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
-          rm -f "${{ steps.meta.outputs.apk_path }}"
+          sed -i -E "s#(/SomangPayAdmin\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
+          sed -i -E "s#(/SomangPayUser\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
+          rm -f "${{ github.workspace }}/SomangPayKiosk.apk" "${{ github.workspace }}/SomangPayAdmin.apk" "${{ github.workspace }}/SomangPayUser.apk"
 
-      - name: Commit updated APK + admin link
+      - name: Commit updated APKs + admin links
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add frontend/SomangPayKiosk.apk frontend/admin.html
+          git add frontend/SomangPayKiosk.apk frontend/SomangPayAdmin.apk frontend/SomangPayUser.apk frontend/admin.html
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
-          git commit -m "chore: publish kiosk APK build #${{ github.run_number }} [skip ci]"
+          git commit -m "chore: publish kiosk/admin/user APK build #${{ github.run_number }} [skip ci]"
           git push origin HEAD:main

@@ -1316,12 +1316,13 @@ async function issueKioskCardToUser() {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/cards/register`, {
-      method: "POST",
+    const res = await kioskAdminFetch(`${API_BASE}/admin/cards`, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         card_uid: cardUid,
         card_name: "키오스크 현장 대리 발급 실물 카드",
+        card_type: "NFC",
         user_id: parseInt(userId)
       })
     });

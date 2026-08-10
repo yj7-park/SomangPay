@@ -13,16 +13,18 @@
 
     <application
         android:allowBackup="true"
-        android:label="소망페이 무인 결제기"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
         android:usesCleartextTraffic="true">
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="landscape">
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <!-- 가로 고정은 매니페스트가 아니라 MainActivity.onCreate()에서
+                 BuildConfig.KIOSK_LOCKDOWN_ENABLED일 때만 프로그램적으로 적용한다
+                 (admin/user 플레이버는 기기 방향을 자유롭게 따라가야 하므로). -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

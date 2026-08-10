@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">소망페이 무인 결제기</string>
+    <!-- app_name은 각 플레이버(kiosk/admin/user)가 build.gradle의 resValue로 생성한다.
+         여기서 중복 정의하면 리소스 병합 충돌이 난다. -->
 </resources>

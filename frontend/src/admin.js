@@ -2,6 +2,9 @@ const API_BASE = "/api";
 
 let users = [];
 let products = [];
+let cards = [];
+let depositHistories = [];
+let rechargeQueue = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
 
@@ -33,7 +36,7 @@ async function adminFetch(url, options = {}) {
     isAdminAuthenticated = false;
     sessionStorage.removeItem("admin_auth");
     sessionStorage.removeItem("admin_token");
-    alert("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
+    showAlertModal("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
     showModal("admin-pin-modal");
   }
   return res;
@@ -55,6 +58,43 @@ function hideModal(id) {
   }
 }
 
+// ============ 공용 알림/확인 모달 (alert()/confirm() 대체) ============
+let _alertModalResolve = null;
+let _confirmModalResolve = null;
+
+function showAlertModal(message, title = "알림") {
+  document.getElementById("generic-alert-title").innerText = title;
+  document.getElementById("generic-alert-message").innerText = message;
+  showModal("generic-alert-modal");
+  return new Promise(resolve => { _alertModalResolve = resolve; });
+}
+function _resolveAlertModal() {
+  hideModal("generic-alert-modal");
+  if (_alertModalResolve) { _alertModalResolve(); _alertModalResolve = null; }
+}
+function showConfirmModal(message, title = "확인") {
+  document.getElementById("generic-confirm-title").innerText = title;
+  document.getElementById("generic-confirm-message").innerText = message;
+  showModal("generic-confirm-modal");
+  return new Promise(resolve => { _confirmModalResolve = resolve; });
+}
+function _resolveConfirmModal(result) {
+  hideModal("generic-confirm-modal");
+  if (_confirmModalResolve) { _confirmModalResolve(result); _confirmModalResolve = null; }
+}
+
+// 전화번호 입력 필드에 실시간으로 하이픈을 자동 삽입한다 (010-1234-5678 형태).
+function formatPhoneInput(input) {
+  const digits = input.value.replace(/\D/g, "").slice(0, 11);
+  let formatted = digits;
+  if (digits.length > 3 && digits.length <= 7) {
+    formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  } else if (digits.length > 7) {
+    formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+  input.value = formatted;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const savedToken = sessionStorage.getItem("admin_token");
   if (savedToken && sessionStorage.getItem("admin_auth") === "true") {
@@ -71,7 +111,7 @@ async function submitAdminPin() {
   const pinInput = document.getElementById("admin-pin-input");
   const pin = pinInput ? pinInput.value.trim() : "";
   if (!pin) {
-    alert("PIN 번호를 입력하세요.");
+    await showAlertModal("PIN 번호를 입력하세요.");
     return;
   }
 
@@ -92,14 +132,14 @@ async function submitAdminPin() {
       hideModal("admin-pin-modal");
       initAdminDashboard();
     } else if (res.status === 429) {
-      alert(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
+      await showAlertModal(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
-      alert("관리자 PIN 번호가 올바르지 않습니다.");
+      await showAlertModal("관리자 PIN 번호가 올바르지 않습니다.");
       if (pinInput) pinInput.value = "";
     }
   } catch (err) {
     console.error("PIN Auth error:", err);
-    alert("서버 연결 오류. 잠시 후 다시 시도하세요.");
+    await showAlertModal("서버 연결 오류. 잠시 후 다시 시도하세요.");
   }
 }
 
@@ -108,7 +148,75 @@ function initAdminDashboard() {
   loadAdminProducts();
   loadDepositHistories();
   loadAdminCards();
-  initAdminNfcReader();
+  loadRechargeQueue();
+  loadStatsSummary();
+  connectAdminWebSocket();
+}
+
+// ============ 실시간 갱신 (WebSocket) ============
+// DB가 바뀌면(다른 관리자 세션, 회원의 충전 신청, 키오스크 결제 등) 서버가 "이 범위가
+// 바뀌었다"는 신호만 보내고, 실제 반영은 이미 있는 REST 로드 함수를 그대로 재사용한다.
+let adminWs = null;
+let adminWsReconnectTimer = null;
+
+function connectAdminWebSocket() {
+  if (!adminToken) return;
+  if (adminWs && adminWs.readyState <= 1) return; // 이미 연결(중)이면 중복 연결 안 함
+
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  adminWs = new WebSocket(`${protocol}//${location.host}/ws/admin?token=${encodeURIComponent(adminToken)}`);
+
+  adminWs.onmessage = (event) => {
+    let data;
+    try { data = JSON.parse(event.data); } catch (e) { return; }
+    if (data.type !== "refresh") return;
+    handleAdminRefreshEvent(data.scopes || []).catch(err => console.error("Refresh event error:", err));
+  };
+
+  adminWs.onclose = () => {
+    adminWs = null;
+    if (!isAdminAuthenticated) return; // 로그아웃/세션만료로 인한 정상 종료면 재연결 안 함
+    clearTimeout(adminWsReconnectTimer);
+    adminWsReconnectTimer = setTimeout(connectAdminWebSocket, 3000);
+  };
+
+  adminWs.onerror = () => {
+    if (adminWs) adminWs.close();
+  };
+}
+
+async function handleAdminRefreshEvent(scopes) {
+  const tasks = [];
+  if (scopes.includes("users")) tasks.push(loadAdminUsers());
+  if (scopes.includes("cards")) tasks.push(loadAdminCards());
+  if (scopes.includes("recharge_queue")) tasks.push(loadRechargeQueue());
+  if (scopes.includes("stats")) tasks.push(loadStatsSummary());
+  if (scopes.includes("deposits")) tasks.push(loadDepositHistories());
+  await Promise.all(tasks);
+
+  // 지금 열려 있는 회원 상세도 최신 데이터(users/cards/deposits)로 다시 그린다.
+  if (currentDetailUserId && (scopes.includes("users") || scopes.includes("cards") || scopes.includes("deposits"))) {
+    renderMemberDetail();
+  }
+}
+
+// ============ 탭 내비게이션 (트위터 스타일) ============
+let currentDetailUserId = null;
+let detailReturnView = "search";
+
+function switchAdminView(viewName) {
+  document.querySelectorAll(".admin-view").forEach(el => el.classList.remove("active"));
+  const target = document.getElementById(`admin-view-${viewName}`);
+  if (target) target.classList.add("active");
+
+  const tabViews = ["home", "search", "inbox", "menu"];
+  if (tabViews.includes(viewName)) {
+    document.querySelectorAll(".admin-tab-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.view === viewName);
+    });
+    if (viewName === "search") renderMemberFeed();
+    if (viewName === "home") renderHomeRecentMembers();
+  }
 }
 
 let adminScanMode = "NFC";
@@ -119,6 +227,12 @@ let adminFacingMode = "user"; // 기본 전면 카메라
 let adminQrCooldown = false; // 연속 스캔 방지 쿨다운
 let adminNfcCooldown = false; // NFC 연속 태깅 방지 쿨다운
 let adminNdefReader = null; // 중복 NDEFReader 생성 방지용 글로벌 레퍼런스
+
+// 현재 활성화된 카드 리더 종류: "WEB_NFC" | "BUILTIN_NFC" | "USB_CCID" | "USB_VENDOR_HID_NFC" | "USB_HID_KEYBOARD" | "NONE" | "UNKNOWN"
+// kiosk.js와 동일한 브릿지 - Android 래퍼 안에서는 window.onCardReaderModeChanged가, 일반 브라우저에서는 Web NFC 성공 시 직접 갱신한다.
+let currentReaderMode = "UNKNOWN";
+let adminHidBuffer = ""; // USB 키보드 에뮬레이션형 리더용 입력 버퍼
+let adminHidTimeout = null;
 
 function switchAdminScanMode(mode) {
   adminScanMode = mode;
@@ -164,15 +278,15 @@ function triggerDetectionFeedback() {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    
+
     osc.type = "sine";
     osc.frequency.setValueAtTime(800, audioCtx.currentTime); // 800Hz 소프트 삑소리
     gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
-    
+
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-    
+
     osc.start();
     osc.stop(audioCtx.currentTime + 0.12);
   } catch (e) {
@@ -183,20 +297,36 @@ function triggerDetectionFeedback() {
   const check = document.getElementById("admin-detect-check");
   if (check) {
     check.style.display = "inline-block";
-    
+
     if (adminCheckTimeout) {
       clearTimeout(adminCheckTimeout);
     }
-    
+
     adminCheckTimeout = setTimeout(() => {
       check.style.display = "none";
     }, 2000);
   }
 }
 
+// kiosk.js의 initWebNFC()와 동일한 판단 순서: Android 네이티브 래퍼(AndroidInterface) 안이면
+// WebView가 Web NFC scan()을 지원하지 않으므로 그쪽은 시도하지 않고 네이티브 브릿지에 위임한다.
+// 일반 브라우저면 Web NFC를 시도하고, 그마저 없으면 USB_HID_KEYBOARD(키보드 에뮬레이션형
+// USB 리더)나 카메라 QR, 데모 시뮬레이션 버튼으로 자연스럽게 대체된다.
 async function initAdminNfcReader() {
+  if (window.AndroidInterface) {
+    if (typeof window.AndroidInterface.getCurrentReaderMode === "function") {
+      try {
+        currentReaderMode = window.AndroidInterface.getCurrentReaderMode();
+      } catch (e) {
+        currentReaderMode = "UNKNOWN";
+      }
+    }
+    console.log("Android Native App 카드 리더 브릿지 감지됨. 현재 모드:", currentReaderMode);
+    return;
+  }
+
   if (!("NDEFReader" in window)) return;
-  
+
   // 이미 싱글톤 인스턴스가 존재하면 중복 생성 및 .scan() 중복 트리거를 차단하여 크래시 방지
   if (adminNdefReader) {
     console.log("NFC Reader already active.");
@@ -205,7 +335,7 @@ async function initAdminNfcReader() {
 
   try {
     adminNdefReader = new NDEFReader();
-    
+
     // NDEF 규격 카드 감지 리스너 (scan() 호출 전에 바인딩)
     adminNdefReader.addEventListener("reading", ({ serialNumber }) => {
       if (serialNumber && !adminNfcCooldown) {
@@ -213,7 +343,7 @@ async function initAdminNfcReader() {
         const uid = serialNumber.toUpperCase();
         document.getElementById("admin-card-uid-input").value = uid;
         triggerDetectionFeedback();
-        
+
         // 2초 동안 동일 혹은 연속 접촉으로 인한 중복 동작 방지
         setTimeout(() => {
           adminNfcCooldown = false;
@@ -235,12 +365,63 @@ async function initAdminNfcReader() {
     });
 
     await adminNdefReader.scan();
+    currentReaderMode = "WEB_NFC";
     console.log("Web NFC Auto Scan Activated.");
   } catch (e) {
     console.log("Web NFC Access/Scan Error:", e);
     adminNdefReader = null; // 실패 시 재시도 가능하게 초기화
   }
 }
+
+// ============ Android 네이티브 카드 리더 브릿지 (kiosk.js와 동일한 훅) ============
+// 네이티브 앱이 evaluateJavascript로 이 이름 그대로 호출하므로 함수명을 바꾸면 안 된다.
+
+window.onCardReaderModeChanged = function (mode) {
+  currentReaderMode = mode;
+  console.log("🔧 [카드 리더] 활성 모드 변경:", mode);
+};
+
+window.onAndroidNfcScanned = function (rawHexUid) {
+  // 카드 스캐너 모달이 열려 있을 때만 반영 - 모달이 닫혀 있으면 관리자가 스캔을 기다리는
+  // 상황이 아니므로 스탠바이 상태의 실수 태깅을 조용히 무시한다.
+  const modal = document.getElementById("card-scanner-modal");
+  if (!modal || !modal.classList.contains("active")) return;
+  if (adminNfcCooldown) return;
+  adminNfcCooldown = true;
+  setTimeout(() => { adminNfcCooldown = false; }, 2000);
+
+  document.getElementById("admin-card-uid-input").value = rawHexUid;
+  triggerDetectionFeedback();
+  console.log("⚡ [Android Native App] 하드웨어 카드 리더 스캔 성공:", rawHexUid);
+};
+
+window.onKioskReaderError = function (message) {
+  console.log("⚠️ [Android Native] 카드 리더 사용 불가:", message);
+  currentReaderMode = "NONE";
+};
+
+// USB 키보드 에뮬레이션형 리더(드라이버 불필요, 태그 시 UID를 키 입력처럼 전송) 지원.
+// 카드 스캐너 모달이 열려 있을 때만 버퍼링해서, 검색창 등 다른 입력 중에는 간섭하지 않는다.
+window.addEventListener("keydown", (e) => {
+  const modal = document.getElementById("card-scanner-modal");
+  if (!modal || !modal.classList.contains("active")) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+
+  if (e.key === "Enter") {
+    if (adminHidBuffer.length >= 4) {
+      const scannedUid = adminHidBuffer.trim();
+      currentReaderMode = "USB_HID_KEYBOARD";
+      document.getElementById("admin-card-uid-input").value = scannedUid;
+      triggerDetectionFeedback();
+      console.log("📇 [USB HID 키보드 리더] 스캔 감지:", scannedUid);
+    }
+    adminHidBuffer = "";
+  } else if (e.key.length === 1) {
+    adminHidBuffer += e.key;
+    if (adminHidTimeout) clearTimeout(adminHidTimeout);
+    adminHidTimeout = setTimeout(() => { adminHidBuffer = ""; }, 300);
+  }
+});
 
 function triggerSimulatedNfcScan() {
   const simUid = `CARD_SIM_${Math.floor(1000 + Math.random() * 9000)}`;
@@ -284,6 +465,13 @@ async function startAdminCameraScanner(facingMode) {
     video.setAttribute("playsinline", true);
     await video.play();
 
+    // 카메라 사용 중에는 외부 리더(USB CCID/벤더 HID)와의 동시 폴링 충돌을 피하기 위해
+    // 네이티브 래퍼에 일시정지를 요청한다 (kiosk.js와 동일 패턴). 내장 Web NFC는 카메라와
+    // 무관하게 계속 동작해도 문제없어 별도 처리하지 않는다.
+    if (window.AndroidInterface && typeof window.AndroidInterface.pauseReaderForCamera === "function") {
+      window.AndroidInterface.pauseReaderForCamera();
+    }
+
     adminCameraScanning = true;
     adminFacingMode = fm;
     if (videoBox) videoBox.style.display = "block";
@@ -298,7 +486,7 @@ async function startAdminCameraScanner(facingMode) {
     scanAdminQrFrame();
   } catch (err) {
     console.error("Camera access error:", err);
-    alert("카메라에 접근할 수 없습니다. 실시간 QR 스캔 시뮬레이션 버튼을 이용해 주세요.");
+    await showAlertModal("카메라에 접근할 수 없습니다. 실시간 QR 스캔 시뮬레이션 버튼을 이용해 주세요.");
   }
 }
 
@@ -334,6 +522,14 @@ function stopAdminCameraScanner() {
     toggleBtn.style.background = "rgba(6,182,212,0.2)";
     toggleBtn.style.color = "#67e8f9";
   }
+
+  // 카메라 드라이버 완전 해제 후 지연을 두고 외부 리더 재활성화 (kiosk.js와 동일 패턴)
+  setTimeout(() => {
+    if (window.AndroidInterface && typeof window.AndroidInterface.reenableNfcReader === "function") {
+      window.AndroidInterface.reenableNfcReader();
+      console.log("⚡ [Android Native App] 네이티브 카드 리더 재활성화 호출 완료.");
+    }
+  }, 500);
 }
 
 function scanAdminQrFrame() {
@@ -370,7 +566,7 @@ function scanAdminQrFrame() {
       const detectedQr = code.data.trim();
       document.getElementById("admin-card-uid-input").value = detectedQr;
       triggerDetectionFeedback();
-      
+
       // 2초 동안 동일 혹은 신규 스캔으로 인한 연속 스캔 방지
       setTimeout(() => {
         adminQrCooldown = false;
@@ -381,13 +577,91 @@ function scanAdminQrFrame() {
   adminAnimFrameId = requestAnimationFrame(scanAdminQrFrame);
 }
 
+// ============ 카드 스캐너 모달 (검색 모드 / 등록 모드 공용) ============
+let scannerMode = "SEARCH"; // SEARCH | REGISTER
+let scannerContext = null; // REGISTER 모드일 때 { userId, cardType }
+
+function openScannerModal(mode, context) {
+  scannerMode = mode;
+  scannerContext = context || null;
+
+  const title = document.getElementById("scanner-modal-title");
+  const desc = document.getElementById("scanner-modal-desc");
+  const confirmBtn = document.getElementById("scanner-confirm-btn");
+  document.getElementById("admin-card-uid-input").value = "";
+
+  if (mode === "SEARCH") {
+    title.innerText = "📲 NFC/QR 태그로 회원 찾기";
+    desc.innerHTML = "회원의 <strong>NFC 카드를 태그</strong>하거나 <strong>QR 코드를 카메라에 비추면</strong> 해당 회원 상세 페이지로 바로 이동합니다.";
+    confirmBtn.innerText = "검색하기";
+    switchAdminScanMode("NFC");
+  } else {
+    const typeLabel = context.cardType === "QR_CODE" ? "QR 코드" : "NFC 카드";
+    title.innerText = `📷💳 ${typeLabel} 등록`;
+    desc.innerHTML = `<strong>${typeLabel}</strong>를 스캔하면 이 회원에게 등록(또는 교체)됩니다.`;
+    confirmBtn.innerText = "등록하기";
+    switchAdminScanMode(context.cardType === "QR_CODE" ? "QR" : "NFC");
+  }
+
+  showModal("card-scanner-modal");
+}
+
+function closeScannerModal() {
+  stopAdminCameraScanner();
+  hideModal("card-scanner-modal");
+}
+
+async function handleScannerConfirm() {
+  const cardUid = document.getElementById("admin-card-uid-input").value.trim();
+  if (!cardUid) {
+    await showAlertModal("NFC 카드를 태그하시거나 QR 코드를 카메라에 스캔해 주세요.");
+    return;
+  }
+
+  if (scannerMode === "SEARCH") {
+    const card = cards.find(c => c.card_uid === cardUid);
+    if (!card) {
+      await showAlertModal("등록되지 않은 카드입니다.");
+      return;
+    }
+    closeScannerModal();
+    openMemberDetail(card.user_id);
+    return;
+  }
+
+  // REGISTER 모드
+  const { userId, cardType } = scannerContext;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/cards`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ card_uid: cardUid, card_type: cardType, user_id: userId })
+    });
+
+    if (res.ok) {
+      closeScannerModal();
+      await loadAdminCards();
+      if (currentDetailUserId === userId) renderDetailCardSlots();
+      await showAlertModal(`🎉 ${cardType === "QR_CODE" ? "QR 코드" : "NFC 카드"}가 등록(또는 교체)되었습니다.`);
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      await showAlertModal(`등록 실패: ${errData.detail || "오류 발생"}`);
+    }
+  } catch (err) {
+    console.error("Register card error:", err);
+    await showAlertModal("서버 통신 중 에러가 발생했습니다.");
+  }
+}
+
+// ============ 데이터 로드 ============
+
 async function loadAdminUsers() {
   try {
     const res = await adminFetch(`${API_BASE}/users`);
     if (!res.ok) return;
     users = await res.json();
-    renderUsersTable();
-    renderUserSelectDropdown();
+    renderHomeRecentMembers();
+    renderMemberFeed();
   } catch (err) {
     console.error("Failed to load users:", err);
   }
@@ -407,94 +681,475 @@ async function loadDepositHistories() {
   try {
     const res = await adminFetch(`${API_BASE}/histories/deposits`);
     if (!res.ok) return;
-    const histories = await res.json();
-    renderDepositHistoriesTable(histories);
+    depositHistories = await res.json();
   } catch (err) {
     console.error("Failed to load deposit histories:", err);
   }
 }
 
-let cards = [];
-
 async function loadAdminCards() {
   try {
-    const res = await adminFetch(`${API_BASE}/cards`);
+    const res = await adminFetch(`${API_BASE}/admin/cards`);
     if (!res.ok) return;
     cards = await res.json();
-    renderCardsTable();
   } catch (err) {
     console.error("Failed to load cards:", err);
   }
 }
 
-function renderCardsTable() {
-  const tbody = document.getElementById("admin-card-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
+async function loadStatsSummary() {
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/stats/summary`);
+    if (!res.ok) return;
+    renderDashboard(await res.json());
+  } catch (err) {
+    console.error("Failed to load stats summary:", err);
+  }
+}
 
-  if (cards.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">등록된 카드가 없습니다.</td></tr>`;
+function renderDashboard(stats) {
+  document.getElementById("stat-total-balance").innerText = `${stats.total_balance.toLocaleString()}원`;
+  document.getElementById("stat-total-users").innerText = `${stats.total_users.toLocaleString()}명`;
+  document.getElementById("stat-today-deposit").innerText = `${stats.today.deposit_amount.toLocaleString()}원`;
+  document.getElementById("stat-today-payment").innerText = `${stats.today.payment_amount.toLocaleString()}원`;
+  document.getElementById("stat-month-deposit").innerText = `${stats.this_month.deposit_amount.toLocaleString()}원`;
+  document.getElementById("stat-month-payment").innerText = `${stats.this_month.payment_amount.toLocaleString()}원`;
+  document.getElementById("stat-unmatched").innerText = `${stats.unmatched_deposit_count}건`;
+  document.getElementById("stat-pending").innerText = `${stats.pending_recharge_count}건`;
+
+  document.getElementById("attention-unmatched").classList.toggle("has-items", stats.unmatched_deposit_count > 0);
+  document.getElementById("attention-pending").classList.toggle("has-items", stats.pending_recharge_count > 0);
+
+  const badgeCount = stats.unmatched_deposit_count + stats.pending_recharge_count;
+  const badge = document.getElementById("inbox-tab-badge");
+  if (badge) {
+    badge.style.display = badgeCount > 0 ? "flex" : "none";
+    badge.innerText = badgeCount > 99 ? "99+" : String(badgeCount);
+  }
+}
+
+// ============ 회원 검색 피드 (트위터 피드 스타일) ============
+
+function renderMemberFeedCard(u) {
+  const isActive = u.status === "ACTIVE";
+  const div = document.createElement("div");
+  div.className = "glass-container member-card";
+  div.onclick = () => openMemberDetail(u.id);
+  div.innerHTML = `
+    <div>
+      <div class="member-card-name">
+        <span class="status-dot ${isActive ? '' : 'suspended'}"></span>${u.name}
+        <span class="badge-tag ${u.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}" style="margin-left: 0.4rem;">${u.user_type === 'SENIOR' ? '시니어' : '일반'}</span>
+      </div>
+      <div class="member-card-sub">${u.phone || '연락처 없음'}</div>
+    </div>
+    <div class="member-card-balance">${u.credit_balance.toLocaleString()}원</div>
+  `;
+  return div;
+}
+
+function renderMemberFeed() {
+  const feed = document.getElementById("search-member-feed");
+  if (!feed) return;
+  const query = (document.getElementById("member-search-input")?.value || "").trim().toLowerCase();
+
+  const filtered = !query ? users : users.filter(u => {
+    const haystack = [u.name, u.phone].filter(Boolean).join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+
+  feed.innerHTML = "";
+  if (filtered.length === 0) {
+    feed.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 2rem 0;">${query ? '검색 결과가 없습니다.' : '등록된 회원이 없습니다.'}</p>`;
+    return;
+  }
+  filtered.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
+}
+
+function renderHomeRecentMembers() {
+  const feed = document.getElementById("home-recent-members");
+  if (!feed) return;
+  feed.innerHTML = "";
+  const recent = [...users].sort((a, b) => b.id - a.id).slice(0, 5);
+  if (recent.length === 0) {
+    feed.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0;">등록된 회원이 없습니다.</p>`;
+    return;
+  }
+  recent.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
+}
+
+// ============ 회원 상세 페이지 ============
+
+function openMemberDetail(userId) {
+  const activeTab = document.querySelector(".admin-tab-btn.active");
+  if (activeTab) detailReturnView = activeTab.dataset.view;
+
+  currentDetailUserId = userId;
+  switchAdminView("member-detail");
+  renderMemberDetail();
+}
+
+function closeMemberDetail() {
+  currentDetailUserId = null;
+  switchAdminView(detailReturnView);
+}
+
+function renderMemberDetail() {
+  const user = users.find(u => u.id === currentDetailUserId);
+  if (!user) return;
+
+  const isActive = user.status === "ACTIVE";
+  document.getElementById("detail-member-name").innerText = user.name;
+  const badge = document.getElementById("detail-member-badge");
+  badge.innerText = user.user_type === 'SENIOR' ? '👵👴 시니어' : '👦 일반';
+  badge.className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
+  const statusEl = document.getElementById("detail-member-status");
+  statusEl.innerText = isActive ? "🟢 활성" : "🔴 정지됨";
+  statusEl.style.color = isActive ? "var(--accent-emerald)" : "var(--accent-danger)";
+  document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
+  document.getElementById("detail-member-phone").innerText = user.phone || "-";
+
+  const statusBtn = document.getElementById("detail-status-btn");
+  statusBtn.innerText = isActive ? "정지" : "재활성화";
+  statusBtn.style.background = isActive ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)";
+  statusBtn.style.color = isActive ? "#fca5a5" : "#6ee7b7";
+
+  renderDetailCardSlots();
+  renderDetailHistory();
+}
+
+function renderDetailCardSlots() {
+  renderCardSlot("NFC", "detail-card-nfc-slot", "💳 NFC 카드");
+  renderCardSlot("QR_CODE", "detail-card-qr-slot", "📷 QR 코드");
+}
+
+function renderCardSlot(cardType, containerId, label) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const card = cards.find(c => c.user_id === currentDetailUserId && c.card_type === cardType);
+
+  if (card) {
+    container.innerHTML = `
+      <div class="card-slot">
+        <div>
+          <div class="card-slot-type">${label}</div>
+          <div class="card-slot-uid">${card.card_uid}</div>
+        </div>
+        <div style="display:flex; gap:0.4rem;">
+          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: rgba(59,130,246,0.2); color:#93c5fd;" onclick="openScannerModal('REGISTER', {userId: currentDetailUserId, cardType: '${cardType}'})">교체</button>
+          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: rgba(239,68,68,0.2); color:#fca5a5;" onclick="deleteDetailCard(${card.id})">삭제</button>
+        </div>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="card-slot">
+        <div class="card-slot-type" style="color: var(--text-muted);">${label} - 미등록</div>
+        <button class="btn-action btn-primary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.82rem;" onclick="openScannerModal('REGISTER', {userId: currentDetailUserId, cardType: '${cardType}'})">발급하기</button>
+      </div>
+    `;
+  }
+}
+
+async function deleteDetailCard(cardId) {
+  if (!(await showConfirmModal("이 카드를 삭제하시겠습니까? 삭제된 식별자는 즉시 결제에 사용할 수 없게 됩니다."))) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/cards/${cardId}`, { method: "DELETE" });
+    if (res.ok) {
+      await loadAdminCards();
+      renderDetailCardSlots();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("deleteDetailCard error:", err);
+  }
+}
+
+async function toggleDetailUserStatus() {
+  const user = users.find(u => u.id === currentDetailUserId);
+  if (!user) return;
+  const newStatus = user.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+  const label = newStatus === "SUSPENDED" ? "정지" : "재활성화";
+  if (!(await showConfirmModal(`${user.name}님을 ${label}하시겠습니까? 정지된 회원은 즉시 결제가 차단됩니다.`))) return;
+
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/users/${user.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (res.ok) {
+      await loadAdminUsers();
+      renderMemberDetail();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("toggleDetailUserStatus error:", err);
+  }
+}
+
+async function submitDetailRecharge(btn) {
+  const amount = parseInt(document.getElementById("detail-recharge-amount").value);
+  const memo = document.getElementById("detail-recharge-memo").value;
+
+  if (!amount || amount <= 0) {
+    await showAlertModal("충전 금액을 올바르게 입력하세요.");
     return;
   }
 
-  cards.forEach(c => {
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/recharge-credit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: currentDetailUserId,
+          amount: amount,
+          memo: memo || "관리자 직권 충전"
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await showAlertModal(data.message);
+        document.getElementById("detail-recharge-memo").value = "";
+        await loadAdminUsers();
+        await loadDepositHistories();
+        await loadStatsSummary();
+        renderMemberDetail();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await showAlertModal(`충전 실패: ${data.detail ? JSON.stringify(data.detail) : '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Detail recharge error:", err);
+    }
+  });
+}
+
+async function renderDetailHistory() {
+  const box = document.getElementById("detail-history-list");
+  if (!box) return;
+  box.innerHTML = `<p style="color: var(--text-muted);">불러오는 중...</p>`;
+
+  const deposits = depositHistories
+    .filter(h => h.user_id === currentDetailUserId)
+    .map(h => ({ type: "충전", amount: h.amount, label: h.deposit_type, memo: h.memo, created_at: h.created_at }));
+
+  let payments = [];
+  try {
+    const res = await adminFetch(`${API_BASE}/payments?user_id=${currentDetailUserId}&limit=20`);
+    if (res.ok) {
+      const txs = await res.json();
+      payments = txs.map(t => ({ type: "결제", amount: -t.amount, label: t.status, memo: t.product_details, created_at: t.created_at }));
+    }
+  } catch (err) {
+    console.error("Failed to load payment history:", err);
+  }
+
+  const combined = [...deposits, ...payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  if (combined.length === 0) {
+    box.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem 0;">이력이 없습니다.</p>`;
+    return;
+  }
+
+  box.innerHTML = combined.slice(0, 30).map(h => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div>
+        <span class="badge-tag ${h.type === '충전' ? 'badge-general' : 'badge-senior'}" style="font-size:0.68rem;">${h.type}</span>
+        <span style="margin-left: 0.4rem; color: var(--text-muted); font-size: 0.78rem;">${new Date(h.created_at).toLocaleString()}</span>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.1rem;">${h.memo || h.label || '-'}</div>
+      </div>
+      <div style="font-weight: 800; color: ${h.amount >= 0 ? 'var(--accent-emerald)' : 'var(--accent-danger)'};">${h.amount >= 0 ? '+' : ''}${h.amount.toLocaleString()}원</div>
+    </div>
+  `).join("");
+}
+
+// ============ 충전함 (Recharge Inbox) ============
+
+async function loadRechargeQueue() {
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/recharge-requests?status=PENDING`);
+    if (!res.ok) return;
+    rechargeQueue = await res.json();
+    renderRechargeQueueTable();
+  } catch (err) {
+    console.error("Failed to load recharge queue:", err);
+  }
+}
+
+function renderRechargeQueueTable() {
+  const tbody = document.getElementById("admin-recharge-queue-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (rechargeQueue.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">대기 중인 충전 신청이 없습니다.</td></tr>`;
+    return;
+  }
+
+  rechargeQueue.forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${c.user_name || '-'}</strong></td>
-      <td style="font-family: monospace;">${c.card_uid}</td>
-      <td>${c.card_type === 'QR_CODE' ? '📷 QR' : '💳 NFC'}</td>
-      <td>${c.card_name || '-'}</td>
-      <td>${c.is_active
-        ? '<span style="color: var(--accent-emerald); font-weight: bold;">활성</span>'
-        : '<span style="color: #ef4444; font-weight: bold;">비활성</span>'}</td>
-      <td>
-        ${c.is_active
-          ? `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="setCardActive(${c.id}, false)">비활성화</button>`
-          : `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(16,185,129,0.2); color: #6ee7b7;" onclick="setCardActive(${c.id}, true)">재활성화</button>`}
+      <td>${new Date(r.created_at).toLocaleString()}</td>
+      <td><strong>${r.user_name}</strong></td>
+      <td style="color: var(--accent-emerald); font-weight: bold;">${r.requested_amount.toLocaleString()}원</td>
+      <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+        <button class="btn-action btn-emerald" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto;" onclick="approveRechargeRequest(${r.id})">입금 확인, 승인</button>
+        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${r.id})">반려</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-async function setCardActive(cardId, active) {
-  if (!confirm(active ? "이 카드를 다시 활성화하시겠습니까?" : "이 카드를 비활성화하시겠습니까? 분실/도난 카드는 즉시 결제에 사용할 수 없게 됩니다.")) return;
+async function approveRechargeRequest(requestId) {
+  if (!(await showConfirmModal("입금을 확인하셨습니까? 승인하면 회원에게 즉시 충전됩니다."))) return;
   try {
-    const res = await adminFetch(`${API_BASE}/cards/${cardId}/${active ? 'activate' : 'deactivate'}`, { method: "POST" });
-    if (res.ok) {
-      loadAdminCards();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      alert(`처리 실패: ${data.detail || '오류 발생'}`);
-    }
-  } catch (err) {
-    console.error("setCardActive error:", err);
-  }
-}
-
-async function toggleUserStatus(userId, currentStatus) {
-  const newStatus = currentStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-  const label = newStatus === "SUSPENDED" ? "정지" : "재활성화";
-  if (!confirm(`이 회원을 ${label}하시겠습니까? 정지된 회원은 즉시 결제가 차단됩니다.`)) return;
-
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/users/${userId}/status`, {
+    const res = await adminFetch(`${API_BASE}/admin/recharge-requests/${requestId}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus })
+      body: JSON.stringify({})
     });
     if (res.ok) {
+      const data = await res.json();
+      await showAlertModal(data.message);
       loadAdminUsers();
+      loadDepositHistories();
+      loadRechargeQueue();
+      loadStatsSummary();
     } else {
       const data = await res.json().catch(() => ({}));
-      alert(`처리 실패: ${data.detail || '오류 발생'}`);
+      await showAlertModal(`승인 실패: ${data.detail || '오류 발생'}`);
     }
   } catch (err) {
-    console.error("toggleUserStatus error:", err);
+    console.error("approveRechargeRequest error:", err);
   }
 }
 
-let editingUserId = null;
+async function rejectRechargeRequest(requestId) {
+  if (!(await showConfirmModal("이 충전 신청을 반려하시겠습니까?"))) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/recharge-requests/${requestId}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    if (res.ok) {
+      loadRechargeQueue();
+      loadStatsSummary();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`반려 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("rejectRechargeRequest error:", err);
+  }
+}
+
+async function submitBankTransaction(btn) {
+  const depositorName = document.getElementById("sim-depositor-name").value.trim();
+  const amount = parseInt(document.getElementById("sim-amount").value);
+
+  if (!depositorName || !amount || amount <= 0) {
+    await showAlertModal("입금자명과 입금 금액을 입력하세요.");
+    return;
+  }
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/bank-transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          external_txn_id: `MANUAL_${Date.now()}`,
+          amount: amount,
+          depositor_name: depositorName
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        await showAlertModal(`등록 실패: ${data.detail || '오류 발생'}`);
+        return;
+      }
+
+      const matchedLabel = data.status === "MATCHED" ? "\n\n✅ 대기 중이던 충전 신청과 자동으로 매칭되어 즉시 충전되었습니다!" : "\n\n대기 중인 충전 신청이 없어 입금 원장에만 등록했습니다. 회원이 신청하면 자동으로 매칭됩니다.";
+      await showAlertModal(`🎉 입금 확인 등록 완료\n입금자명: ${depositorName}\n금액: ${amount.toLocaleString()}원${matchedLabel}`);
+      document.getElementById("sim-depositor-name").value = "";
+      loadAdminUsers();
+      loadDepositHistories();
+      loadRechargeQueue();
+      loadStatsSummary();
+    } catch (err) {
+      console.error("submitBankTransaction error:", err);
+    }
+  });
+}
+
+// ============ 회원 등록 (FAB 모달) ============
+
+function openProxyRegisterModal() {
+  showModal("proxy-register-modal");
+}
+function closeProxyRegisterModal() {
+  hideModal("proxy-register-modal");
+}
+
+async function submitProxyRegister(btn) {
+  const name = document.getElementById("reg-name").value.trim();
+  const phone = document.getElementById("reg-phone").value.trim();
+  const userType = document.getElementById("reg-type").value;
+  const credit = parseInt(document.getElementById("reg-credit").value) || 0;
+
+  if (!name) {
+    await showAlertModal("성명을 입력하세요. 동명이인이 이미 있다면 구분되는 이름(예: 홍길동B)을 입력해 주세요.");
+    return;
+  }
+  if (!phone) {
+    await showAlertModal("연락처(로그인 ID로 사용됩니다)를 입력하세요.");
+    return;
+  }
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/register-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          user_type: userType,
+          initial_credit: credit
+        })
+      });
+
+      if (res.ok) {
+        const newUser = await res.json();
+        closeProxyRegisterModal();
+        document.getElementById("reg-name").value = "";
+        document.getElementById("reg-phone").value = "";
+        document.getElementById("reg-credit").value = "0";
+        await loadAdminUsers();
+        await loadStatsSummary();
+        await showAlertModal("신규 회원이 대리 등록되었습니다!");
+        openMemberDetail(newUser.id);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await showAlertModal(`등록 실패: ${data.detail || '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Proxy register error:", err);
+    }
+  });
+}
+
+// ============ 회원 정보 수정 모달 ============
 
 function openEditUserModal(userId) {
   const user = users.find(u => u.id === userId);
@@ -503,13 +1158,14 @@ function openEditUserModal(userId) {
 
   document.getElementById("admin-user-edit-name").innerText =
     `${user.name} (${user.user_type === 'SENIOR' ? '시니어' : '일반'} · 잔액 ${user.credit_balance.toLocaleString()}원)`;
+  document.getElementById("edit-user-name").value = user.name || "";
   document.getElementById("edit-user-phone").value = user.phone || "";
-  document.getElementById("edit-user-bank").value = user.bank_name || "";
-  document.getElementById("edit-user-account").value = user.account_number || "";
   document.getElementById("edit-user-password").value = "";
 
   showModal("admin-user-edit-modal");
 }
+
+let editingUserId = null;
 
 function closeEditUserModal() {
   editingUserId = null;
@@ -518,137 +1174,43 @@ function closeEditUserModal() {
 
 async function submitUserInfoEdit(btn) {
   if (!editingUserId) return;
+  const name = document.getElementById("edit-user-name").value.trim();
   const phone = document.getElementById("edit-user-phone").value.trim();
-  const bankName = document.getElementById("edit-user-bank").value.trim();
-  const accountNumber = document.getElementById("edit-user-account").value.trim();
   const newPassword = document.getElementById("edit-user-password").value.trim();
+
+  if (!name) {
+    await showAlertModal("이름을 입력하세요.");
+    return;
+  }
 
   await withButtonLock(btn, async () => {
     try {
-      const res = await adminFetch(`${API_BASE}/users/${editingUserId}/info`, {
+      const res = await adminFetch(`${API_BASE}/admin/users/${editingUserId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          name: name,
           phone: phone,
-          bank_name: bankName,
-          account_number: accountNumber,
           new_password: newPassword || null
         })
       });
 
       if (res.ok) {
         closeEditUserModal();
-        loadAdminUsers();
+        await loadAdminUsers();
+        if (currentDetailUserId === editingUserId) renderMemberDetail();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(`수정 실패: ${data.detail || '오류 발생'}`);
+        await showAlertModal(`수정 실패: ${data.detail || '오류 발생'}`);
       }
     } catch (err) {
       console.error("submitUserInfoEdit error:", err);
-      alert("서버 연결에 실패했습니다.");
+      await showAlertModal("서버 연결에 실패했습니다.");
     }
   });
 }
 
-function renderUsersTable() {
-  const tbody = document.getElementById("admin-user-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  const searchInput = document.getElementById("admin-user-search");
-  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
-  const filtered = !query ? users : users.filter(u => {
-    const haystack = [u.name, u.phone, u.account_number, u.username].filter(Boolean).join(" ").toLowerCase();
-    return haystack.includes(query);
-  });
-
-  const countLabel = document.getElementById("admin-user-count");
-  if (countLabel) {
-    countLabel.innerText = query ? `(검색결과 ${filtered.length}/${users.length}명)` : `(총 ${users.length}명)`;
-  }
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">${query ? '검색 결과가 없습니다.' : '등록된 회원이 없습니다.'}</td></tr>`;
-    return;
-  }
-
-  filtered.forEach(u => {
-    const tr = document.createElement("tr");
-    const isActive = u.status === "ACTIVE";
-    tr.innerHTML = `
-      <td><strong>${u.name}</strong></td>
-      <td><span class="badge-tag ${u.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}">${u.user_type}</span></td>
-      <td>${u.phone || '-'}</td>
-      <td>${u.account_number || '-'}</td>
-      <td style="color: var(--accent-emerald); font-weight: bold; font-size: 1.1rem;">${u.credit_balance.toLocaleString()}원</td>
-      <td>${isActive
-        ? '<span style="color: var(--accent-emerald); font-weight: bold;">활성</span>'
-        : '<span style="color: #ef4444; font-weight: bold;">정지됨</span>'}</td>
-      <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-        <button class="btn-action btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto;" onclick="quickRecharge(${u.id})">충전</button>
-        <button class="btn-action" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto; background: rgba(59,130,246,0.2); color: #93c5fd;" onclick="openEditUserModal(${u.id})">수정</button>
-        <button class="btn-action" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; width: auto; background: ${isActive ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}; color: ${isActive ? '#fca5a5' : '#6ee7b7'};" onclick="toggleUserStatus(${u.id}, '${u.status}')">${isActive ? '정지' : '재활성화'}</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderUserSelectDropdown() {
-  const select = document.getElementById("recharge-user-select");
-  if (select) {
-    select.innerHTML = users.map(u => `<option value="${u.id}">${u.name} (${u.user_type === 'SENIOR' ? '시니어' : '일반'}) - 잔액: ${u.credit_balance.toLocaleString()}원</option>`).join("");
-  }
-  
-  const cardSelect = document.getElementById("admin-card-user-select");
-  if (cardSelect) {
-    cardSelect.innerHTML = '<option value="">-- 대리 발급 대상 회원 선택 --</option>' + users.map(u => `<option value="${u.id}">[${u.user_type === 'SENIOR' ? '시니어' : '일반'}] ${u.name} (${u.phone || u.account_number || '연락처없음'})</option>`).join("");
-  }
-}
-
-// Admin Register Physical NFC Card or Church Member QR Code For User
-async function adminRegisterCardForUser(btn) {
-  const userId = document.getElementById("admin-card-user-select").value;
-  const cardType = adminScanMode === "QR" ? "QR_CODE" : "NFC";
-  const cardUid = document.getElementById("admin-card-uid-input").value.trim();
-
-  if (!userId) {
-    alert("발급 대상 회원을 선택해 주세요.");
-    return;
-  }
-  if (!cardUid) {
-    alert("NFC 카드를 태그하시거나 교인증 QR 코드를 카메라에 스캔해 주세요.");
-    return;
-  }
-
-  await withButtonLock(btn, async () => {
-    try {
-      const res = await adminFetch(`${API_BASE}/cards/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          card_uid: cardUid,
-          card_name: cardType === 'QR_CODE' ? "대리 등록 교인증 QR 코드" : "대리 발급 실물 NFC 카드",
-          card_type: cardType,
-          user_id: parseInt(userId)
-        })
-      });
-
-      if (res.ok) {
-        alert(`🎉 [관리자 식별자 대리 발급 성공!]\n유형: ${cardType === 'QR_CODE' ? '📷 교인증 QR 코드' : '💳 실물 NFC 카드'}\n식별 코드: ${cardUid}\n선택하신 회원 계정에 1:1 대리 발급이 완료되었습니다.`);
-        document.getElementById("admin-card-uid-input").value = "";
-        loadAdminUsers();
-        loadAdminCards();
-      } else {
-        const errData = await res.json();
-        alert(`식별자 대리 발급 실패: ${errData.detail || '오류 발생'}`);
-      }
-    } catch (err) {
-      console.error("Admin register card error:", err);
-      alert("서버 통신 중 에러가 발생했습니다.");
-    }
-  });
-}
+// ============ 메뉴(상품) 관리 ============
 
 function renderProductsTable() {
   const tbody = document.getElementById("admin-product-tbody");
@@ -669,142 +1231,6 @@ function renderProductsTable() {
     `;
     tbody.appendChild(tr);
   });
-}
-
-function renderDepositHistoriesTable(histories) {
-  const tbody = document.getElementById("admin-deposit-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  histories.forEach(h => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${new Date(h.created_at).toLocaleString()}</td>
-      <td><strong>${h.user_name}</strong></td>
-      <td style="color: var(--accent-emerald); font-weight: bold;">+${h.amount.toLocaleString()}원</td>
-      <td><span class="badge-tag badge-general">${h.deposit_type}</span></td>
-      <td>${h.source_account || '-'}</td>
-      <td>${h.memo || '-'}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-async function runNHBankDepositSimulation(btn) {
-  const account = document.getElementById("sim-account").value;
-  const amount = parseInt(document.getElementById("sim-amount").value);
-
-  if (!account || !amount || amount <= 0) {
-    alert("계좌번호와 입금 금액을 입력하세요.");
-    return;
-  }
-
-  await withButtonLock(btn, async () => {
-    try {
-      const res = await adminFetch(`${API_BASE}/nhbank/mock-deposit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source_account: account, amount: amount })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        alert(`[매칭 실패] ${data.detail}`);
-        return;
-      }
-
-      alert(`🎉 [NH농협 입금 자동 충전 성공!]\n${data.message}`);
-      loadAdminUsers();
-      loadDepositHistories();
-    } catch (err) {
-      console.error("Simulation error:", err);
-    }
-  });
-}
-
-async function submitProxyRegister(btn) {
-  const name = document.getElementById("reg-name").value;
-  const phone = document.getElementById("reg-phone").value;
-  const userType = document.getElementById("reg-type").value;
-  const account = document.getElementById("reg-account").value;
-  const credit = parseInt(document.getElementById("reg-credit").value) || 0;
-
-  if (!name) {
-    alert("성명을 입력하세요.");
-    return;
-  }
-
-  await withButtonLock(btn, async () => {
-    try {
-      const res = await adminFetch(`${API_BASE}/admin/register-user`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name,
-          phone: phone,
-          user_type: userType,
-          account_number: account,
-          initial_credit: credit
-        })
-      });
-
-      if (res.ok) {
-        alert("신규 회원이 대리 등록되었습니다!");
-        document.getElementById("reg-name").value = "";
-        document.getElementById("reg-phone").value = "";
-        document.getElementById("reg-account").value = "";
-        document.getElementById("reg-credit").value = "0";
-        loadAdminUsers();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(`등록 실패: ${data.detail || '오류 발생'}`);
-      }
-    } catch (err) {
-      console.error("Proxy register error:", err);
-    }
-  });
-}
-
-async function submitManualRecharge(btn) {
-  const userId = document.getElementById("recharge-user-select").value;
-  const amount = parseInt(document.getElementById("recharge-amount").value);
-  const memo = document.getElementById("recharge-memo").value;
-
-  if (!userId || !amount || amount <= 0) {
-    alert("충전 대상 및 금액을 올바르게 입력하세요.");
-    return;
-  }
-
-  await withButtonLock(btn, async () => {
-    try {
-      const res = await adminFetch(`${API_BASE}/admin/recharge-credit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: parseInt(userId),
-          amount: amount,
-          memo: memo || "관리자 직권 충전"
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        alert(data.message);
-        loadAdminUsers();
-        loadDepositHistories();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(`충전 실패: ${data.detail ? JSON.stringify(data.detail) : '오류 발생'}`);
-      }
-    } catch (err) {
-      console.error("Manual recharge error:", err);
-    }
-  });
-}
-
-function quickRecharge(userId) {
-  document.getElementById("recharge-user-select").value = userId;
-  document.getElementById("recharge-amount").focus();
 }
 
 let editingProductId = null;
@@ -837,7 +1263,7 @@ function cancelAdminProductEdit() {
 async function deleteAdminProduct(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
-  if (!confirm(`"${product.name}" 메뉴를 정말 삭제하시겠습니까?`)) return;
+  if (!(await showConfirmModal(`"${product.name}" 메뉴를 정말 삭제하시겠습니까?`))) return;
 
   try {
     const res = await adminFetch(`${API_BASE}/products/${id}`, { method: "DELETE" });
@@ -846,7 +1272,7 @@ async function deleteAdminProduct(id) {
       loadAdminProducts();
     } else {
       const data = await res.json().catch(() => ({}));
-      alert(`삭제 실패: ${data.detail || '오류 발생'}`);
+      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
     }
   } catch (err) {
     console.error("Delete product error:", err);
@@ -859,7 +1285,7 @@ async function submitAddProduct(btn) {
   const senPrice = parseInt(document.getElementById("prod-price-sen").value);
 
   if (!name || isNaN(genPrice)) {
-    alert("메뉴 이름과 일반 가격을 입력하세요.");
+    await showAlertModal("메뉴 이름과 일반 가격을 입력하세요.");
     return;
   }
 
@@ -887,7 +1313,7 @@ async function submitAddProduct(btn) {
         loadAdminProducts();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(`처리 실패: ${data.detail || '오류 발생'}`);
+        await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
       }
     } catch (err) {
       console.error("Add/edit product error:", err);

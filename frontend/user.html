@@ -26,15 +26,10 @@
           <a href="user.html" class="nav-item active">📱 회원 PWA</a>
           <a href="admin.html" class="nav-item">🖥️ 관리자</a>
         </nav>
-        <button onclick="openSelfRegisterModal()" class="btn-action btn-emerald" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; min-height: 38px;">
-          ✨ 신규 가입
-        </button>
       </div>
     </header>
 
-
-
-    <!-- User Card Widget -->
+    <!-- User Balance Card (로그인 후 표시) -->
     <div id="user-card-box" class="user-card-widget" style="display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <h2 id="display-user-name" style="font-size: 1.6rem; font-weight: 800;">-</h2>
@@ -45,14 +40,8 @@
         <div style="color: #c7d2fe; font-size: 0.95rem;">현재 보유 크레딧 잔액</div>
         <div id="display-user-balance" class="user-balance-big">0원</div>
       </div>
-    </div>
 
-    <!-- User Balance & Status Card Section -->
-    <div id="user-card-section" class="glass-container" style="padding: 1.5rem; display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 id="user-display-name" style="font-size: 1.2rem; color: #fff;">-</h3>
-        <button onclick="userLogout()" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #fca5a5; border-radius: 8px; cursor: pointer;">로그아웃</button>
-      </div>
+      <button onclick="userLogout()" style="margin-top: 1.2rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #fca5a5; border-radius: 8px; cursor: pointer;">로그아웃</button>
     </div>
 
     <!-- 1-Second Easy Recharge Section -->
@@ -82,15 +71,24 @@
       </div>
     </div>
 
-    <!-- Account Info Section -->
-    <div id="account-info-section" class="glass-container" style="padding: 1.5rem; display: none;">
-      <h4 style="color: var(--accent-amber); font-size: 1.05rem; margin-bottom: 0.5rem;">🏦 계좌 입금 충전 안내 (농협 API)</h4>
+    <!-- Bank Transfer Charge Guide & Recharge Request Section -->
+    <div id="charge-guide-section" class="glass-container" style="padding: 1.5rem; display: none;">
+      <h4 style="color: var(--accent-amber); font-size: 1.05rem; margin-bottom: 0.5rem;">🏦 계좌이체 충전 안내</h4>
       <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0.8rem;">
-        등록된 계좌에서 입금 시 <strong>자동으로 크레딧이 충전</strong>됩니다.
+        아래 계좌로 입금하신 후, <strong>입금하신 금액</strong>을 입력하고 "충전 신청" 버튼을 눌러 주세요. 입금이 확인되면 자동으로 충전되고, 확인이 늦어지면 관리자가 확인 후 처리합니다.
       </p>
-      <div style="font-size: 0.95rem;">
-        • <strong>본인 등록 출처 계좌:</strong> <span id="display-user-account" style="color: #fff; font-weight: bold;">-</span>
+      <div style="background: rgba(0,0,0,0.3); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem; margin-bottom: 1rem;">
+        <div>💳 입금 계좌: <strong id="charge-guide-account" style="color: #fff;">-</strong></div>
+        <div style="margin-top: 0.4rem;">✍️ 입금자명(<strong>반드시 이 이름 그대로</strong> 입금): <strong id="charge-guide-depositor-name" style="color: var(--accent-cyan);">-</strong></div>
       </div>
+
+      <div class="form-group" style="margin-bottom: 0.8rem;">
+        <label style="font-size: 0.85rem; color: var(--text-muted);">입금하신 금액 (원)</label>
+        <input type="number" id="recharge-request-amount" class="form-control" placeholder="예: 10000" style="background: rgba(0,0,0,0.5); color: #fff;">
+      </div>
+      <button class="btn-action btn-primary" style="width: 100%; font-weight: bold;" onclick="submitRechargeRequest(this)">💰 충전 신청하기</button>
+
+      <div id="recharge-request-history" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);"></div>
     </div>
 
     <!-- User Login Section -->
@@ -104,92 +102,60 @@
       
       <div class="form-group" style="margin-bottom: 0.8rem;">
         <label style="font-size: 0.85rem; color: var(--text-muted);">📱 휴대폰 번호 (아이디)</label>
-        <input type="tel" id="login-username" class="form-control" placeholder="예: 010-1234-5678" style="background: rgba(0,0,0,0.5); color: #fff;">
+        <input type="tel" id="login-phone" class="form-control" placeholder="예: 010-1234-5678" maxlength="13" oninput="formatPhoneInput(this)" style="background: rgba(0,0,0,0.5); color: #fff;">
       </div>
       <div class="form-group" style="margin-bottom: 1.2rem;">
-        <label style="font-size: 0.85rem; color: var(--text-muted);">🔑 비밀번호 / PIN</label>
-        <input type="password" id="login-password" class="form-control" placeholder="비밀번호 입력 (초기: 1234)" style="background: rgba(0,0,0,0.5); color: #fff;">
+        <label style="font-size: 0.85rem; color: var(--text-muted);">🔑 비밀번호</label>
+        <input type="password" id="login-password" class="form-control" placeholder="비밀번호 입력 (초기 비밀번호: 1234)" style="background: rgba(0,0,0,0.5); color: #fff;" onkeyup="if(event.key==='Enter') userLogin();">
       </div>
-      
+
       <button class="btn-action btn-primary" style="width: 100%; font-weight: bold;" onclick="userLogin()">
         🔒 로그인하기
       </button>
-      <div style="text-align: center; margin-top: 0.8rem;">
-        <button onclick="openSelfRegisterModal()" style="background: none; border: none; color: var(--accent-cyan); font-size: 0.85rem; cursor: pointer; text-decoration: underline;">
-          ✨ 신규 회원가입 (휴대폰 번호로가입)
-        </button>
-      </div>
+      <p style="text-align: center; margin-top: 0.8rem; font-size: 0.8rem; color: var(--text-muted);">
+        계정이 없으신가요? 교회 사무실(관리자)에 문의해 주세요.
+      </p>
     </div>
 
-    <!-- User Account Info Edit Section (Visible after login) -->
+    <!-- User Account Info Section (Visible after login) -->
     <div id="user-info-section" class="glass-container" style="padding: 1.5rem; display: none;">
-      <h4 style="font-size: 1.1rem; color: var(--accent-cyan); margin-bottom: 0.8rem;">⚙️ 내 정보 확인 및 수정</h4>
-      
+      <h4 style="font-size: 1.1rem; color: var(--accent-cyan); margin-bottom: 0.8rem;">⚙️ 내 정보</h4>
+
       <div style="display: flex; flex-direction: column; gap: 0.8rem; text-align: left;">
         <div>
-          <label style="font-size: 0.8rem; color: var(--text-muted);">연락처</label>
-          <input type="text" id="edit-user-phone" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: #fff;">
+          <label style="font-size: 0.8rem; color: var(--text-muted);">연락처 (로그인 ID)</label>
+          <input type="text" id="display-user-phone" disabled style="width: 100%; padding: 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); color: var(--text-muted);">
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">연락처를 변경하시려면 교회 사무실(관리자)에 문의해 주세요.</p>
         </div>
         <div>
-          <label style="font-size: 0.8rem; color: var(--text-muted);">환불/입금 은행 및 계좌번호</label>
-          <div style="display: flex; gap: 0.5rem;">
-            <input type="text" id="edit-user-bank" style="width: 30%; padding: 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: #fff;">
-            <input type="text" id="edit-user-account" style="width: 70%; padding: 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: #fff;">
-          </div>
-        </div>
-        <div>
-          <label style="font-size: 0.8rem; color: var(--text-muted);">비밀번호 변경 (변경할 경우 입력)</label>
+          <label style="font-size: 0.8rem; color: var(--text-muted);">비밀번호 변경 (변경할 경우만 입력)</label>
           <input type="password" id="edit-user-password" placeholder="새 비밀번호 입력" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: #fff;">
         </div>
-        <button class="btn-action btn-primary" style="padding: 0.75rem; margin-top: 0.5rem;" onclick="saveUserInfoEdit()">저장하기</button>
-      </div>
-
-      <!-- Registered Cards Read-only List -->
-      <div id="user-registered-cards-box" style="margin-top: 1.2rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.1); text-align: left;">
-        <h5 style="font-size: 0.9rem; color: var(--accent-green); margin-bottom: 0.3rem;">💳 등록된 실물 카드 정보 (관리자 발급):</h5>
-        <ul id="user-registered-cards-ul" style="font-size: 0.85rem; color: #a5b4fc; padding-left: 1.2rem;"></ul>
+        <button class="btn-action btn-primary" style="padding: 0.75rem; margin-top: 0.5rem;" onclick="changePassword()">비밀번호 변경</button>
       </div>
     </div>
 
   </div>
 
-  <!-- Self Register Modal -->
-  <div id="self-reg-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large" style="text-align: left; max-width: 440px;">
-      <h2 style="font-size: 1.5rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">✨ 소망페이 신규 회원가입</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;">정보를 입력하고 즉시 소망페이를 이용하세요.</p>
-
-      <div class="form-group">
-        <label class="form-label">📱 휴대폰 번호 (계정 ID로 사용됨)</label>
-        <input type="tel" id="self-reg-username" class="form-control" placeholder="예: 010-8888-7777">
+  <!-- Generic Alert Modal (alert() 대체) -->
+  <div id="generic-alert-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 400px;">
+      <h2 id="generic-alert-title" style="font-size: 1.3rem; color: #fff; margin-bottom: 0.8rem;">알림</h2>
+      <p id="generic-alert-message" style="font-size: 0.95rem; color: var(--text-muted); white-space: pre-line; margin-bottom: 1.5rem;"></p>
+      <div class="modal-footer">
+        <button class="btn-action btn-primary" onclick="_resolveAlertModal()">확인</button>
       </div>
+    </div>
+  </div>
 
-      <div class="form-group">
-        <label class="form-label">성명</label>
-        <input type="text" id="self-reg-name" class="form-control" placeholder="예: 홍길동">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">연락처</label>
-        <input type="text" id="self-reg-phone" class="form-control" placeholder="010-1234-5678">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">회원 구분</label>
-        <select id="self-reg-type" class="form-control">
-          <option value="GENERAL">👦 일반 / 아동 회원</option>
-          <option value="SENIOR">👵👴 시니어 회원 (할인 적용)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">충전 환불용 농협 계좌번호</label>
-        <input type="text" id="self-reg-account" class="form-control" placeholder="예: 302-1234-5678-01">
-      </div>
-
-      <div style="display: flex; gap: 0.8rem; margin-top: 1.5rem;">
-        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff; flex:1;" onclick="closeSelfRegisterModal()">취소</button>
-        <button class="btn-action btn-primary" style="flex:2;" onclick="submitSelfRegister()">가입 완료</button>
+  <!-- Generic Confirm Modal (confirm() 대체) -->
+  <div id="generic-confirm-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 400px;">
+      <h2 id="generic-confirm-title" style="font-size: 1.3rem; color: #fff; margin-bottom: 0.8rem;">확인</h2>
+      <p id="generic-confirm-message" style="font-size: 0.95rem; color: var(--text-muted); white-space: pre-line; margin-bottom: 1.5rem;"></p>
+      <div class="modal-footer">
+        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="_resolveConfirmModal(false)">취소</button>
+        <button class="btn-action btn-primary" onclick="_resolveConfirmModal(true)">확인</button>
       </div>
     </div>
   </div>

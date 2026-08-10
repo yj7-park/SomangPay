@@ -28,7 +28,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         TextToSpeech.OnInitListener, CardReaderManager.NativeNfcController {
 
     private static final String TAG = "SomangKioskNative";
-    private static final String KIOSK_URL = "https://125.248.31.132/kiosk";
+    // 대상 URL/락다운 여부는 플레이버별로 build.gradle의 buildConfigField가 주입한다
+    // (kiosk/admin/user - app/build.gradle 참고). 카드 리더 브릿지는 세 플레이버가 공유한다.
 
     private WebView webView;
     private NfcAdapter nfcAdapter;
@@ -41,8 +42,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 앱 시작 시 강제로 가로 고정 모드(LANDSCAPE)로 설정
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        // 전용 키오스크 단말기 빌드에서만 강제로 가로 고정 모드(LANDSCAPE)로 설정 -
+        // admin/user는 직원 개인 휴대폰에서 쓰므로 기기 방향을 자유롭게 따라간다.
+        if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        }
 
         mainHandler = new Handler(Looper.getMainLooper());
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
@@ -69,7 +73,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         // 길게 눌러 텍스트 선택/복사 메뉴, 링크·이미지 컨텍스트 메뉴(새 탭에서 열기, 이미지 저장 등)가
         // 뜨는 것을 차단 - true를 반환해 롱클릭 이벤트를 여기서 소비하고 WebView 기본 동작으로 넘기지 않는다.
         // (CSS의 user-select:none과 함께 적용해야 선택 핸들 자체가 아예 생기지 않는다 - style.css 참고)
-        webView.setOnLongClickListener(v -> true);
+        // 전용 키오스크 단말기 전용 동작 - admin/user는 일반 앱처럼 길게 눌러 복사/공유가 가능해야 한다.
+        if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
+            webView.setOnLongClickListener(v -> true);
+        }
         webView.setHapticFeedbackEnabled(false);
 
         // 카드 리더 우선순위(USB CCID > USB HID 키보드 > 내장 NFC > 에러) 오케스트레이터 초기화
@@ -101,7 +108,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         // ngrok 인터스티셜 페이지 바이패스 헤더 추가
         Map<String, String> extraHeaders = new HashMap<>();
         extraHeaders.put("ngrok-skip-browser-warning", "true");
-        webView.loadUrl(KIOSK_URL, extraHeaders);
+        webView.loadUrl(BuildConfig.TARGET_URL, extraHeaders);
 
         // 2. 런타임 기기 카메라(CAMERA) 권한 체크 및 팝업 요청
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -113,7 +120,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         // TTS 엔진 초기화
         tts = new TextToSpeech(this, this);
 
-        Log.d(TAG, "Native Kiosk App Initialized with URL: " + KIOSK_URL);
+        Log.d(TAG, "Native App Initialized with URL: " + BuildConfig.TARGET_URL);
     }
 
     @Override
@@ -157,11 +164,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         }
     }
 
-    // 시스템 뒤로가기(하단 버튼/제스처)를 완전히 무시 - 키오스크는 단일 화면이라 뒤로 나갈 곳이
-    // 없고, 기본 동작(super 호출)을 두면 액티비티가 그대로 종료되어 앱 밖으로 빠져나가 버린다.
+    // 전용 키오스크 단말기 빌드에서만 시스템 뒤로가기(하단 버튼/제스처)를 완전히 무시 -
+    // 키오스크는 단일 화면이라 뒤로 나갈 곳이 없고, 기본 동작(super 호출)을 두면 액티비티가
+    // 그대로 종료되어 앱 밖으로 빠져나가 버린다. admin/user는 일반 앱처럼 정상 동작해야 한다.
     @Override
     public void onBackPressed() {
-        // 의도적으로 아무 것도 하지 않음
+        if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
+            return;
+        }
+        super.onBackPressed();
     }
 
     // 시스템 다이얼로그(권한 요청, 알림 패널 등)로 포커스가 빠졌다가 돌아올 때마다 몰입모드를
@@ -179,7 +190,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             );
-            enterKioskLockTaskIfNeeded();
+            if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
+                enterKioskLockTaskIfNeeded();
+            }
         }
     }
 

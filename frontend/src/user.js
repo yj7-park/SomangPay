@@ -1,29 +1,94 @@
 const API_BASE = "/api";
 
-let users = [];
+let userToken = null;
 let loggedInUser = null;
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadUsers();
-  
-  // Check session login
-  const savedUser = sessionStorage.getItem("logged_in_user");
-  if (savedUser) {
-    try {
-      loggedInUser = JSON.parse(savedUser);
-      onLoginSuccess(loggedInUser);
-    } catch (e) {
-      sessionStorage.removeItem("logged_in_user");
-    }
+  const savedToken = localStorage.getItem("user_token");
+  if (savedToken) {
+    userToken = savedToken;
+    restoreSession();
   }
 });
 
+// 로그인 토큰이 남아있으면 서버에 다시 확인해 최신 정보로 자동 로그인한다.
+// (localStorage에 저장돼 있어 로그아웃 전까지 브라우저 재시작에도 유지된다)
+async function restoreSession() {
+  try {
+    const res = await authFetch(`${API_BASE}/users/me`);
+    if (res.ok) {
+      loggedInUser = await res.json();
+      onLoginSuccess(loggedInUser);
+    } else {
+      userLogout();
+    }
+  } catch (err) {
+    console.error("Session restore error:", err);
+  }
+}
+
+// 회원 자기 서비스 API 호출 공통 헬퍼 - Authorization 헤더 자동 부착, 401이면 로그아웃 처리.
+async function authFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {}, userToken ? { "Authorization": `Bearer ${userToken}` } : {});
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    userLogout();
+    await showAlertModal("세션이 만료되었습니다. 다시 로그인해 주세요.");
+  }
+  return res;
+}
+
+// ============ 공용 알림/확인 모달 (alert()/confirm() 대체) ============
+let _alertModalResolve = null;
+let _confirmModalResolve = null;
+
+function showAlertModal(message, title = "알림") {
+  document.getElementById("generic-alert-title").innerText = title;
+  document.getElementById("generic-alert-message").innerText = message;
+  showModal("generic-alert-modal");
+  return new Promise(resolve => { _alertModalResolve = resolve; });
+}
+function _resolveAlertModal() {
+  hideModal("generic-alert-modal");
+  if (_alertModalResolve) { _alertModalResolve(); _alertModalResolve = null; }
+}
+function showConfirmModal(message, title = "확인") {
+  document.getElementById("generic-confirm-title").innerText = title;
+  document.getElementById("generic-confirm-message").innerText = message;
+  showModal("generic-confirm-modal");
+  return new Promise(resolve => { _confirmModalResolve = resolve; });
+}
+function _resolveConfirmModal(result) {
+  hideModal("generic-confirm-modal");
+  if (_confirmModalResolve) { _confirmModalResolve(result); _confirmModalResolve = null; }
+}
+function showModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'flex'; el.classList.add("active"); }
+}
+function hideModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'none'; el.classList.remove("active"); }
+}
+
+// 전화번호 입력 필드에 실시간으로 하이픈을 자동 삽입한다 (010-1234-5678 형태).
+function formatPhoneInput(input) {
+  const digits = input.value.replace(/\D/g, "").slice(0, 11);
+  let formatted = digits;
+  if (digits.length > 3 && digits.length <= 7) {
+    formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  } else if (digits.length > 7) {
+    formatted = `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+  input.value = formatted;
+}
+
 async function userLogin() {
-  const username = document.getElementById("login-username").value.trim();
+  const phone = document.getElementById("login-phone").value.trim();
   const password = document.getElementById("login-password").value.trim();
 
-  if (!username || !password) {
-    alert("아이디와 비밀번호를 입력해주세요.");
+  if (!phone || !password) {
+    await showAlertModal("휴대폰 번호와 비밀번호를 입력해주세요.");
     return;
   }
 
@@ -31,112 +96,105 @@ async function userLogin() {
     const res = await fetch(`${API_BASE}/users/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ phone, password })
     });
 
     const data = await res.json();
     if (!res.ok) {
-      alert(`[로그인 실패] ${data.detail || '아이디 또는 비밀번호 오류'}`);
+      await showAlertModal(`[로그인 실패] ${data.detail || '휴대폰 번호 또는 비밀번호 오류'}`);
       return;
     }
 
+    userToken = data.token;
+    localStorage.setItem("user_token", userToken);
     loggedInUser = data;
-    sessionStorage.setItem("logged_in_user", JSON.stringify(loggedInUser));
     onLoginSuccess(loggedInUser);
-    alert(`🎉 [로그인 성공] ${loggedInUser.name}님 환영합니다!`);
   } catch (err) {
     console.error("Login Error:", err);
-    alert("서버 연결에 실패했습니다.");
+    await showAlertModal("서버 연결에 실패했습니다.");
   }
 }
 
 function userLogout() {
-  sessionStorage.removeItem("logged_in_user");
+  localStorage.removeItem("user_token");
+  userToken = null;
   loggedInUser = null;
+  disconnectUserWebSocket();
   document.getElementById("user-login-section").style.display = "block";
-  document.getElementById("user-card-section").style.display = "none";
+  document.getElementById("user-card-box").style.display = "none";
   document.getElementById("recharge-section").style.display = "none";
+  document.getElementById("charge-guide-section").style.display = "none";
   document.getElementById("user-info-section").style.display = "none";
-  document.getElementById("login-username").value = "";
+  document.getElementById("login-phone").value = "";
   document.getElementById("login-password").value = "";
 }
 
 function onLoginSuccess(user) {
   document.getElementById("user-login-section").style.display = "none";
-  document.getElementById("user-card-section").style.display = "block";
+  document.getElementById("user-card-box").style.display = "block";
   document.getElementById("recharge-section").style.display = "block";
+  document.getElementById("charge-guide-section").style.display = "block";
   document.getElementById("user-info-section").style.display = "block";
 
-  // Render User Balance Card
-  document.getElementById("user-display-name").innerText = `${user.name} 님 [${user.user_type === 'SENIOR' ? '시니어' : '일반'}]`;
-  document.getElementById("user-credit-balance").innerText = `${user.credit_balance.toLocaleString()} 원`;
-  document.getElementById("user-bank-info").innerText = `${user.bank_name || '농협'} ${user.account_number || '등록계좌 없음'}`;
+  document.getElementById("display-user-name").innerText = user.name;
+  document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '👵👴 시니어' : '👦 일반';
+  document.getElementById("display-user-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
+  document.getElementById("display-user-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
+  document.getElementById("display-user-phone").value = user.phone || "-";
 
-  // Populate Edit Info Inputs
-  document.getElementById("edit-user-phone").value = user.phone || "";
-  document.getElementById("edit-user-bank").value = user.bank_name || "농협";
-  document.getElementById("edit-user-account").value = user.account_number || "";
-  document.getElementById("edit-user-password").value = "";
-
-  // Render QR Code
-  generateUserQrCode(user);
-
-  // Fetch Read-only Registered Physical Cards
-  fetchUserCards(user.id);
+  loadChargeGuide();
+  loadMyRechargeRequests();
+  connectUserWebSocket();
 }
 
-async function loadUsers() {
-  try {
-    // 전체 회원 목록(전화번호/계좌번호/잔액 등 PII 포함)은 관리자 전용이라, 이 계정 선택
-    // 드롭다운은 이름/구분/아이디만 내려주는 공개 최소 정보 엔드포인트를 쓴다.
-    const res = await fetch(`${API_BASE}/users/public`);
-    users = await res.json();
-    renderUserSelectOptions();
-  } catch (err) {
-    console.error("Failed to load users:", err);
+// ============ 실시간 갱신 (WebSocket) ============
+// 관리자가 대신 충전해주거나, 계좌이체가 뒤늦게 매칭되거나, 키오스크에서 결제하는 등
+// 다른 경로로 내 잔액/신청 상태가 바뀌면 새로고침 없이 반영한다.
+let userWs = null;
+let userWsReconnectTimer = null;
+
+function connectUserWebSocket() {
+  if (!userToken) return;
+  if (userWs && userWs.readyState <= 1) return;
+
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  userWs = new WebSocket(`${protocol}//${location.host}/ws/user?token=${encodeURIComponent(userToken)}`);
+
+  userWs.onmessage = (event) => {
+    let data;
+    try { data = JSON.parse(event.data); } catch (e) { return; }
+    if (data.type !== "refresh") return;
+    if ((data.scopes || []).includes("me")) {
+      refreshMyInfo();
+      loadMyRechargeRequests();
+    }
+  };
+
+  userWs.onclose = () => {
+    userWs = null;
+    if (!userToken) return; // 로그아웃으로 인한 정상 종료면 재연결 안 함
+    clearTimeout(userWsReconnectTimer);
+    userWsReconnectTimer = setTimeout(connectUserWebSocket, 3000);
+  };
+
+  userWs.onerror = () => {
+    if (userWs) userWs.close();
+  };
+}
+
+function disconnectUserWebSocket() {
+  clearTimeout(userWsReconnectTimer);
+  if (userWs) {
+    userWs.close();
+    userWs = null;
   }
 }
 
-function renderUserSelectOptions() {
-  const select = document.getElementById("user-select");
-  if (!select) return;
-  select.innerHTML = `<option value="">-- 접속할 회원을 선택하세요 --</option>`;
-
-  users.forEach(u => {
-    const opt = document.createElement("option");
-    opt.value = u.id;
-    opt.innerText = `${u.name} (${u.user_type === 'SENIOR' ? '시니어' : '일반'}) - ${u.username}`;
-    select.appendChild(opt);
-  });
-}
-
-function onUserChange() {
-  const userId = document.getElementById("user-select").value;
-  const userCard = document.getElementById("user-card-box");
-  const rechargeSec = document.getElementById("recharge-section");
-  const accSec = document.getElementById("account-info-section");
-  const nfcSec = document.getElementById("nfc-section");
-
-  if (!userId) {
-    userCard.style.display = "none";
-    rechargeSec.style.display = "none";
-    accSec.style.display = "none";
-    nfcSec.style.display = "none";
-    return;
-  }
-
-  const user = users.find(u => u.id === parseInt(userId));
-  if (user) {
-    userCard.style.display = "block";
-    rechargeSec.style.display = "block";
-    accSec.style.display = "block";
-    nfcSec.style.display = "block";
-
-    document.getElementById("display-user-name").innerText = user.name;
-    document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '👵👴 시니어' : '👦 일반';
-    document.getElementById("display-user-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
-    document.getElementById("display-user-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
-    document.getElementById("display-user-account").innerText = user.account_number || "등록된 계좌 없음";
+async function refreshMyInfo() {
+  const res = await authFetch(`${API_BASE}/users/me`);
+  if (res.ok) {
+    loggedInUser = await res.json();
+    document.getElementById("display-user-balance").innerText = `${loggedInUser.credit_balance.toLocaleString()}원`;
   }
 }
 
@@ -146,14 +204,14 @@ function setPresetAmt(amt) {
 
 async function triggerDeeplink(provider) {
   if (!loggedInUser) {
-    alert("로그인이 필요합니다.");
+    await showAlertModal("로그인이 필요합니다.");
     return;
   }
   const userId = loggedInUser.id;
   const amount = parseInt(document.getElementById("recharge-amt-input").value);
 
-  if (!userId || !amount || amount <= 0) {
-    alert("회원을 선택하고 올바른 충전 금액을 입력해주세요.");
+  if (!amount || amount <= 0) {
+    await showAlertModal("올바른 충전 금액을 입력해주세요.");
     return;
   }
 
@@ -170,7 +228,7 @@ async function triggerDeeplink(provider) {
 
     const data = await res.json();
     if (!res.ok) {
-      alert(data.detail || "딥링크 생성 실패");
+      await showAlertModal(data.detail || "딥링크 생성 실패");
       return;
     }
 
@@ -191,9 +249,8 @@ async function triggerDeeplink(provider) {
 
       if (confirmRes.ok) {
         const confirmData = await confirmRes.json();
-        alert(confirmData.message);
-        await loadUsers();
-        onUserChange();
+        await showAlertModal(confirmData.message);
+        await refreshMyInfo();
       }
     }, 1500);
 
@@ -202,204 +259,96 @@ async function triggerDeeplink(provider) {
   }
 }
 
-function openSelfRegisterModal() {
-  const el = document.getElementById("self-reg-modal");
-  if (el) {
-    el.style.display = 'flex';
-    el.classList.add("active");
-  }
-}
+// ============ 계좌이체 충전 안내 & 신청 ============
 
-function closeSelfRegisterModal() {
-  const el = document.getElementById("self-reg-modal");
-  if (el) {
-    el.style.display = 'none';
-    el.classList.remove("active");
-  }
-}
-
-async function submitSelfRegister() {
-  const username = document.getElementById("self-reg-username").value.trim();
-  const name = document.getElementById("self-reg-name").value.trim();
-  const phone = document.getElementById("self-reg-phone").value.trim();
-  const userType = document.getElementById("self-reg-type").value;
-  const account = document.getElementById("self-reg-account").value.trim();
-
-  if (!username || !name) {
-    alert("아이디와 성명을 입력하세요.");
-    return;
-  }
-
+async function loadChargeGuide() {
   try {
-    const res = await fetch(`${API_BASE}/users/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: username,
-        name: name,
-        phone: phone,
-        user_type: userType,
-        account_number: account
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.detail || "회원가입 실패");
-      return;
-    }
-
-    alert(`🎉 회원가입이 완료되었습니다!환영합니다, ${data.name}님.`);
-    closeSelfRegisterModal();
-    await loadUsers();
-
-    // Auto-select newly created user
-    document.getElementById("user-select").value = data.id;
-    onUserChange();
+    const res = await authFetch(`${API_BASE}/settings/charge-guide`);
+    if (!res.ok) return;
+    const guide = await res.json();
+    document.getElementById("charge-guide-account").innerText = `${guide.bank_name} ${guide.account_number} (예금주: ${guide.account_holder})`;
+    document.getElementById("charge-guide-depositor-name").innerText = guide.depositor_name;
   } catch (err) {
-    console.error("Self register error:", err);
+    console.error("loadChargeGuide error:", err);
   }
 }
 
-// Scan & Register Physical NFC Card
-async function scanAndRegisterPhysicalCard() {
-  const userId = document.getElementById("user-select").value;
-  const statusElem = document.getElementById("nfc-scan-status");
-
-  if (!userId) {
-    alert("회원을 먼저 선택해주세요.");
+async function submitRechargeRequest(btn) {
+  const amount = parseInt(document.getElementById("recharge-request-amount").value);
+  if (!amount || amount <= 0) {
+    await showAlertModal("입금하신 금액을 올바르게 입력해주세요.");
     return;
   }
 
-  statusElem.style.display = "block";
-  statusElem.innerText = "📡 스마트폰 뒷면에 실물 카드를 접촉해 주세요...";
-
-  if ('NDEFReader' in window) {
-    try {
-      const ndef = new NDEFReader();
-      await ndef.scan();
-
-      ndef.onreading = async (event) => {
-        const physicalUid = event.serialNumber;
-        if (!physicalUid) {
-          alert("카드의 고유 시리얼(UID)을 읽을 수 없습니다. 다시 접촉해 주세요.");
-          return;
-        }
-        statusElem.innerText = `💳 실물 카드 감지 성공! UID: ${physicalUid}`;
-        await saveNfcUidToBackend(userId, physicalUid, "스마트폰 셀프 등록 실물 NFC 카드");
-      };
-      return;
-    } catch (err) {
-      console.error("NDEF scan error:", err);
-      alert(`NFC 센서 활성화 실패: ${err.message || err}. 카드 번호를 직접 입력해 주세요.`);
-    }
-  } else {
-    alert("현재 브라우저는 Web NFC를 지원하지 않습니다. 아래 입력창에 카드 번호(UID)를 입력해주세요.");
-  }
-}
-
-// Register Manual Card UID
-async function registerManualCardUid() {
-  const userId = document.getElementById("user-select").value;
-  const cardUid = document.getElementById("manual-card-uid-input").value.trim();
-
-  if (!userId) {
-    alert("회원을 먼저 선택해주세요.");
-    return;
-  }
-  if (!cardUid) {
-    alert("카드 고유 번호(UID)를 입력해 주세요.");
-    return;
-  }
-
-  await saveNfcUidToBackend(userId, cardUid, "수동 입력 실물 NFC 카드");
-  document.getElementById("manual-card-uid-input").value = "";
-}
-
-async function fetchUserCards(userId) {
-  const box = document.getElementById("user-registered-cards-box");
-  const ul = document.getElementById("user-registered-cards-ul");
-  ul.innerHTML = "";
-
+  if (btn.disabled) return;
+  btn.disabled = true;
   try {
-    const res = await fetch(`${API_BASE}/cards/user/${userId}`);
-    if (res.ok) {
-      const cards = await res.json();
-      if (cards.length > 0) {
-        box.style.display = "block";
-        cards.forEach(c => {
-          const li = document.createElement("li");
-          li.innerText = `💳 ${c.card_name} (UID: ${c.card_uid})`;
-          ul.appendChild(li);
-        });
-      } else {
-        box.style.display = "none";
-      }
-    }
-  } catch (e) {
-    console.error("fetchUserCards error:", e);
-  }
-}
-
-async function saveNfcUidToBackend(userId, cardUid, cardName) {
-  const statusElem = document.getElementById("nfc-scan-status");
-  try {
-    const res = await fetch(`${API_BASE}/cards/register`, {
+    const res = await authFetch(`${API_BASE}/recharge-requests`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        card_uid: cardUid,
-        card_name: cardName,
-        user_id: parseInt(userId)
-      })
+      body: JSON.stringify({ amount })
     });
 
-    if (res.ok) {
-      if (statusElem) statusElem.innerText = `✅ 카드가 등록되었습니다! (UID: ${cardUid})`;
-      await fetchUserCards(userId);
-    } else {
-      const err = await res.json().catch(() => ({}));
-      if (statusElem) statusElem.innerText = `❌ 카드 등록 실패: ${err.detail || '오류 발생'}`;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      await showAlertModal(`충전 신청 실패: ${data.detail || '오류 발생'}`);
+      return;
     }
-  } catch (e) {
-    console.error("saveNfcUidToBackend error:", e);
-    if (statusElem) statusElem.innerText = "❌ 서버 연결에 실패했습니다.";
+
+    await showAlertModal(data.message, data.status === "MATCHED" ? "🎉 충전 완료" : "신청 접수됨");
+    document.getElementById("recharge-request-amount").value = "";
+    await refreshMyInfo();
+    await loadMyRechargeRequests();
+  } catch (err) {
+    console.error("submitRechargeRequest error:", err);
+  } finally {
+    btn.disabled = false;
   }
 }
 
-// Save User Info Edit (Phone, Bank, Account, Password)
-async function saveUserInfoEdit() {
-  if (!loggedInUser) return;
+async function loadMyRechargeRequests() {
+  const box = document.getElementById("recharge-request-history");
+  if (!box) return;
+  try {
+    const res = await authFetch(`${API_BASE}/recharge-requests/me`);
+    if (!res.ok) return;
+    const list = await res.json();
+    const pending = list.filter(r => r.status === "PENDING");
+    if (pending.length === 0) {
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML = "⏳ 확인 대기 중인 신청: " + pending.map(r => `${r.requested_amount.toLocaleString()}원`).join(", ");
+  } catch (err) {
+    console.error("loadMyRechargeRequests error:", err);
+  }
+}
 
-  const phone = document.getElementById("edit-user-phone").value.trim();
-  const bankName = document.getElementById("edit-user-bank").value.trim();
-  const accountNumber = document.getElementById("edit-user-account").value.trim();
+// ============ 비밀번호 변경 ============
+
+async function changePassword() {
   const newPassword = document.getElementById("edit-user-password").value.trim();
+  if (!newPassword) {
+    await showAlertModal("변경할 비밀번호를 입력해주세요.");
+    return;
+  }
 
   try {
-    const res = await fetch(`${API_BASE}/users/${loggedInUser.id}/info`, {
+    const res = await authFetch(`${API_BASE}/users/me/password`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        phone: phone,
-        bank_name: bankName,
-        account_number: accountNumber,
-        new_password: newPassword || null
-      })
+      body: JSON.stringify({ new_password: newPassword })
     });
 
     if (res.ok) {
-      const updated = await res.json();
-      loggedInUser = updated;
-      sessionStorage.setItem("logged_in_user", JSON.stringify(loggedInUser));
-      onLoginSuccess(loggedInUser);
-      alert("🎉 회원 정보 및 비밀번호가 성공적으로 수정되었습니다!");
+      document.getElementById("edit-user-password").value = "";
+      await showAlertModal("🎉 비밀번호가 변경되었습니다!");
     } else {
-      const err = await res.json();
-      alert(`정보 수정 실패: ${err.detail || '오류 발생'}`);
+      const err = await res.json().catch(() => ({}));
+      await showAlertModal(`비밀번호 변경 실패: ${err.detail || '오류 발생'}`);
     }
   } catch (e) {
-    console.error("saveUserInfoEdit error:", e);
-    alert("서버 연결에 실패했습니다.");
+    console.error("changePassword error:", e);
+    await showAlertModal("서버 연결에 실패했습니다.");
   }
 }

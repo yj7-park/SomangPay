@@ -19,7 +19,10 @@ if not _secret_env:
     _secret_env = secrets.token_hex(32)
 ADMIN_SECRET_KEY = _secret_env.encode()
 
-TOKEN_TTL_SECONDS = 12 * 60 * 60  # 관리자 세션 유효시간: 12시간
+ADMIN_TOKEN_TTL_SECONDS = 12 * 60 * 60  # 관리자 세션 유효시간: 12시간
+USER_TOKEN_TTL_SECONDS = 3650 * 24 * 60 * 60  # 회원 세션: 사실상 무기한(10년) - "로그아웃 전까지 같은 기기에서 유지" 요구사항.
+# 매 요청마다 DB에서 user.status == "ACTIVE"를 재확인하므로, 관리자가 회원을 정지시키면
+# 만료 전이라도 토큰이 즉시 무력화된다(별도 revocation 테이블 불필요).
 PBKDF2_ITERATIONS = 260_000
 
 
@@ -50,27 +53,43 @@ def needs_rehash(stored: str) -> bool:
     return not (stored and stored.startswith("pbkdf2_sha256$"))
 
 
-def create_admin_token(admin_id: int) -> str:
-    expires_at = int(time.time()) + TOKEN_TTL_SECONDS
-    payload = f"{admin_id}:{expires_at}"
+def _create_signed_token(subject_id: int, ttl_seconds: int) -> str:
+    expires_at = int(time.time()) + ttl_seconds
+    payload = f"{subject_id}:{expires_at}"
     sig = hmac.new(ADMIN_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
     raw = f"{payload}:{sig}"
     return base64.urlsafe_b64encode(raw.encode()).decode()
 
 
-def verify_admin_token(token: str) -> Optional[int]:
+def _verify_signed_token(token: str) -> Optional[int]:
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
-        admin_id_str, expires_at_str, sig = raw.split(":")
-        payload = f"{admin_id_str}:{expires_at_str}"
+        subject_id_str, expires_at_str, sig = raw.split(":")
+        payload = f"{subject_id_str}:{expires_at_str}"
         expected_sig = hmac.new(ADMIN_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected_sig, sig):
             return None
         if int(expires_at_str) < int(time.time()):
             return None
-        return int(admin_id_str)
+        return int(subject_id_str)
     except Exception:
         return None
+
+
+def create_admin_token(admin_id: int) -> str:
+    return _create_signed_token(admin_id, ADMIN_TOKEN_TTL_SECONDS)
+
+
+def verify_admin_token(token: str) -> Optional[int]:
+    return _verify_signed_token(token)
+
+
+def create_user_token(user_id: int) -> str:
+    return _create_signed_token(user_id, USER_TOKEN_TTL_SECONDS)
+
+
+def verify_user_token(token: str) -> Optional[int]:
+    return _verify_signed_token(token)
 
 
 # 인메모리 PIN 브루트포스 시도 제한 (IP당 5분 내 5회).
@@ -94,17 +113,3 @@ def register_pin_attempt(client_ip: str) -> bool:
 
 def clear_pin_attempts(client_ip: str):
     _pin_attempts.pop(client_ip, None)
-
-
-# NH농협 웹훅 서명 검증용 시크릿. 설정 안 하면 웹훅 서명 검증을 건너뛴다(개발 편의) - 운영에서는
-# 반드시 설정해서 위조 웹훅 호출을 막아야 한다.
-NH_WEBHOOK_SECRET = os.getenv("NH_WEBHOOK_SECRET")
-
-
-def verify_webhook_signature(raw_body: bytes, signature: Optional[str]) -> bool:
-    if not NH_WEBHOOK_SECRET:
-        return True  # 시크릿 미설정 시 검증 생략 (개발/데모 환경 호환)
-    if not signature:
-        return False
-    expected = hmac.new(NH_WEBHOOK_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)

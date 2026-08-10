@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from sqlalchemy import Column, Integer, String, BigInteger, Boolean, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, Integer, String, BigInteger, Boolean, DateTime, ForeignKey, Text, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -9,12 +9,12 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
-    name = Column(String(50), nullable=False)
-    phone = Column(String(20), nullable=True)
+    name = Column(String(50), unique=True, nullable=False) # 동명이인은 관리자가 등록 시 구분 이름(예: 홍길동B)을 직접 입력 - 계좌이체 입금자명 매칭에도 그대로 쓰이므로 유일해야 함
+    phone = Column(String(20), unique=True, nullable=True, index=True) # 로그인 ID (하이픈 없는 숫자로 정규화해서 저장)
     role = Column(String(20), default="USER") # USER, ADMIN, MERCHANT
     user_type = Column(String(20), default="GENERAL") # GENERAL, SENIOR
-    bank_name = Column(String(50), nullable=True) # 출처/환불 은행
-    account_number = Column(String(50), nullable=True, index=True) # 충전 출처 계좌번호 (농협입금 매칭용)
+    bank_name = Column(String(50), nullable=True) # 참고용 - 토스/카카오 딥링크 송금 화면에만 쓰임, 입금 매칭에는 미사용
+    account_number = Column(String(50), nullable=True) # 참고용 - 토스/카카오 딥링크 송금 화면에만 쓰임, 입금 매칭에는 미사용
     credit_balance = Column(Integer, default=0, nullable=False)
     password_hash = Column(String(200), default="1234", nullable=True) # 기본 비밀번호 1234
     status = Column(String(20), default="ACTIVE") # ACTIVE, SUSPENDED
@@ -38,13 +38,16 @@ class Product(Base):
 
 class NFCCard(Base):
     __tablename__ = "nfc_cards"
+    __table_args__ = (
+        # 회원당 카드타입(NFC/QR_CODE)별 최대 1개 - 행이 존재하면 곧 활성 카드다.
+        UniqueConstraint("user_id", "card_type", name="uq_nfc_cards_user_type"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     card_uid = Column(String(100), unique=True, index=True, nullable=False)
     card_name = Column(String(100), nullable=True)
     card_type = Column(String(20), default="NFC") # NFC, QR_CODE
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    is_active = Column(Boolean, default=True)
     issued_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     owner = relationship("User", back_populates="cards")
@@ -63,20 +66,50 @@ class Merchant(Base):
     kiosk_devices = relationship("KioskDevice", back_populates="merchant")
 
 class DepositHistory(Base):
+    """실제로 크레딧이 반영된 충전 건의 통합 이력 원장 (충전 경로 불문)."""
     __tablename__ = "deposit_histories"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)
-    deposit_type = Column(String(30), nullable=False) # NH_AUTO_MATCH, VIRTUAL_ACCOUNT, ADMIN_MANUAL
-    source_account = Column(String(100), nullable=True)
-    # 은행 웹훅의 거래 고유번호 - 같은 입금 알림이 재전송돼도 중복 충전되지 않도록 대조하는 멱등키
+    deposit_type = Column(String(30), nullable=False) # ADMIN_MANUAL, BANK_TRANSFER, TOSS_DEEPLINK, KAKAOPAY_DEEPLINK
     transaction_id = Column(String(100), nullable=True, index=True)
     admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     memo = Column(String(200), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User", foreign_keys=[user_id], back_populates="deposits")
+
+class BankTransaction(Base):
+    """농협 계좌조회로 가져온(지금은 모킹) 원본 입금 원장. 실제 API 연동 전까지는
+    관리자가 POST /api/admin/bank-transactions로 직접 입력한다."""
+    __tablename__ = "bank_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    external_txn_id = Column(String(100), unique=True, index=True, nullable=False) # 은행 거래고유번호 (재조회 dedup 키)
+    transaction_at = Column(DateTime, default=datetime.datetime.utcnow)
+    amount = Column(Integer, nullable=False)
+    depositor_name = Column(String(50), nullable=False) # 통장에 찍히는 입금자명 원문
+    status = Column(String(20), default="UNMATCHED") # UNMATCHED, MATCHED
+    matched_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    matched_recharge_request_id = Column(Integer, ForeignKey("recharge_requests.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class RechargeRequest(Base):
+    """회원이 입금 후 제출하는 '충전 신청'. 신청 시점에 BankTransaction과 매칭을 시도한다."""
+    __tablename__ = "recharge_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    requested_amount = Column(Integer, nullable=False)
+    status = Column(String(20), default="PENDING") # PENDING, MATCHED, REJECTED
+    matched_bank_transaction_id = Column(Integer, ForeignKey("bank_transactions.id"), nullable=True)
+    admin_id = Column(Integer, ForeignKey("users.id"), nullable=True) # 관리자가 수동 처리한 경우
+    memo = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
 
 class KioskDevice(Base):
     __tablename__ = "kiosk_devices"
