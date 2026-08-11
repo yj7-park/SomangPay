@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 인앱 자동/수동 업데이트: 스토어를 거치지 않는 사이드로드 APK를 갱신 설치하려면
+         API 26+에서 명시적으로 이 권한이 있어야 시스템 설치 화면을 띄울 수 있다 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -30,6 +33,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 다운로드한 업데이트 APK 파일을 file:// 대신 content:// URI로 시스템 설치
+             화면(PackageInstaller)에 안전하게 넘기기 위한 FileProvider - 세 플레이버가
+             applicationId만 다르므로 authorities도 매니페스트 플레이스홀더로 함께 갈린다. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

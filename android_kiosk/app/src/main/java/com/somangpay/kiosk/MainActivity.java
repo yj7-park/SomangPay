@@ -36,6 +36,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private Handler mainHandler;
     private String lastScannedUid = "";
     private CardReaderManager cardReaderManager;
+    private UpdateManager updateManager;
     static TextToSpeech tts;
 
     @Override
@@ -110,6 +111,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         extraHeaders.put("ngrok-skip-browser-warning", "true");
         webView.loadUrl(BuildConfig.TARGET_URL, extraHeaders);
 
+        // 인앱 업데이트 - 스토어를 거치지 않는 사이드로드 배포라 앱이 직접 새 버전을 감지해야 한다.
+        // 페이지 로드 직후 곧바로 체크하면 웹 쪽 JS(onUpdateAvailable 리스너)가 아직 준비되지 않았을
+        // 수 있어 몇 초 지연 후 자동 체크(수동 트리거 아님)를 1회 수행한다. 업데이트 발견 시 콜백은
+        // window.onUpdateAvailable로 전달되고, "자동 업데이트" 설정이 켜져 있으면 UpdateManager가
+        // 이어서 바로 다운로드까지 진행한다(설정 꺼짐이 기본값 - 웹 UI의 업데이트 아이콘을 눌러야 진행).
+        updateManager = new UpdateManager(this, webView, mainHandler);
+        mainHandler.postDelayed(() -> updateManager.checkForUpdate(false), 3000);
+
         // 2. 런타임 기기 카메라(CAMERA) 권한 체크 및 팝업 요청
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             if (checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -136,12 +145,24 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     @Override
     protected void onResume() {
         super.onResume();
+        // 카메라 권한 다이얼로그 등 시스템 오버레이가 뜨면 액티비티가 onPause()되었다가 돌아오는데,
+        // WebView 자체의 onPause()/onResume()을 호출해주지 않으면 일부 기기(특히 하드웨어 가속
+        // WebView)에서 서페이스가 재게시(repaint)되지 않고 그대로 검은 화면에 멈춰버린다.
+        // Activity.onResume()만으로는 WebView 내부 렌더링/타이머가 자동으로 재개되지 않는다.
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers();
+        }
         cardReaderManager.onResume();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        if (webView != null) {
+            webView.onPause();
+            webView.pauseTimers();
+        }
         cardReaderManager.onPause();
     }
 
@@ -225,6 +246,28 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     // JS가 페이지 로드 시점에 현재 카드 리더 상태를 동기적으로 조회할 때 KioskWebAppInterface에서 호출
     String getCurrentCardReaderMode() {
         return cardReaderManager.getCurrentModeName();
+    }
+
+    // 아래 업데이트 관련 메서드들은 모두 KioskWebAppInterface(JS 브릿지)의 위임 대상 -
+    // 웹 UI의 업데이트 배지/설정 모달이 이 메서드들을 통해 UpdateManager를 제어한다.
+    String getAppVersionInfo() {
+        return updateManager.getAppVersionInfoJson();
+    }
+
+    void checkForUpdate() {
+        updateManager.checkForUpdate(true);
+    }
+
+    void startUpdateDownload() {
+        updateManager.startUpdateDownload();
+    }
+
+    boolean getAutoUpdateEnabled() {
+        return updateManager.isAutoUpdateEnabled();
+    }
+
+    void setAutoUpdateEnabled(boolean enabled) {
+        updateManager.setAutoUpdateEnabled(enabled);
     }
 
     // JS의 화면 방향 전환 요청 처리 - Screen Orientation API의 lock()은 전체화면(Fullscreen API) 상태가
@@ -471,6 +514,31 @@ class KioskWebAppInterface implements Runnable {
     public void pauseReaderForCamera() {
         // 카메라 사용 시작 시 JS가 호출 - 기기 내장 NFC만 잠시 멈춤(외부 USB 리더는 영향 없음)
         activity.runOnUiThread(() -> activity.pauseCardReaderForCamera());
+    }
+
+    @android.webkit.JavascriptInterface
+    public String getAppVersionInfo() {
+        return activity.getAppVersionInfo();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void checkForUpdate() {
+        activity.runOnUiThread(activity::checkForUpdate);
+    }
+
+    @android.webkit.JavascriptInterface
+    public void startUpdateDownload() {
+        activity.runOnUiThread(activity::startUpdateDownload);
+    }
+
+    @android.webkit.JavascriptInterface
+    public boolean getAutoUpdateEnabled() {
+        return activity.getAutoUpdateEnabled();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void setAutoUpdateEnabled(boolean enabled) {
+        activity.setAutoUpdateEnabled(enabled);
     }
 
     @android.webkit.JavascriptInterface

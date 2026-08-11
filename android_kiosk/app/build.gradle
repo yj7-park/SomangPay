@@ -40,14 +40,16 @@ android {
             // http로 접속 - 자체서명 인증서 위의 wss:// 웹소켓은 안드로이드 WebView에서
             // onReceivedSslError 우회가 적용되지 않아 조용히 막힌다(REST/XHR는 우회되는 것과 다름).
             // 어차피 자체서명 인증서라 실질 보안 이득이 없던 상태라 http로 내려 이 제약을 피한다.
-            buildConfigField "String", "TARGET_URL", '"http://125.248.31.132/admin"'
+            // 80번 포트는 공유기의 WAN측 원격 관리 웹UI가 이미 점유하고 있어 포트포워딩이 겹치므로,
+            // 대신 8080을 써서 공유기 관리 페이지와 충돌하지 않게 한다(공유기: 외부 8080 → PC의 80).
+            buildConfigField "String", "TARGET_URL", '"http://125.248.31.132:8080/admin"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
         }
         user {
             dimension "target"
             applicationId "com.somangpay.user"
             resValue "string", "app_name", "소망페이 회원"
-            buildConfigField "String", "TARGET_URL", '"http://125.248.31.132/user"'
+            buildConfigField "String", "TARGET_URL", '"http://125.248.31.132:8080/user"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
         }
     }

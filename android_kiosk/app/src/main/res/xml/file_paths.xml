@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- UpdateManager가 앱 전용 외부 저장소(getExternalFilesDir(null))
+     루트에 update.apk를 내려받으므로 그 경로만 노출하면 된다. -->
+<paths xmlns:android="http://schemas.android.com/apk/res-auto">
+    <external-files-path name="update_apk" path="." />
+</paths>

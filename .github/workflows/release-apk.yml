@@ -3,6 +3,9 @@ name: Build & Release Kiosk/Admin/User APKs
 # main에 머지될 때마다 소망페이 키오스크/관리자/회원 안드로이드 앱 세 개를 release
 # 빌드로 컴파일해서 GitHub Release에 올리고, admin 대시보드가 항상 최신 빌드를
 # 받아가도록 frontend/SomangPay{Kiosk,Admin,User}.apk도 함께 갱신해 커밋한다.
+# frontend/version.json에는 플레이버별 최신 versionCode/apkUrl을 함께 기록하는데, 이미
+# 설치된 앱들이 실행 시 이 파일을 읽어 스스로 새 버전을 감지/다운로드/설치한다
+# (android_kiosk의 UpdateManager 참고 - 앱 자체 업데이트 체크 로직).
 #
 # 이 워크플로우 자신이 만드는 커밋 메시지에는 [skip ci]가 들어있어 무한 재실행을 방지한다
 # (GitHub Actions는 head 커밋 메시지에 [skip ci]/[ci skip]이 있으면 push 트리거를 자동으로 건너뜀).
@@ -84,11 +87,21 @@ jobs:
           sed -i -E "s#(/SomangPayUser\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
           rm -f "${{ github.workspace }}/SomangPayKiosk.apk" "${{ github.workspace }}/SomangPayAdmin.apk" "${{ github.workspace }}/SomangPayUser.apk"
 
+      - name: Publish version manifest (앱 인앱 업데이트 체크용)
+        run: |
+          cat > frontend/version.json <<EOF
+          {
+            "kiosk": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.0-${{ github.run_number }}", "apkUrl": "/SomangPayKiosk.apk" },
+            "admin": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.0-${{ github.run_number }}", "apkUrl": "/SomangPayAdmin.apk" },
+            "user": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.0-${{ github.run_number }}", "apkUrl": "/SomangPayUser.apk" }
+          }
+          EOF
+
       - name: Commit updated APKs + admin links
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add frontend/SomangPayKiosk.apk frontend/SomangPayAdmin.apk frontend/SomangPayUser.apk frontend/admin.html
+          git add frontend/SomangPayKiosk.apk frontend/SomangPayAdmin.apk frontend/SomangPayUser.apk frontend/admin.html frontend/version.json
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
