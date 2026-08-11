@@ -887,6 +887,25 @@ def admin_list_bank_transactions(
         query = query.filter(models.BankTransaction.status == status)
     return query.order_by(models.BankTransaction.id.desc()).all()
 
+@app.delete("/api/admin/bank-transactions/{txn_id}")
+async def admin_delete_bank_transaction(
+    txn_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """미배정(UNMATCHED) 은행거래 삭제 - 테스트/오입력 건을 정리하는 용도.
+    이미 회원과 매칭되어 충전까지 반영된 건은 잔액과 얽혀 있어 삭제를 막는다."""
+    txn = db.query(models.BankTransaction).filter(models.BankTransaction.id == txn_id).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="은행거래를 찾을 수 없습니다.")
+    if txn.status != "UNMATCHED":
+        raise HTTPException(status_code=400, detail="이미 매칭된 거래는 삭제할 수 없습니다.")
+
+    db.delete(txn)
+    db.commit()
+    await notify_admins(["stats", "deposits"])
+    return {"success": True, "message": "은행거래를 삭제했습니다."}
+
 @app.get("/api/admin/recharge-requests", response_model=List[schemas.RechargeRequestResponse])
 def admin_list_recharge_requests(
     status: Optional[str] = None,

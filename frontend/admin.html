@@ -145,6 +145,28 @@
         </div>
 
         <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">🏦 미배정 은행거래 목록</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+            위에서 등록했거나(수동/문자 자동감지) 아직 대기 중인 충전 신청과 이름+금액이 일치하지 않아 매칭되지 못한 입금 건입니다. 회원이 나중에 충전 신청을 하면 자동으로 매칭되고, 잘못 등록됐거나(예: 테스트) 이미 다른 방식으로 처리했다면 삭제하세요.
+          </p>
+          <div style="overflow-x: auto;">
+            <table class="table-custom">
+              <thead>
+                <tr>
+                  <th>등록일시</th>
+                  <th>입금자명</th>
+                  <th>금액</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="admin-unmatched-deposits-tbody">
+                <!-- Dynamic -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
           <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">🤖 입금 문자 자동감지 설정</h3>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
             은행 입금 알림 문자를 관리자 앱이 직접 인식해서 위 등록을 자동으로 처리합니다. 문자를 보낸 발신번호/발신자와, 본문에서 입금자명·금액을 뽑아낼 정규식을 지정하세요. 이름은 <code>(?&lt;name&gt;...)</code>, 금액은 <code>(?&lt;amount&gt;...)</code> 이름의 캡처 그룹으로 표시해야 합니다. 기본값은 NH농협 알림 문자(발신 1588-2100) 포맷 기준이며, 다른 은행이면 아래 값을 문자 실제 형식에 맞게 바꾸세요.

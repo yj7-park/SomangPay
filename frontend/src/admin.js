@@ -5,6 +5,7 @@ let products = [];
 let cards = [];
 let depositHistories = [];
 let rechargeQueue = [];
+let unmatchedDeposits = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
 
@@ -149,6 +150,7 @@ function initAdminDashboard() {
   loadDepositHistories();
   loadAdminCards();
   loadRechargeQueue();
+  loadUnmatchedDeposits();
   loadStatsSummary();
   loadSmsDetectSettings();
   connectAdminWebSocket();
@@ -191,7 +193,7 @@ async function handleAdminRefreshEvent(scopes) {
   if (scopes.includes("users")) tasks.push(loadAdminUsers());
   if (scopes.includes("cards")) tasks.push(loadAdminCards());
   if (scopes.includes("recharge_queue")) tasks.push(loadRechargeQueue());
-  if (scopes.includes("stats")) tasks.push(loadStatsSummary());
+  if (scopes.includes("stats")) { tasks.push(loadStatsSummary()); tasks.push(loadUnmatchedDeposits()); }
   if (scopes.includes("deposits")) tasks.push(loadDepositHistories());
   await Promise.all(tasks);
 
@@ -1070,6 +1072,61 @@ async function rejectRechargeRequest(requestId) {
   }
 }
 
+// ============ 미배정 은행거래 목록 (홈 탭 "미배정 은행거래" 카운트가 가리키는 실제 목록) ============
+// 대기 중인 충전 신청과 이름+금액이 안 맞아 자동 매칭되지 못한 BankTransaction 원장.
+// stats.unmatched_deposit_count는 이 목록의 개수와 같다 - 충전함 탭 배지 숫자가 이 표와
+// recharge-requests 표(신청 대기) 두 개의 합이라 반드시 둘 다 같이 보여줘야 한다.
+async function loadUnmatchedDeposits() {
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/bank-transactions?status=UNMATCHED`);
+    if (!res.ok) return;
+    unmatchedDeposits = await res.json();
+    renderUnmatchedDepositsTable();
+  } catch (err) {
+    console.error("Failed to load unmatched deposits:", err);
+  }
+}
+
+function renderUnmatchedDepositsTable() {
+  const tbody = document.getElementById("admin-unmatched-deposits-tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (unmatchedDeposits.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">미배정 은행거래가 없습니다.</td></tr>`;
+    return;
+  }
+
+  unmatchedDeposits.forEach(t => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${new Date(t.created_at).toLocaleString()}</td>
+      <td><strong>${t.depositor_name}</strong></td>
+      <td style="color: var(--accent-emerald); font-weight: bold;">${t.amount.toLocaleString()}원</td>
+      <td>
+        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${t.id})">삭제</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function deleteUnmatchedDeposit(txnId) {
+  if (!(await showConfirmModal("이 은행거래를 삭제하시겠습니까? (테스트/오입력 건 정리용 - 나중에 회원이 신청하면 더 이상 자동 매칭되지 않습니다)"))) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/bank-transactions/${txnId}`, { method: "DELETE" });
+    if (res.ok) {
+      loadUnmatchedDeposits();
+      loadStatsSummary();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("deleteUnmatchedDeposit error:", err);
+  }
+}
+
 // 계좌이체 입금 등록 공통 로직 - 수동 입력 폼과 SMS 자동감지가 함께 쓴다.
 // silent=true면 매번 확인이 필요한 알림 모달 대신 조용한 토스트만 띄운다(SMS 자동감지는
 // 무인 상태에서도 계속 들어올 수 있어 확인 모달을 띄우면 오히려 방해가 된다).
@@ -1096,6 +1153,7 @@ async function registerBankTransaction(depositorName, amount, { externalTxnIdPre
     loadAdminUsers();
     loadDepositHistories();
     loadRechargeQueue();
+    loadUnmatchedDeposits();
     loadStatsSummary();
 
     if (silent) {
