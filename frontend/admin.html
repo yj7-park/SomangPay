@@ -144,6 +144,40 @@
           </div>
         </div>
 
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">🤖 입금 문자 자동감지 설정</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
+            은행 입금 알림 문자를 관리자 앱이 직접 인식해서 위 등록을 자동으로 처리합니다. 문자를 보낸 발신번호/발신자와, 본문에서 입금자명·금액을 뽑아낼 정규식을 지정하세요. 이름은 <code>(?&lt;name&gt;...)</code>, 금액은 <code>(?&lt;amount&gt;...)</code> 이름의 캡처 그룹으로 표시해야 합니다.
+          </p>
+
+          <div class="admin-form-grid admin-form-grid-3" style="margin-bottom: 1rem;">
+            <div>
+              <label class="form-label">감지할 발신번호 / 발신자</label>
+              <input type="text" id="sms-detect-sender" class="form-control" placeholder="예: 1588-2100 또는 NH농협" style="margin-bottom: 0;">
+            </div>
+            <div style="grid-column: span 2;">
+              <label class="form-label">파싱 정규식 (name / amount 캡처 그룹)</label>
+              <input type="text" id="sms-detect-regex" class="form-control" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
+            </div>
+          </div>
+          <button class="btn-action btn-primary" style="width: auto; padding: 0.5rem 1rem;" onclick="saveSmsDetectSettings(this)">설정 저장</button>
+
+          <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
+            <h4 style="font-size: 0.92rem; margin-bottom: 0.6rem; color: var(--text-muted);">🧪 문자 수신 시뮬레이션 (SIM 없이 테스트)</h4>
+            <div class="admin-form-grid admin-form-grid-3">
+              <div>
+                <label class="form-label">테스트 발신번호</label>
+                <input type="text" id="sms-test-sender" class="form-control" placeholder="예: 1588-2100" style="margin-bottom: 0;">
+              </div>
+              <div style="grid-column: span 2;">
+                <label class="form-label">테스트 문자 본문</label>
+                <input type="text" id="sms-test-body" class="form-control" placeholder="예: [Web발신] 홍길동님 10,000원 입금되었습니다." style="margin-bottom: 0;">
+              </div>
+            </div>
+            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; margin-top: 0.6rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="triggerSimulatedSms(this)">🧪 수신 시뮬레이션 실행</button>
+          </div>
+        </div>
+
         <div class="glass-container" style="padding: 1.5rem;">
           <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">🧾 계좌이체 충전 신청 대기 목록</h3>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">

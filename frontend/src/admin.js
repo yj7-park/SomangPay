@@ -150,6 +150,7 @@ function initAdminDashboard() {
   loadAdminCards();
   loadRechargeQueue();
   loadStatsSummary();
+  loadSmsDetectSettings();
   connectAdminWebSocket();
 }
 
@@ -1069,6 +1070,50 @@ async function rejectRechargeRequest(requestId) {
   }
 }
 
+// 계좌이체 입금 등록 공통 로직 - 수동 입력 폼과 SMS 자동감지가 함께 쓴다.
+// silent=true면 매번 확인이 필요한 알림 모달 대신 조용한 토스트만 띄운다(SMS 자동감지는
+// 무인 상태에서도 계속 들어올 수 있어 확인 모달을 띄우면 오히려 방해가 된다).
+async function registerBankTransaction(depositorName, amount, { externalTxnIdPrefix = "MANUAL", silent = false } = {}) {
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/bank-transactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_txn_id: `${externalTxnIdPrefix}_${Date.now()}`,
+        amount: amount,
+        depositor_name: depositorName
+      })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = `등록 실패: ${data.detail || '오류 발생'}`;
+      if (silent) { showToast(`❌ ${msg}`); } else { await showAlertModal(msg); }
+      return false;
+    }
+
+    const matched = data.status === "MATCHED";
+    loadAdminUsers();
+    loadDepositHistories();
+    loadRechargeQueue();
+    loadStatsSummary();
+
+    if (silent) {
+      showToast(matched
+        ? `✅ 문자 자동감지: ${depositorName} ${amount.toLocaleString()}원 - 충전 완료`
+        : `🏦 문자 자동감지: ${depositorName} ${amount.toLocaleString()}원 - 입금 등록됨`);
+    } else {
+      const matchedLabel = matched ? "\n\n✅ 대기 중이던 충전 신청과 자동으로 매칭되어 즉시 충전되었습니다!" : "\n\n대기 중인 충전 신청이 없어 입금 원장에만 등록했습니다. 회원이 신청하면 자동으로 매칭됩니다.";
+      await showAlertModal(`🎉 입금 확인 등록 완료\n입금자명: ${depositorName}\n금액: ${amount.toLocaleString()}원${matchedLabel}`);
+    }
+    return true;
+  } catch (err) {
+    console.error("registerBankTransaction error:", err);
+    if (silent) showToast("❌ 문자 자동감지 등록 중 오류가 발생했습니다.");
+    return false;
+  }
+}
+
 async function submitBankTransaction(btn) {
   const depositorName = document.getElementById("sim-depositor-name").value.trim();
   const amount = parseInt(document.getElementById("sim-amount").value);
@@ -1079,34 +1124,108 @@ async function submitBankTransaction(btn) {
   }
 
   await withButtonLock(btn, async () => {
-    try {
-      const res = await adminFetch(`${API_BASE}/admin/bank-transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          external_txn_id: `MANUAL_${Date.now()}`,
-          amount: amount,
-          depositor_name: depositorName
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        await showAlertModal(`등록 실패: ${data.detail || '오류 발생'}`);
-        return;
-      }
-
-      const matchedLabel = data.status === "MATCHED" ? "\n\n✅ 대기 중이던 충전 신청과 자동으로 매칭되어 즉시 충전되었습니다!" : "\n\n대기 중인 충전 신청이 없어 입금 원장에만 등록했습니다. 회원이 신청하면 자동으로 매칭됩니다.";
-      await showAlertModal(`🎉 입금 확인 등록 완료\n입금자명: ${depositorName}\n금액: ${amount.toLocaleString()}원${matchedLabel}`);
-      document.getElementById("sim-depositor-name").value = "";
-      loadAdminUsers();
-      loadDepositHistories();
-      loadRechargeQueue();
-      loadStatsSummary();
-    } catch (err) {
-      console.error("submitBankTransaction error:", err);
-    }
+    const ok = await registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: "MANUAL" });
+    if (ok) document.getElementById("sim-depositor-name").value = "";
   });
+}
+
+// ============ 입금 문자 자동감지 (SMS) ============
+// 네이티브(SmsReceiver, android_kiosk - 관리자 앱 전용)가 은행 문자를 원본 그대로
+// window.onSmsReceived(sender, body)로 넘기면, 여기서 저장된 발신번호 필터/정규식으로 파싱해서
+// 위 registerBankTransaction()을 그대로 호출한다. 파싱 규칙을 은행 문자 포맷에 맞춰 바꿀 때마다
+// 앱을 다시 빌드/배포할 필요가 없도록 일부러 이 계층(웹)에 둔다.
+const SMS_DETECT_SENDER_KEY = "sms_detect_sender";
+const SMS_DETECT_REGEX_KEY = "sms_detect_regex";
+
+function loadSmsDetectSettings() {
+  const senderEl = document.getElementById("sms-detect-sender");
+  const regexEl = document.getElementById("sms-detect-regex");
+  if (senderEl) senderEl.value = localStorage.getItem(SMS_DETECT_SENDER_KEY) || "";
+  if (regexEl) regexEl.value = localStorage.getItem(SMS_DETECT_REGEX_KEY) || "";
+}
+
+async function saveSmsDetectSettings(btn) {
+  const sender = document.getElementById("sms-detect-sender").value.trim();
+  const regexStr = document.getElementById("sms-detect-regex").value.trim();
+
+  if (regexStr) {
+    try {
+      new RegExp(regexStr);
+    } catch (e) {
+      await showAlertModal(`정규식이 올바르지 않습니다: ${e.message}`);
+      return;
+    }
+  }
+
+  localStorage.setItem(SMS_DETECT_SENDER_KEY, sender);
+  localStorage.setItem(SMS_DETECT_REGEX_KEY, regexStr);
+  showToast("✅ 문자 자동감지 설정을 저장했습니다.");
+}
+
+// SIM이 없는 테스트 기기에서도 실제 수신 시와 동일한 코드 경로(window.onSmsReceived)를 그대로
+// 타게 해서, "테스트에서 되던 게 실기기에서 안 된다"는 괴리가 생기지 않도록 한다.
+function triggerSimulatedSms(btn) {
+  const sender = document.getElementById("sms-test-sender").value.trim();
+  const body = document.getElementById("sms-test-body").value.trim();
+  if (!body) {
+    showAlertModal("테스트할 문자 본문을 입력하세요.");
+    return;
+  }
+  window.onSmsReceived(sender, body);
+}
+
+// 네이티브 SmsReceiver가 문자 수신 시 호출하는 콜백 (AndroidInterface와 반대 방향의 브릿지 -
+// 네이티브 → 웹). PIN 인증 전에는 백엔드 호출 자체가 의미 없으니 무시한다.
+window.onSmsReceived = function (sender, body) {
+  if (!isAdminAuthenticated) return;
+
+  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) || "").trim();
+  if (filterSender && !(sender || "").includes(filterSender)) {
+    return; // 지정한 발신번호/발신자가 아니면 무시
+  }
+
+  const regexStr = (localStorage.getItem(SMS_DETECT_REGEX_KEY) || "").trim();
+  if (!regexStr) {
+    showToast("⚠️ 문자를 받았지만 파싱 정규식이 설정되지 않았습니다. (충전함 > 자동감지 설정)");
+    return;
+  }
+
+  let match;
+  try {
+    match = body.match(new RegExp(regexStr));
+  } catch (e) {
+    showToast(`⚠️ 정규식 오류: ${e.message}`);
+    return;
+  }
+
+  if (!match || !match.groups || !match.groups.name || !match.groups.amount) {
+    showToast("⚠️ 문자를 받았지만 이름/금액을 추출하지 못했습니다. 정규식을 확인하세요.");
+    return;
+  }
+
+  const depositorName = match.groups.name.trim();
+  const amount = parseInt(match.groups.amount.replace(/[,\s]/g, ""), 10);
+  if (!depositorName || !amount || amount <= 0) {
+    showToast("⚠️ 문자에서 추출한 이름/금액이 올바르지 않습니다.");
+    return;
+  }
+
+  registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: "SMS", silent: true });
+};
+
+// ============ 가벼운 토스트 알림 (매번 확인이 필요 없는 자동 처리 결과 통지용) ============
+let toastHideTimer = null;
+function showToast(message) {
+  let toast = document.getElementById("admin-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "admin-toast";
+    document.body.appendChild(toast);
+  }
+  toast.innerText = message;
+  toast.classList.add("show");
+  clearTimeout(toastHideTimer);
+  toastHideTimer = setTimeout(() => toast.classList.remove("show"), 4000);
 }
 
 // ============ 회원 등록 (FAB 모달) ============
