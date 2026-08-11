@@ -20,6 +20,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import com.somangpay.kiosk.reader.CardReaderManager;
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -37,8 +38,26 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private String lastScannedUid = "";
     private CardReaderManager cardReaderManager;
     private UpdateManager updateManager;
-    private SmsReceiver smsReceiver;
     static TextToSpeech tts;
+
+    // SmsReceiver(매니페스트에 정적 등록됨)가 문자를 받았을 때, 지금 액티비티/웹뷰가 살아있으면
+    // 바로 웹으로 전달할 수 있도록 약한 참조로 현재 인스턴스를 들고 있는다 - onCreate에서 채우고
+    // onDestroy에서 비운다(onResume/onPause에 걸면 백그라운드 상태에서 온 문자를 놓치게 된다).
+    private static WeakReference<MainActivity> currentInstance;
+
+    // SmsReceiver.onReceive()에서 호출 - 웹뷰가 살아있으면 바로 전달하고 true, 없으면(프로세스가
+    // 완전히 종료된 상태) false를 반환해 SmsReceiver가 대기열에 남기도록 한다.
+    static boolean deliverSmsToWebIfAlive(String sender, String body) {
+        MainActivity activity = currentInstance != null ? currentInstance.get() : null;
+        if (activity == null || activity.webView == null || activity.mainHandler == null) return false;
+        final String safeSender = sender == null ? "" : sender;
+        activity.mainHandler.post(() -> activity.webView.evaluateJavascript(
+                "window.onSmsReceived && window.onSmsReceived("
+                        + org.json.JSONObject.quote(safeSender) + ","
+                        + org.json.JSONObject.quote(body) + ");",
+                null));
+        return true;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -128,14 +147,19 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         }
 
         // 3. 입금 문자 자동감지 - 관리자 앱 전용(SMS_DETECT_ENABLED, build.gradle 참고).
-        // 파싱 규칙(발신번호 필터/정규식)은 여기 없이 웹(admin.js)이 갖고 있고, 네이티브는
-        // 원본 문자만 window.onSmsReceived로 전달한다 - register/unregister는 onResume/onPause에서.
+        // SmsReceiver는 onResume/onPause로 등록/해제하지 않는다 - 앱이 백그라운드에 있을 때(예:
+        // 문자 앱으로 전환) 도착한 실제 입금 문자를 놓쳐버리는 게 실사용에서 확인됐다. 대신
+        // AndroidManifest.xml에 정적으로 등록해 시스템이 프로세스 상태와 무관하게 깨워서 전달하고,
+        // 지금 이 액티비티가 살아있으면 currentInstance를 통해 바로 웹으로, 죽어있었으면
+        // SmsReceiver가 대기열에 남겨둔 걸 여기서 웹뷰가 준비된 뒤 흘려보낸다.
+        currentInstance = new WeakReference<>(this);
         if (BuildConfig.SMS_DETECT_ENABLED) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
                     && checkSelfPermission(android.Manifest.permission.RECEIVE_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{android.Manifest.permission.RECEIVE_SMS}, 104);
             }
-            smsReceiver = new SmsReceiver(webView, mainHandler);
+            mainHandler.postDelayed(
+                    () -> SmsReceiver.drainPendingSmsQueue(this, MainActivity::deliverSmsToWebIfAlive), 3000);
         }
 
         // TTS 엔진 초기화
@@ -166,7 +190,6 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             webView.resumeTimers();
         }
         cardReaderManager.onResume();
-        if (smsReceiver != null) smsReceiver.register(this);
     }
 
     @Override
@@ -177,7 +200,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             webView.pauseTimers();
         }
         cardReaderManager.onPause();
-        if (smsReceiver != null) smsReceiver.unregister(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (currentInstance != null && currentInstance.get() == this) {
+            currentInstance = null;
+        }
     }
 
     // 화면 고정(Screen Pinning) 자동 진입 - Device Owner가 아니어도 앱이 스스로 요청 가능한
