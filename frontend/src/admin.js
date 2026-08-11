@@ -1137,11 +1137,18 @@ async function submitBankTransaction(btn) {
 const SMS_DETECT_SENDER_KEY = "sms_detect_sender";
 const SMS_DETECT_REGEX_KEY = "sms_detect_regex";
 
+// NH농협 알림 문자(발신 1588-2100) 실제 포맷 기준 기본값 - 예)
+// "농협 입금63,000원\n04/09 19:46 815110-52-\n****14 피파웃\n잔액2,190,941원"
+// 다른 은행이면 관리자가 화면에서 값을 바꾸면 되고, 저장하기 전(로컬스토리지가 비어있는 상태)
+// 에도 이 기본값으로 바로 동작하도록 저장값 조회 시 항상 이 값으로 폴백한다.
+const SMS_DETECT_SENDER_DEFAULT = "1588-2100";
+const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?\\*{4}\\d+\\s+(?<name>[가-힣]{2,10})";
+
 function loadSmsDetectSettings() {
   const senderEl = document.getElementById("sms-detect-sender");
   const regexEl = document.getElementById("sms-detect-regex");
-  if (senderEl) senderEl.value = localStorage.getItem(SMS_DETECT_SENDER_KEY) || "";
-  if (regexEl) regexEl.value = localStorage.getItem(SMS_DETECT_REGEX_KEY) || "";
+  if (senderEl) senderEl.value = localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT;
+  if (regexEl) regexEl.value = localStorage.getItem(SMS_DETECT_REGEX_KEY) ?? SMS_DETECT_REGEX_DEFAULT;
 }
 
 async function saveSmsDetectSettings(btn) {
@@ -1179,12 +1186,12 @@ function triggerSimulatedSms(btn) {
 window.onSmsReceived = function (sender, body) {
   if (!isAdminAuthenticated) return;
 
-  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) || "").trim();
+  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT).trim();
   if (filterSender && !(sender || "").includes(filterSender)) {
     return; // 지정한 발신번호/발신자가 아니면 무시
   }
 
-  const regexStr = (localStorage.getItem(SMS_DETECT_REGEX_KEY) || "").trim();
+  const regexStr = (localStorage.getItem(SMS_DETECT_REGEX_KEY) ?? SMS_DETECT_REGEX_DEFAULT).trim();
   if (!regexStr) {
     showToast("⚠️ 문자를 받았지만 파싱 정규식이 설정되지 않았습니다. (충전함 > 자동감지 설정)");
     return;

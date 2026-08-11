@@ -147,17 +147,17 @@
         <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
           <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">🤖 입금 문자 자동감지 설정</h3>
           <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
-            은행 입금 알림 문자를 관리자 앱이 직접 인식해서 위 등록을 자동으로 처리합니다. 문자를 보낸 발신번호/발신자와, 본문에서 입금자명·금액을 뽑아낼 정규식을 지정하세요. 이름은 <code>(?&lt;name&gt;...)</code>, 금액은 <code>(?&lt;amount&gt;...)</code> 이름의 캡처 그룹으로 표시해야 합니다.
+            은행 입금 알림 문자를 관리자 앱이 직접 인식해서 위 등록을 자동으로 처리합니다. 문자를 보낸 발신번호/발신자와, 본문에서 입금자명·금액을 뽑아낼 정규식을 지정하세요. 이름은 <code>(?&lt;name&gt;...)</code>, 금액은 <code>(?&lt;amount&gt;...)</code> 이름의 캡처 그룹으로 표시해야 합니다. 기본값은 NH농협 알림 문자(발신 1588-2100) 포맷 기준이며, 다른 은행이면 아래 값을 문자 실제 형식에 맞게 바꾸세요.
           </p>
 
           <div class="admin-form-grid admin-form-grid-3" style="margin-bottom: 1rem;">
             <div>
               <label class="form-label">감지할 발신번호 / 발신자</label>
-              <input type="text" id="sms-detect-sender" class="form-control" placeholder="예: 1588-2100 또는 NH농협" style="margin-bottom: 0;">
+              <input type="text" id="sms-detect-sender" class="form-control" value="1588-2100" placeholder="예: 1588-2100 또는 NH농협" style="margin-bottom: 0;">
             </div>
             <div style="grid-column: span 2;">
               <label class="form-label">파싱 정규식 (name / amount 캡처 그룹)</label>
-              <input type="text" id="sms-detect-regex" class="form-control" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
+              <input type="text" id="sms-detect-regex" class="form-control" value="입금\s*(?<amount>[\d,]+)원[\s\S]*?\*{4}\d+\s+(?<name>[가-힣]{2,10})" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
             </div>
           </div>
           <button class="btn-action btn-primary" style="width: auto; padding: 0.5rem 1rem;" onclick="saveSmsDetectSettings(this)">설정 저장</button>
@@ -167,11 +167,14 @@
             <div class="admin-form-grid admin-form-grid-3">
               <div>
                 <label class="form-label">테스트 발신번호</label>
-                <input type="text" id="sms-test-sender" class="form-control" placeholder="예: 1588-2100" style="margin-bottom: 0;">
+                <input type="text" id="sms-test-sender" class="form-control" value="1588-2100" placeholder="예: 1588-2100" style="margin-bottom: 0;">
               </div>
               <div style="grid-column: span 2;">
-                <label class="form-label">테스트 문자 본문</label>
-                <input type="text" id="sms-test-body" class="form-control" placeholder="예: [Web발신] 홍길동님 10,000원 입금되었습니다." style="margin-bottom: 0;">
+                <label class="form-label">테스트 문자 본문 (여러 줄 가능)</label>
+                <textarea id="sms-test-body" class="form-control" rows="4" placeholder="실제 은행 문자를 그대로 붙여넣어 테스트할 수 있습니다.">농협 입금63,000원
+04/09 19:46 815110-52-
+****14 피파웃
+잔액2,190,941원</textarea>
               </div>
             </div>
             <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; margin-top: 0.6rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="triggerSimulatedSms(this)">🧪 수신 시뮬레이션 실행</button>
