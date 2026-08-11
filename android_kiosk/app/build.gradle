@@ -32,6 +32,7 @@ android {
             resValue "string", "app_name", "소망페이 무인 결제기"
             buildConfigField "String", "TARGET_URL", '"https://125.248.31.132/kiosk"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "true"
+            buildConfigField "boolean", "SMS_DETECT_ENABLED", "false"
         }
         admin {
             dimension "target"
@@ -44,6 +45,9 @@ android {
             // 대신 8080을 써서 공유기 관리 페이지와 충돌하지 않게 한다(공유기: 외부 8080 → PC의 80).
             buildConfigField "String", "TARGET_URL", '"http://125.248.31.132:8080/admin"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
+            // 입금 문자 자동감지는 관리자 앱에서만 의미가 있다 - 키오스크/회원 앱에는 SMS 권한
+            // 프롬프트 자체를 띄우지 않기 위해 플레이버별로 껐다 켰다 한다(코드는 공유, 플래그만 분기).
+            buildConfigField "boolean", "SMS_DETECT_ENABLED", "true"
         }
         user {
             dimension "target"
@@ -51,6 +55,7 @@ android {
             resValue "string", "app_name", "소망페이 회원"
             buildConfigField "String", "TARGET_URL", '"http://125.248.31.132:8080/user"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
+            buildConfigField "boolean", "SMS_DETECT_ENABLED", "false"
         }
     }
 

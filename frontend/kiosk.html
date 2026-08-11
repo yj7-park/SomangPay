@@ -40,6 +40,7 @@
         <span id="qr-status-indicator" style="background: rgba(148,163,184,0.15); border: 1.5px solid #94a3b8; color: #94a3b8; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="qr-status-text">QR 스캔 비활성</span>
         </span>
+        <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
         <button onclick="openKioskAdminPinModal()" style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: #fff; padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정">
           ⚙️
         </button>
@@ -287,6 +288,7 @@
     </div>
   </div>
 
+  <script src="src/update-widget.js?v=20260811_0001"></script>
   <script src="src/kiosk.js?v=20260808_0001"></script>
 </body>
 </html>

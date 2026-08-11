@@ -730,13 +730,27 @@ function renderDashboard(stats) {
 
 // ============ 회원 검색 피드 (트위터 피드 스타일) ============
 
+// 이름 해시로 팔레트에서 색을 고르는 트위터식 이니셜 아바타 (프로필 사진이 없는 회원용)
+const AVATAR_PALETTE = ['#1d9bf0', '#7856ff', '#f91880', '#ff7a00', '#00ba7c', '#e0245e', '#635bff', '#0f9b8e'];
+
+function avatarColorFor(name) {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+function avatarInitialFor(name) {
+  return (name || '').trim().charAt(0).toUpperCase() || '?';
+}
+
 function renderMemberFeedCard(u) {
   const isActive = u.status === "ACTIVE";
   const div = document.createElement("div");
   div.className = "glass-container member-card";
   div.onclick = () => openMemberDetail(u.id);
   div.innerHTML = `
-    <div>
+    <div class="member-card-avatar" style="background: ${avatarColorFor(u.name)};">${avatarInitialFor(u.name)}</div>
+    <div class="member-card-info">
       <div class="member-card-name">
         <span class="status-dot ${isActive ? '' : 'suspended'}"></span>${u.name}
         <span class="badge-tag ${u.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}" style="margin-left: 0.4rem;">${u.user_type === 'SENIOR' ? '시니어' : '일반'}</span>
@@ -800,6 +814,9 @@ function renderMemberDetail() {
 
   const isActive = user.status === "ACTIVE";
   document.getElementById("detail-member-name").innerText = user.name;
+  const avatarEl = document.getElementById("detail-member-avatar");
+  avatarEl.innerText = avatarInitialFor(user.name);
+  avatarEl.style.background = avatarColorFor(user.name);
   const badge = document.getElementById("detail-member-badge");
   badge.innerText = user.user_type === 'SENIOR' ? '👵👴 시니어' : '👦 일반';
   badge.className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;

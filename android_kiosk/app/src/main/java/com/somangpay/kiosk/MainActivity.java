@@ -37,6 +37,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private String lastScannedUid = "";
     private CardReaderManager cardReaderManager;
     private UpdateManager updateManager;
+    private SmsReceiver smsReceiver;
     static TextToSpeech tts;
 
     @Override
@@ -126,6 +127,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             }
         }
 
+        // 3. 입금 문자 자동감지 - 관리자 앱 전용(SMS_DETECT_ENABLED, build.gradle 참고).
+        // 파싱 규칙(발신번호 필터/정규식)은 여기 없이 웹(admin.js)이 갖고 있고, 네이티브는
+        // 원본 문자만 window.onSmsReceived로 전달한다 - register/unregister는 onResume/onPause에서.
+        if (BuildConfig.SMS_DETECT_ENABLED) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
+                    && checkSelfPermission(android.Manifest.permission.RECEIVE_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.RECEIVE_SMS}, 104);
+            }
+            smsReceiver = new SmsReceiver(webView, mainHandler);
+        }
+
         // TTS 엔진 초기화
         tts = new TextToSpeech(this, this);
 
@@ -154,6 +166,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             webView.resumeTimers();
         }
         cardReaderManager.onResume();
+        if (smsReceiver != null) smsReceiver.register(this);
     }
 
     @Override
@@ -164,6 +177,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             webView.pauseTimers();
         }
         cardReaderManager.onPause();
+        if (smsReceiver != null) smsReceiver.unregister(this);
     }
 
     // 화면 고정(Screen Pinning) 자동 진입 - Device Owner가 아니어도 앱이 스스로 요청 가능한

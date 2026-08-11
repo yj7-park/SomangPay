@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>소망페이 - 시스템 통합 관리자 대시보드</title>
   <link rel="stylesheet" href="src/style.css">
+  <link rel="stylesheet" href="src/admin-x-theme.css">
   <script src="jsQR.min.js"></script>
 </head>
 <body>
@@ -21,16 +22,17 @@
         <a href="user.html" class="nav-item">📱 회원 PWA</a>
         <a href="admin.html" class="nav-item active">🖥️ 관리자</a>
       </nav>
-      <a href="/SomangPayKiosk.apk?v=7" download="SomangPayKiosk.apk" class="btn-action" style="background: rgba(245,158,11,0.15); border: 1px solid #f59e0b; color: #f59e0b; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
+      <a href="/SomangPayKiosk.apk?v=7" download="SomangPayKiosk.apk" class="btn-action" style="background: rgba(255,212,0,0.15); border: 1px solid #ffd400; color: #ffd400; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
         📥 Kiosk APK 다운로드
       </a>
-      <a href="/SomangPayAdmin.apk?v=7" download="SomangPayAdmin.apk" class="btn-action" style="background: rgba(6,182,212,0.15); border: 1px solid #06b6d4; color: #06b6d4; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
+      <a href="/SomangPayAdmin.apk?v=7" download="SomangPayAdmin.apk" class="btn-action" style="background: rgba(29,155,240,0.15); border: 1px solid #1d9bf0; color: #1d9bf0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
         🖥️ Admin APK 다운로드
       </a>
-      <a href="/SomangPayUser.apk?v=7" download="SomangPayUser.apk" class="btn-action" style="background: rgba(99,102,241,0.15); border: 1px solid #6366f1; color: #818cf8; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
+      <a href="/SomangPayUser.apk?v=7" download="SomangPayUser.apk" class="btn-action" style="background: rgba(120,86,255,0.15); border: 1px solid #7856ff; color: #b9a6ff; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
         📱 User APK 다운로드
       </a>
-      <span style="background: rgba(16,185,129,0.2); border: 1px solid #10b981; color: #10b981; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem;">
+      <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+      <span style="background: rgba(0,186,124,0.18); border: 1px solid #00ba7c; color: #00ba7c; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem;">
         🔒 관리자 인가됨
       </span>
     </div>
@@ -209,6 +211,7 @@
       <div id="admin-view-member-detail" class="admin-view">
         <div class="detail-header">
           <button class="back-btn" onclick="closeMemberDetail()">←</button>
+          <div id="detail-member-avatar" class="avatar-circle avatar-lg">-</div>
           <div>
             <h2 id="detail-member-name" style="margin: 0; font-size: 1.3rem;">-</h2>
             <span id="detail-member-badge" class="badge-tag badge-general">-</span>
@@ -316,7 +319,7 @@
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">감지된 식별자 코드 (자동 인식)</div>
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           <input type="text" id="admin-card-uid-input" class="form-control" placeholder="태깅 또는 스캔 시 자동 입력됩니다." readonly style="flex: 1; margin: 0; background: rgba(6,182,212,0.1); color: var(--accent-cyan); font-family: monospace; font-weight: bold;">
-          <span id="admin-detect-check" style="font-size: 1.6rem; display: none; line-height: 1; filter: drop-shadow(0 0 5px #10b981);" title="인식 성공">✅</span>
+          <span id="admin-detect-check" style="font-size: 1.6rem; display: none; line-height: 1; filter: drop-shadow(0 0 5px var(--accent-emerald));" title="인식 성공">✅</span>
         </div>
       </div>
 
@@ -342,7 +345,7 @@
           <div id="admin-camera-video-box" style="position: relative; width: 100%; max-width: 260px; height: 150px; margin: 0 auto; overflow: hidden; border-radius: 10px; background: #000; display: none;">
             <video id="admin-qr-video" playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
             <canvas id="admin-qr-canvas" style="display: none;"></canvas>
-            <div style="position: absolute; inset: 10px; border: 2px dashed #06b6d4; border-radius: 8px; pointer-events: none;"></div>
+            <div style="position: absolute; inset: 10px; border: 2px dashed var(--accent-cyan); border-radius: 8px; pointer-events: none;"></div>
           </div>
           <button class="btn-action btn-primary" style="margin-top: 0.6rem; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: var(--accent-cyan); color: #000;" onclick="triggerSimulatedQrScan()">🧪 [데모] QR 스캔 시뮬레이션</button>
         </div>
@@ -351,7 +354,7 @@
 
       <div class="modal-footer">
         <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="closeScannerModal()">취소</button>
-        <button id="scanner-confirm-btn" class="btn-action btn-primary" style="background: linear-gradient(135deg, #06b6d4, #3b82f6);" onclick="handleScannerConfirm()">확인</button>
+        <button id="scanner-confirm-btn" class="btn-action btn-primary" onclick="handleScannerConfirm()">확인</button>
       </div>
     </div>
   </div>
@@ -422,6 +425,7 @@
     </div>
   </div>
 
+  <script src="src/update-widget.js"></script>
   <script src="src/admin.js"></script>
 </body>
 </html>

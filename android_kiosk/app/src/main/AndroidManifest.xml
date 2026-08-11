@@ -9,6 +9,9 @@
     <!-- 인앱 자동/수동 업데이트: 스토어를 거치지 않는 사이드로드 APK를 갱신 설치하려면
          API 26+에서 명시적으로 이 권한이 있어야 시스템 설치 화면을 띄울 수 있다 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 입금 문자 자동감지(관리자 앱 전용, BuildConfig.SMS_DETECT_ENABLED로 런타임에 게이팅) -
+         은행 알림 문자를 가로채 window.onSmsReceived로 넘기기 위해 필요. -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
