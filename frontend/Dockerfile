@@ -15,9 +15,11 @@ COPY kiosk.html /usr/share/nginx/html/
 COPY user.html /usr/share/nginx/html/
 COPY admin.html /usr/share/nginx/html/
 COPY manifest.json /usr/share/nginx/html/
+COPY favicon.ico /usr/share/nginx/html/
 COPY sw.js /usr/share/nginx/html/
 COPY jsQR.min.js /usr/share/nginx/html/
 COPY src /usr/share/nginx/html/src/
+COPY icons /usr/share/nginx/html/icons/
 
 EXPOSE 80 443 3000
 CMD ["nginx", "-g", "daemon off;"]
