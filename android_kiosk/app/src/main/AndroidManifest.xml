@@ -41,13 +41,17 @@
              onReceive 시작부에서 게이팅). 동적 등록(onResume/onPause) 대신 정적으로 매니페스트에
              등록해서, 앱이 백그라운드에 있거나 프로세스가 완전히 종료된 상태에서도 시스템이
              깨워서 전달하게 한다 - SMS_RECEIVED는 안드로이드 8+ 백그라운드 브로드캐스트 제한의
-             예외 대상이라 가능하다. BROADCAST_SMS 권한을 요구해 시스템(통신 스택) 외의 다른 앱이
-             가짜 문자 브로드캐스트를 위장해서 보내는 것을 막는다. -->
+             예외 대상이라 가능하다.
+             android:permission="BROADCAST_SMS"를 걸어뒀었는데 실기기(삼성)에서 진짜 외부 문자가
+             와도 onReceive 자체가 전혀 호출되지 않는 게 확인되어 제거한다 - SMS_RECEIVED는
+             안드로이드 코어 protected-broadcast 목록에 있어 어차피 제3자 앱이 가짜로 보낼 수
+             없으므로, 리시버 쪽에서 추가로 권한을 요구하지 않아도 위장 방지 효과는 동일하다.
+             priority를 높여 다른(예: 삼성 자체 스팸 필터) 리시버가 먼저 abortBroadcast()로
+             가로채 가는 경우도 배제한다. -->
         <receiver
             android:name=".SmsReceiver"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter>
+            android:exported="true">
+            <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
