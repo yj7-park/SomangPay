@@ -34,11 +34,19 @@ public class SmsReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        // onReceive 자체가 호출되는지부터 무조건 로그로 남긴다 - 이후 조건문에서 조용히 return하면
+        // "리시버가 아예 안 불렸다"와 "불렸는데 조건에 막혔다"를 로그만 보고는 구분할 수 없어서,
+        // 실기기에서 문자가 감지 안 될 때 원인 파악이 안 되는 문제가 있었다.
+        Log.d(TAG, "onReceive called, action=" + intent.getAction() + ", SMS_DETECT_ENABLED=" + BuildConfig.SMS_DETECT_ENABLED);
+
         if (!Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction())) return;
         if (!BuildConfig.SMS_DETECT_ENABLED) return; // 매니페스트는 세 플레이버가 공유 - 관리자 앱이 아니면 무시
 
         SmsMessage[] messages = Telephony.Sms.Intents.getMessagesFromIntent(intent);
-        if (messages == null || messages.length == 0) return;
+        if (messages == null || messages.length == 0) {
+            Log.w(TAG, "getMessagesFromIntent()가 빈 배열/null을 반환함 - intent extras: " + intent.getExtras());
+            return;
+        }
 
         // 장문 문자는 여러 PDU 조각으로 나뉘어 도착하므로 본문을 이어붙인다.
         String sender = messages[0].getOriginatingAddress();
@@ -48,11 +56,14 @@ public class SmsReceiver extends BroadcastReceiver {
         }
         String body = bodyBuilder.toString();
 
-        Log.d(TAG, "SMS received from " + sender);
+        Log.d(TAG, "SMS received from " + sender + ", body=" + body);
 
         if (!MainActivity.deliverSmsToWebIfAlive(sender, body)) {
             // 지금 웹뷰가 없다(프로세스가 완전히 종료된 상태) - 다음에 앱이 열릴 때 처리하도록 남겨둔다.
+            Log.d(TAG, "웹뷰가 아직 없어(프로세스 종료 등) 대기열에 저장함");
             enqueuePendingSms(context, sender, body);
+        } else {
+            Log.d(TAG, "웹뷰로 바로 전달 완료");
         }
     }
 
