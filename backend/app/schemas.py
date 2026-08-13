@@ -84,6 +84,37 @@ class KioskDeviceResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ================= 관리자 - 키오스크 관리 =================
+
+class KioskProductSales(BaseModel):
+    product_id: Optional[int] = None
+    product_name: str
+    quantity: int
+    amount: int
+
+class KioskSalesSummary(BaseModel):
+    today: List[KioskProductSales] = []
+    this_month: List[KioskProductSales] = []
+    all_time: List[KioskProductSales] = []
+
+class AdminKioskResponse(BaseModel):
+    id: int
+    device_uuid: str
+    device_name: Optional[str] = None
+    merchant_id: Optional[int] = None
+    merchant_name: Optional[str] = None
+    assigned_products: List[int] = []
+    default_product_id: Optional[int] = None
+    default_quantity: Optional[int] = 1
+    updated_at: datetime
+    sales: KioskSalesSummary
+
+class KioskUpdateRequest(BaseModel):
+    device_name: Optional[str] = None
+    assigned_products: Optional[List[int]] = None
+    default_product_id: Optional[int] = None
+    default_quantity: Optional[int] = None
+
 class NFCCardUpsert(BaseModel):
     """카드 등록/교체 공용 스키마. 이미 해당 회원의 같은 타입 카드가 있으면 교체된다."""
     user_id: int

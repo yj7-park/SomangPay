@@ -13,11 +13,19 @@ let qrScanCooldown = false;
 let kioskFacingMode = "user"; // 기본 전면 카메라
 let editingProductId = null; // 수정 중인 상품 ID
 let currentDefaultProductId = null; // 기본 자동 결제 상품 ID
+let currentAssignedProducts = []; // 이 단말기에 노출할 메뉴 ID 목록 - 비어있으면 전체 메뉴 노출(하위호환)
 let kioskNdefReader = null; // 중복 NDEFReader 생성 방지용 글로벌 레퍼런스
 let kioskNfcAbortController = null; // Web NFC scan() 중단(카메라 사용 시 일시정지)을 위한 컨트롤러
 let isKioskPaymentProcessing = false; // 결제 중복 요청 방지 락
 let kioskNfcScanCooldown = false; // NFC 연속 태깅 방지 쿨다운
 let lastQrDecodeTime = 0; // QR 실시간 연산 쓰로틀링을 위한 최종 디코딩 시각 타임스탬프
+
+// version-check.js(auto 모드)가 "지금 새 코드로 새로고침해도 되는지" 판단할 때 쓰는 함수.
+// 결제 처리 중이거나 장바구니에 담긴 게 있으면 손님이 이용 중인 것이므로 안전하지 않은 것으로 본다
+// (모달이 열려있는지는 version-check.js가 별도로 이미 확인한다).
+window.isKioskIdleForReload = function () {
+  return !isKioskPaymentProcessing && Object.keys(cart).length === 0;
+};
 
 // 현재 활성화된 카드 리더 종류: "WEB_NFC" | "BUILTIN_NFC" | "USB_CCID" | "USB_HID_KEYBOARD" | "NONE" | "UNKNOWN"
 // Android 래퍼 안에서는 window.onCardReaderModeChanged가, 일반 브라우저에서는 Web NFC 성공 시 직접 갱신한다.
@@ -400,6 +408,7 @@ async function initDeviceUUID() {
       const data = await res.json();
       currentDeviceName = data.device_name || "무인 결제 단말기";
       currentDefaultProductId = data.default_product_id;
+      currentAssignedProducts = data.assigned_products || [];
       allowCameraReaderConcurrent = !!data.allow_camera_reader_concurrent;
       updateDeviceHeaderUI();
       updateCameraConcurrentToggleAvailability();
@@ -446,6 +455,10 @@ async function saveKioskDeviceSettings() {
   const defaultProductId = defaultProductSelect ? defaultProductSelect.value : "";
   const concurrentCheckbox = document.getElementById("k-allow-camera-concurrent-input");
   const concurrentValue = concurrentCheckbox ? concurrentCheckbox.checked : allowCameraReaderConcurrent;
+  const assignedChecklist = document.getElementById("k-assigned-products-checklist");
+  const assignedProducts = assignedChecklist
+    ? Array.from(assignedChecklist.querySelectorAll("input:checked")).map(cb => parseInt(cb.value))
+    : currentAssignedProducts;
 
   try {
     const res = await fetch(`${API_BASE}/kiosk/device/sync`, {
@@ -455,7 +468,8 @@ async function saveKioskDeviceSettings() {
         device_uuid: currentDeviceUuid,
         device_name: newName,
         default_product_id: defaultProductId ? parseInt(defaultProductId) : null,
-        allow_camera_reader_concurrent: concurrentValue
+        allow_camera_reader_concurrent: concurrentValue,
+        assigned_products: assignedProducts
       })
     });
 
@@ -463,11 +477,12 @@ async function saveKioskDeviceSettings() {
       currentDeviceName = newName;
       currentDefaultProductId = defaultProductId ? parseInt(defaultProductId) : null;
       allowCameraReaderConcurrent = concurrentValue;
+      currentAssignedProducts = assignedProducts;
       updateDeviceHeaderUI();
       updateCameraConcurrentToggleAvailability();
       applyAlwaysOnCameraMode();
-      resetCart(); // 새로운 기본 결제 상품으로 화면 및 선택 메뉴 즉시 동기화
-      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, QR 스캐너 켜기: ${allowCameraReaderConcurrent})`, "SUCCESS");
+      resetCart(); // 새로운 기본 결제 상품/노출 메뉴로 화면 및 선택 메뉴 즉시 동기화
+      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, QR 스캐너 켜기: ${allowCameraReaderConcurrent}, 노출 메뉴: ${assignedProducts.length || "전체"})`, "SUCCESS");
       flashDeviceSaveStatus(true);
     } else {
       flashDeviceSaveStatus(false);
@@ -517,6 +532,7 @@ async function loadProducts() {
     appendDebugLog(`메뉴 데이터 ${products.length}건 로드 성공`, "SUCCESS");
     renderKioskProducts();
     renderKioskAdminProducts();
+    renderKioskAssignedChecklist();
 
     // 기본 자동 결제 메뉴 드롭다운 갱신
     const select = document.getElementById("k-default-product-select");
@@ -578,13 +594,22 @@ function applyKioskMenuGridLayout(container, count) {
   container.style.setProperty("grid-template-rows", `repeat(${rows}, 1fr)`, "important");
 }
 
+// 이 단말기에 노출할 메뉴만 걸러낸다 - currentAssignedProducts가 비어있으면(배정 안 함)
+// 하위호환으로 전체 메뉴를 보여준다. 장바구니/기본결제 조회 등 다른 로직은 계속
+// 전체 카탈로그(products)를 기준으로 하고, 여기 고객 화면 렌더링만 걸러진 목록을 쓴다.
+function visibleKioskProducts() {
+  if (!currentAssignedProducts || currentAssignedProducts.length === 0) return products;
+  return products.filter(p => currentAssignedProducts.includes(p.id));
+}
+
 function renderKioskProducts() {
   const container = document.getElementById("kiosk-menu-grid");
   if (!container) return;
   container.innerHTML = "";
-  applyKioskMenuGridLayout(container, products.length);
+  const visibleProducts = visibleKioskProducts();
+  applyKioskMenuGridLayout(container, visibleProducts.length);
 
-  products.forEach(p => {
+  visibleProducts.forEach(p => {
     const qty = cart[p.id] || 0;
     const card = document.createElement("div");
     card.className = `menu-card ${qty > 0 ? 'selected' : ''}`;
@@ -1112,6 +1137,26 @@ function renderKioskAdminProducts() {
       </td>
     `;
     tbody.appendChild(tr);
+  });
+}
+
+// 이 단말기에 노출할 메뉴 체크리스트 (전체 카탈로그 기준 - 메뉴 자체는 어느 단말기에서든
+// 추가/수정/삭제 가능하고, 여기서는 "이 단말기에 보여줄지"만 정한다)
+function renderKioskAssignedChecklist() {
+  const container = document.getElementById("k-assigned-products-checklist");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (products.length === 0) {
+    container.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">등록된 메뉴가 없습니다.</span>`;
+    return;
+  }
+
+  products.forEach(p => {
+    const label = document.createElement("label");
+    label.style.cssText = "display:flex; align-items:center; gap:0.3rem; font-size:0.85rem; background:rgba(255,255,255,0.06); padding:0.35rem 0.6rem; border-radius:8px; cursor:pointer;";
+    label.innerHTML = `<input type="checkbox" value="${p.id}" ${currentAssignedProducts.includes(p.id) ? 'checked' : ''} onchange="saveKioskDeviceSettings()"> ${p.name}`;
+    container.appendChild(label);
   });
 }
 

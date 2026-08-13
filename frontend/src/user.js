@@ -122,7 +122,6 @@ function userLogout() {
   disconnectUserWebSocket();
   document.getElementById("user-login-section").style.display = "block";
   document.getElementById("user-card-box").style.display = "none";
-  document.getElementById("recharge-section").style.display = "none";
   document.getElementById("charge-guide-section").style.display = "none";
   document.getElementById("user-info-section").style.display = "none";
   document.getElementById("login-phone").value = "";
@@ -132,7 +131,6 @@ function userLogout() {
 function onLoginSuccess(user) {
   document.getElementById("user-login-section").style.display = "none";
   document.getElementById("user-card-box").style.display = "block";
-  document.getElementById("recharge-section").style.display = "block";
   document.getElementById("charge-guide-section").style.display = "block";
   document.getElementById("user-info-section").style.display = "block";
 
@@ -195,67 +193,6 @@ async function refreshMyInfo() {
   if (res.ok) {
     loggedInUser = await res.json();
     document.getElementById("display-user-balance").innerText = `${loggedInUser.credit_balance.toLocaleString()}원`;
-  }
-}
-
-function setPresetAmt(amt) {
-  document.getElementById("recharge-amt-input").value = amt;
-}
-
-async function triggerDeeplink(provider) {
-  if (!loggedInUser) {
-    await showAlertModal("로그인이 필요합니다.");
-    return;
-  }
-  const userId = loggedInUser.id;
-  const amount = parseInt(document.getElementById("recharge-amt-input").value);
-
-  if (!amount || amount <= 0) {
-    await showAlertModal("올바른 충전 금액을 입력해주세요.");
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/payments/deeplink`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: parseInt(userId),
-        amount: amount,
-        provider: provider
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      await showAlertModal(data.detail || "딥링크 생성 실패");
-      return;
-    }
-
-    console.log(`Executing ${data.app_name} Deeplink:`, data.deeplink_url);
-    window.location.href = data.deeplink_url;
-
-    // Simulation Auto Confirm for Demo
-    setTimeout(async () => {
-      const confirmRes = await fetch(`${API_BASE}/payments/deeplink-confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: parseInt(userId),
-          amount: amount,
-          provider: provider
-        })
-      });
-
-      if (confirmRes.ok) {
-        const confirmData = await confirmRes.json();
-        await showAlertModal(confirmData.message);
-        await refreshMyInfo();
-      }
-    }, 1500);
-
-  } catch (err) {
-    console.error("Deeplink error:", err);
   }
 }
 

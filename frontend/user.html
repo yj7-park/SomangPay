@@ -8,8 +8,9 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <meta name="theme-color" content="#06b6d4">
+  <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="src/style.css">
+  <link rel="stylesheet" href="src/instagram-theme.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -46,33 +47,6 @@
       </div>
 
       <button onclick="userLogout()" style="margin-top: 1.2rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #fca5a5; border-radius: 8px; cursor: pointer;">로그아웃</button>
-    </div>
-
-    <!-- 1-Second Easy Recharge Section -->
-    <div id="recharge-section" class="glass-container" style="padding: 1.5rem; display: none;">
-      <h3 style="color: var(--accent-cyan); font-size: 1.2rem; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem;">
-        <span>⚡</span> 1초 간편 충전 (앱 딥링크)
-      </h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-        버튼을 누르면 <strong>토스/카카오페이 앱이 즉시 열려 3초 만에 충전</strong>됩니다.
-      </p>
-
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem;">
-        <button class="btn-action" style="flex:1; background: rgba(255,255,255,0.1); color:#fff; padding:0.6rem;" onclick="setPresetAmt(5000)">5,000원</button>
-        <button class="btn-action" style="flex:1; background: rgba(255,255,255,0.1); color:#fff; padding:0.6rem;" onclick="setPresetAmt(10000)">10,000원</button>
-        <button class="btn-action" style="flex:1; background: rgba(255,255,255,0.1); color:#fff; padding:0.6rem;" onclick="setPresetAmt(30000)">30,000원</button>
-      </div>
-
-      <input type="number" id="recharge-amt-input" class="form-control" value="10000" placeholder="충전 금액" style="margin-bottom: 1rem;">
-
-      <div class="pay-btn-group">
-        <button class="btn-toss" onclick="triggerDeeplink('TOSS')">
-          🔵 토스로 충전
-        </button>
-        <button class="btn-kakaopay" onclick="triggerDeeplink('KAKAOPAY')">
-          🟡 카카오로 충전
-        </button>
-      </div>
     </div>
 
     <!-- Bank Transfer Charge Guide & Recharge Request Section -->
@@ -165,6 +139,7 @@
   </div>
 
   <script src="src/update-widget.js"></script>
+  <script src="src/version-check.js" data-mode="prompt" data-check="/user.html,/src/user.js"></script>
   <script src="src/user.js"></script>
 </body>
 </html>

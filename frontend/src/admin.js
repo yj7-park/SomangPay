@@ -1,11 +1,50 @@
 const API_BASE = "/api";
 
+// ============ 아이콘 (인스타그램류의 단색 라인 아이콘) ============
+// 컬러풀한 이모지 대신 currentColor 스트로크의 단순한 선 아이콘을 쓴다. width/height를
+// 1em으로 둬서 담는 요소의 font-size를 그대로 아이콘 크기로 쓴다(별도 크기 CSS 불필요).
+const ICON_SVGS = {
+  home: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V20a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1V9.5"/></svg>',
+  search: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  bell: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+  monitor: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+  settings: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+  bank: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M4 10h16v9H4z"/><path d="M4 19h16M8 13v4M12 13v4M16 13v4"/></svg>',
+  receipt: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>',
+  camera: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h1.2l1-1.5h7.6l1 1.5H18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  nfc: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16a6 6 0 0 1 0-8"/><path d="M4 19a10.5 10.5 0 0 1 0-14"/><circle cx="15" cy="12" r="2"/><path d="M15 6a6 6 0 0 1 0 12"/></svg>',
+  check: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 6 6L20 6"/></svg>',
+  edit: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  lock: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  card: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>',
+  user: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>',
+  refresh: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.3L3 16"/><path d="M3 21v-5h5"/></svg>',
+};
+function icon(name) {
+  return ICON_SVGS[name] || "";
+}
+// admin.html에 <span data-icon="home"></span> 형태로 심어둔 자리에 위 아이콘을 채워 넣는다.
+// 뱃지 등 자식 요소를 가진 아이콘 자리는 안전하게 건드리지 않도록 innerHTML을 통째로
+// 지우지 않고 아이콘 span 자신만 채운다.
+function hydrateIconPlaceholders(root) {
+  (root || document).querySelectorAll("[data-icon]").forEach(el => {
+    el.innerHTML = icon(el.dataset.icon);
+  });
+}
+
+// 외부(수신 문자 본문 등 신뢰할 수 없는) 텍스트를 innerHTML에 꽂을 때 XSS를 막는 이스케이프.
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+}
+
 let users = [];
 let products = [];
 let cards = [];
 let depositHistories = [];
 let rechargeQueue = [];
-let unmatchedDeposits = [];
+let bankTransactions = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
 
@@ -97,6 +136,7 @@ function formatPhoneInput(input) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  hydrateIconPlaceholders();
   const savedToken = sessionStorage.getItem("admin_token");
   if (savedToken && sessionStorage.getItem("admin_auth") === "true") {
     adminToken = savedToken;
@@ -150,10 +190,12 @@ function initAdminDashboard() {
   loadDepositHistories();
   loadAdminCards();
   loadRechargeQueue();
-  loadUnmatchedDeposits();
+  loadBankTransactions();
   loadStatsSummary();
   loadSmsDetectSettings();
+  loadKiosks();
   connectAdminWebSocket();
+  setupActivityFeedInfiniteScroll();
 }
 
 // ============ 실시간 갱신 (WebSocket) ============
@@ -193,7 +235,7 @@ async function handleAdminRefreshEvent(scopes) {
   if (scopes.includes("users")) tasks.push(loadAdminUsers());
   if (scopes.includes("cards")) tasks.push(loadAdminCards());
   if (scopes.includes("recharge_queue")) tasks.push(loadRechargeQueue());
-  if (scopes.includes("stats")) { tasks.push(loadStatsSummary()); tasks.push(loadUnmatchedDeposits()); }
+  if (scopes.includes("stats")) { tasks.push(loadStatsSummary()); tasks.push(loadBankTransactions()); tasks.push(loadKiosks()); }
   if (scopes.includes("deposits")) tasks.push(loadDepositHistories());
   await Promise.all(tasks);
 
@@ -212,13 +254,14 @@ function switchAdminView(viewName) {
   const target = document.getElementById(`admin-view-${viewName}`);
   if (target) target.classList.add("active");
 
-  const tabViews = ["home", "search", "inbox", "menu"];
+  const tabViews = ["home", "search", "inbox", "kiosk", "settings"];
   if (tabViews.includes(viewName)) {
     document.querySelectorAll(".admin-tab-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === viewName);
     });
     if (viewName === "search") renderMemberFeed();
-    if (viewName === "home") renderHomeRecentMembers();
+    if (viewName === "home") { activityFeedLimit = ACTIVITY_PAGE_SIZE; renderHomeActivityFeed(); }
+    if (viewName === "kiosk") renderKioskList();
   }
 }
 
@@ -479,7 +522,7 @@ async function startAdminCameraScanner(facingMode) {
     adminFacingMode = fm;
     if (videoBox) videoBox.style.display = "block";
     if (toggleBtn) {
-      toggleBtn.innerText = "📷 카메라 끄기";
+      toggleBtn.innerText = "카메라 끄기";
       toggleBtn.style.background = "rgba(239,68,68,0.3)";
       toggleBtn.style.color = "#fca5a5";
     }
@@ -521,7 +564,7 @@ function stopAdminCameraScanner() {
   if (videoBox) videoBox.style.display = "none";
   if (flipBtn) flipBtn.style.display = "none"; // 카메라 끌면 전환 버튼 숨김
   if (toggleBtn) {
-    toggleBtn.innerText = "📷 카메라 켜기";
+    toggleBtn.innerText = "카메라 켜기";
     toggleBtn.style.background = "rgba(6,182,212,0.2)";
     toggleBtn.style.color = "#67e8f9";
   }
@@ -594,13 +637,13 @@ function openScannerModal(mode, context) {
   document.getElementById("admin-card-uid-input").value = "";
 
   if (mode === "SEARCH") {
-    title.innerText = "📲 NFC/QR 태그로 회원 찾기";
+    title.innerHTML = `${icon("card")} NFC/QR 태그로 회원 찾기`;
     desc.innerHTML = "회원의 <strong>NFC 카드를 태그</strong>하거나 <strong>QR 코드를 카메라에 비추면</strong> 해당 회원 상세 페이지로 바로 이동합니다.";
     confirmBtn.innerText = "검색하기";
     switchAdminScanMode("NFC");
   } else {
     const typeLabel = context.cardType === "QR_CODE" ? "QR 코드" : "NFC 카드";
-    title.innerText = `📷💳 ${typeLabel} 등록`;
+    title.innerHTML = `${icon("card")} ${typeLabel} 등록`;
     desc.innerHTML = `<strong>${typeLabel}</strong>를 스캔하면 이 회원에게 등록(또는 교체)됩니다.`;
     confirmBtn.innerText = "등록하기";
     switchAdminScanMode(context.cardType === "QR_CODE" ? "QR" : "NFC");
@@ -663,18 +706,19 @@ async function loadAdminUsers() {
     const res = await adminFetch(`${API_BASE}/users`);
     if (!res.ok) return;
     users = await res.json();
-    renderHomeRecentMembers();
     renderMemberFeed();
   } catch (err) {
     console.error("Failed to load users:", err);
   }
 }
 
+// 전체 메뉴 카탈로그 - 키오스크 탭의 "노출 메뉴 배정" 체크리스트를 그리는 데 쓰인다.
+// 메뉴 자체의 CRUD는 각 단말기 관리자 패널에서 하므로 여기서는 조회만 한다.
 async function loadAdminProducts() {
   try {
     const res = await fetch(`${API_BASE}/products`);
     products = await res.json();
-    renderProductsTable();
+    renderKioskList();
   } catch (err) {
     console.error("Failed to load products:", err);
   }
@@ -733,26 +777,12 @@ function renderDashboard(stats) {
 
 // ============ 회원 검색 피드 (트위터 피드 스타일) ============
 
-// 이름 해시로 팔레트에서 색을 고르는 트위터식 이니셜 아바타 (프로필 사진이 없는 회원용)
-const AVATAR_PALETTE = ['#1d9bf0', '#7856ff', '#f91880', '#ff7a00', '#00ba7c', '#e0245e', '#635bff', '#0f9b8e'];
-
-function avatarColorFor(name) {
-  let hash = 0;
-  for (let i = 0; i < (name || '').length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
-}
-
-function avatarInitialFor(name) {
-  return (name || '').trim().charAt(0).toUpperCase() || '?';
-}
-
 function renderMemberFeedCard(u) {
   const isActive = u.status === "ACTIVE";
   const div = document.createElement("div");
   div.className = "glass-container member-card";
   div.onclick = () => openMemberDetail(u.id);
   div.innerHTML = `
-    <div class="member-card-avatar" style="background: ${avatarColorFor(u.name)};">${avatarInitialFor(u.name)}</div>
     <div class="member-card-info">
       <div class="member-card-name">
         <span class="status-dot ${isActive ? '' : 'suspended'}"></span>${u.name}
@@ -783,16 +813,129 @@ function renderMemberFeed() {
   filtered.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
 }
 
-function renderHomeRecentMembers() {
-  const feed = document.getElementById("home-recent-members");
+// 홈 "최근 처리 내역" - 계좌 입금(bankTransactions)과 충전 신청(rechargeQueue)을
+// 시간순으로 합쳐서 보여주는 실시간 피드. 두 배열 모두 이제 상태 무관 전체 목록을
+// 담고 있으므로(충전함 탭과 동일 데이터 재사용) 별도 API 호출이 필요 없다.
+//
+// 입금과 충전 신청이 서로 매칭된 건(recharge.matched_bank_transaction_id)은 두 개의
+// 별도 카드 대신 한 카드 안에 시간순 2줄로 합쳐서 보여준다. 고정 높이 영역
+// (.activity-feed-scroll) 안에서만 스크롤되고, 스크롤이 바닥에 가까워지면
+// setupActivityFeedInfiniteScroll이 다음 페이지를 이어서 그린다.
+const ACTIVITY_PAGE_SIZE = 15;
+let activityFeedLimit = ACTIVITY_PAGE_SIZE;
+let activityFeedMergedCache = [];
+
+function buildMergedActivityEvents() {
+  const usedBankTxnIds = new Set();
+  const events = [];
+
+  rechargeQueue.forEach(r => {
+    let status = "대기", statusClass = "status-pending";
+    if (r.status === "MATCHED") { status = "완료"; statusClass = "status-done"; }
+    else if (r.status === "REJECTED") { status = "반려"; statusClass = "status-rejected"; }
+
+    const matchedTxn = r.matched_bank_transaction_id
+      ? bankTransactions.find(t => t.id === r.matched_bank_transaction_id)
+      : null;
+
+    if (matchedTxn) {
+      usedBankTxnIds.add(matchedTxn.id);
+      const lines = [
+        {
+          time: matchedTxn.created_at, icon: icon("bank"),
+          title: `계좌 입금 - ${matchedTxn.depositor_name}`, amount: matchedTxn.amount,
+          status: "완료", statusClass: "status-done",
+        },
+        {
+          time: r.created_at, icon: icon("receipt"),
+          title: `충전 신청 - ${r.user_name}`, amount: r.requested_amount,
+          status, statusClass,
+        },
+      ].sort((a, b) => new Date(a.time) - new Date(b.time));
+      events.push({
+        kind: "paired",
+        time: lines[lines.length - 1].time,
+        lines,
+      });
+    } else {
+      events.push({
+        kind: "single",
+        time: r.created_at,
+        icon: icon("receipt"),
+        title: `충전 신청 - ${r.user_name}`,
+        amount: r.requested_amount,
+        status, statusClass,
+      });
+    }
+  });
+
+  bankTransactions.forEach(t => {
+    if (usedBankTxnIds.has(t.id)) return;
+    events.push({
+      kind: "single",
+      time: t.created_at,
+      icon: icon("bank"),
+      title: `계좌 입금 - ${t.depositor_name}`,
+      amount: t.amount,
+      status: t.status === "MATCHED" ? "완료" : "대기",
+      statusClass: t.status === "MATCHED" ? "status-done" : "status-pending",
+    });
+  });
+
+  return events.sort((a, b) => new Date(b.time) - new Date(a.time));
+}
+
+function renderActivityLine(line) {
+  return `
+    <span class="activity-icon">${line.icon}</span>
+    <div class="activity-info">
+      <div class="activity-title">${line.title}</div>
+      <div class="activity-sub">${new Date(line.time).toLocaleString()}</div>
+      <span class="activity-status ${line.statusClass}">${line.status}</span>
+    </div>
+    <div class="activity-amount">${line.amount.toLocaleString()}원</div>
+  `;
+}
+
+function renderActivityCard(ev) {
+  const div = document.createElement("div");
+  if (ev.kind === "paired") {
+    div.className = "glass-container activity-row activity-row-paired";
+    div.innerHTML = ev.lines.map(line => `<div class="activity-pair-line">${renderActivityLine(line)}</div>`).join("");
+  } else {
+    div.className = "glass-container activity-row";
+    div.innerHTML = renderActivityLine(ev);
+  }
+  return div;
+}
+
+function renderHomeActivityFeed() {
+  const feed = document.getElementById("home-activity-feed");
   if (!feed) return;
+
+  activityFeedMergedCache = buildMergedActivityEvents();
+
   feed.innerHTML = "";
-  const recent = [...users].sort((a, b) => b.id - a.id).slice(0, 5);
-  if (recent.length === 0) {
-    feed.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0;">등록된 회원이 없습니다.</p>`;
+  if (activityFeedMergedCache.length === 0) {
+    feed.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0;">처리 내역이 없습니다.</p>`;
     return;
   }
-  recent.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
+
+  activityFeedMergedCache.slice(0, activityFeedLimit).forEach(ev => feed.appendChild(renderActivityCard(ev)));
+}
+
+// 스크롤이 하단 80px 이내로 들어오면 다음 페이지를 이어서 그린다 (드래그/휠 스크롤 모두 대응).
+function setupActivityFeedInfiniteScroll() {
+  const scrollBox = document.getElementById("home-activity-feed-scroll");
+  if (!scrollBox || scrollBox.dataset.scrollWired) return;
+  scrollBox.dataset.scrollWired = "1";
+  scrollBox.addEventListener("scroll", () => {
+    if (activityFeedLimit >= activityFeedMergedCache.length) return;
+    if (scrollBox.scrollTop + scrollBox.clientHeight >= scrollBox.scrollHeight - 80) {
+      activityFeedLimit += ACTIVITY_PAGE_SIZE;
+      renderHomeActivityFeed();
+    }
+  });
 }
 
 // ============ 회원 상세 페이지 ============
@@ -817,14 +960,13 @@ function renderMemberDetail() {
 
   const isActive = user.status === "ACTIVE";
   document.getElementById("detail-member-name").innerText = user.name;
-  const avatarEl = document.getElementById("detail-member-avatar");
-  avatarEl.innerText = avatarInitialFor(user.name);
-  avatarEl.style.background = avatarColorFor(user.name);
   const badge = document.getElementById("detail-member-badge");
-  badge.innerText = user.user_type === 'SENIOR' ? '👵👴 시니어' : '👦 일반';
+  badge.innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
   badge.className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
   const statusEl = document.getElementById("detail-member-status");
-  statusEl.innerText = isActive ? "🟢 활성" : "🔴 정지됨";
+  statusEl.innerHTML = isActive
+    ? '<span class="status-dot"></span>활성'
+    : '<span class="status-dot suspended"></span>정지됨';
   statusEl.style.color = isActive ? "var(--accent-emerald)" : "var(--accent-danger)";
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("detail-member-phone").innerText = user.phone || "-";
@@ -839,8 +981,8 @@ function renderMemberDetail() {
 }
 
 function renderDetailCardSlots() {
-  renderCardSlot("NFC", "detail-card-nfc-slot", "💳 NFC 카드");
-  renderCardSlot("QR_CODE", "detail-card-qr-slot", "📷 QR 코드");
+  renderCardSlot("NFC", "detail-card-nfc-slot", `${icon("card")} NFC 카드`);
+  renderCardSlot("QR_CODE", "detail-card-qr-slot", `${icon("camera")} QR 코드`);
 }
 
 function renderCardSlot(cardType, containerId, label) {
@@ -994,14 +1136,18 @@ async function renderDetailHistory() {
 
 async function loadRechargeQueue() {
   try {
-    const res = await adminFetch(`${API_BASE}/admin/recharge-requests?status=PENDING`);
+    const res = await adminFetch(`${API_BASE}/admin/recharge-requests`);
     if (!res.ok) return;
     rechargeQueue = await res.json();
     renderRechargeQueueTable();
+    renderHomeActivityFeed();
   } catch (err) {
     console.error("Failed to load recharge queue:", err);
   }
 }
+
+const RECHARGE_STATUS_LABEL = { PENDING: "대기", MATCHED: "완료", REJECTED: "반려" };
+const RECHARGE_STATUS_CLASS = { PENDING: "status-pending", MATCHED: "status-done", REJECTED: "status-rejected" };
 
 function renderRechargeQueueTable() {
   const tbody = document.getElementById("admin-recharge-queue-tbody");
@@ -1009,20 +1155,22 @@ function renderRechargeQueueTable() {
   tbody.innerHTML = "";
 
   if (rechargeQueue.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">대기 중인 충전 신청이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">충전 신청 내역이 없습니다.</td></tr>`;
     return;
   }
 
   rechargeQueue.forEach(r => {
     const tr = document.createElement("tr");
+    const actions = r.status === "PENDING"
+      ? `<button class="btn-action btn-emerald" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto;" onclick="approveRechargeRequest(${r.id})">입금 확인, 승인</button>
+         <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${r.id})">반려</button>`
+      : `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
     tr.innerHTML = `
       <td>${new Date(r.created_at).toLocaleString()}</td>
       <td><strong>${r.user_name}</strong></td>
       <td style="color: var(--accent-emerald); font-weight: bold;">${r.requested_amount.toLocaleString()}원</td>
-      <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-        <button class="btn-action btn-emerald" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto;" onclick="approveRechargeRequest(${r.id})">입금 확인, 승인</button>
-        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${r.id})">반려</button>
-      </td>
+      <td><span class="activity-status ${RECHARGE_STATUS_CLASS[r.status] || 'status-pending'}">${RECHARGE_STATUS_LABEL[r.status] || r.status}</span></td>
+      <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">${actions}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1042,6 +1190,7 @@ async function approveRechargeRequest(requestId) {
       loadAdminUsers();
       loadDepositHistories();
       loadRechargeQueue();
+      loadBankTransactions();
       loadStatsSummary();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -1072,40 +1221,43 @@ async function rejectRechargeRequest(requestId) {
   }
 }
 
-// ============ 미배정 은행거래 목록 (홈 탭 "미배정 은행거래" 카운트가 가리키는 실제 목록) ============
-// 대기 중인 충전 신청과 이름+금액이 안 맞아 자동 매칭되지 못한 BankTransaction 원장.
-// stats.unmatched_deposit_count는 이 목록의 개수와 같다 - 충전함 탭 배지 숫자가 이 표와
-// recharge-requests 표(신청 대기) 두 개의 합이라 반드시 둘 다 같이 보여줘야 한다.
-async function loadUnmatchedDeposits() {
+// ============ 계좌 입금 목록 (전체 - 대기/완료) ============
+// stats.unmatched_deposit_count는 이 중 status===UNMATCHED 건수와 같다 - 충전함 탭 배지 숫자가
+// 이 표의 대기 건과 recharge-requests 표(신청 대기) 두 개의 합이라 반드시 둘 다 같이 보여줘야 한다.
+async function loadBankTransactions() {
   try {
-    const res = await adminFetch(`${API_BASE}/admin/bank-transactions?status=UNMATCHED`);
+    const res = await adminFetch(`${API_BASE}/admin/bank-transactions`);
     if (!res.ok) return;
-    unmatchedDeposits = await res.json();
-    renderUnmatchedDepositsTable();
+    bankTransactions = await res.json();
+    renderBankTransactionsTable();
+    renderHomeActivityFeed();
   } catch (err) {
-    console.error("Failed to load unmatched deposits:", err);
+    console.error("Failed to load bank transactions:", err);
   }
 }
 
-function renderUnmatchedDepositsTable() {
-  const tbody = document.getElementById("admin-unmatched-deposits-tbody");
+function renderBankTransactionsTable() {
+  const tbody = document.getElementById("admin-bank-transactions-tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  if (unmatchedDeposits.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-muted);">미배정 은행거래가 없습니다.</td></tr>`;
+  if (bankTransactions.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">계좌 입금 내역이 없습니다.</td></tr>`;
     return;
   }
 
-  unmatchedDeposits.forEach(t => {
+  bankTransactions.forEach(t => {
     const tr = document.createElement("tr");
+    const isUnmatched = t.status === "UNMATCHED";
+    const actions = isUnmatched
+      ? `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${t.id})">삭제</button>`
+      : `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
     tr.innerHTML = `
       <td>${new Date(t.created_at).toLocaleString()}</td>
       <td><strong>${t.depositor_name}</strong></td>
       <td style="color: var(--accent-emerald); font-weight: bold;">${t.amount.toLocaleString()}원</td>
-      <td>
-        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${t.id})">삭제</button>
-      </td>
+      <td><span class="activity-status ${isUnmatched ? 'status-pending' : 'status-done'}">${isUnmatched ? '대기' : '완료'}</span></td>
+      <td>${actions}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1116,7 +1268,7 @@ async function deleteUnmatchedDeposit(txnId) {
   try {
     const res = await adminFetch(`${API_BASE}/admin/bank-transactions/${txnId}`, { method: "DELETE" });
     if (res.ok) {
-      loadUnmatchedDeposits();
+      loadBankTransactions();
       loadStatsSummary();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -1153,7 +1305,7 @@ async function registerBankTransaction(depositorName, amount, { externalTxnIdPre
     loadAdminUsers();
     loadDepositHistories();
     loadRechargeQueue();
-    loadUnmatchedDeposits();
+    loadBankTransactions();
     loadStatsSummary();
 
     if (silent) {
@@ -1187,27 +1339,71 @@ async function submitBankTransaction(btn) {
   });
 }
 
-// ============ 입금 문자 자동감지 (SMS) ============
-// 네이티브(SmsReceiver, android_kiosk - 관리자 앱 전용)가 은행 문자를 원본 그대로
-// window.onSmsReceived(sender, body)로 넘기면, 여기서 저장된 발신번호 필터/정규식으로 파싱해서
-// 위 registerBankTransaction()을 그대로 호출한다. 파싱 규칙을 은행 문자 포맷에 맞춰 바꿀 때마다
-// 앱을 다시 빌드/배포할 필요가 없도록 일부러 이 계층(웹)에 둔다.
+// ============ 입금 알림 자동감지 (SMS + 푸시 알림/RCS) ============
+// 네이티브가 은행 입금 알림을 두 경로로 원본 그대로 넘긴다:
+//   - SmsReceiver → window.onSmsReceived(sender, body)                       (일반 SMS만 잡음)
+//   - BankNotificationListener → window.onNotificationReceived(pkg, title, text)
+//     (SMS/RCS/은행 앱 자체 푸시 등 화면에 뜨는 모든 알림을 잡음 - SmsReceiver의 사각지대를 메움.
+//      "알림 접근" 권한은 사용자가 설정 화면에서 직접 켜야 동작한다.)
+// 여기서 저장된 발신번호 필터(SMS 전용)/정규식(공용)으로 파싱해서 registerBankTransaction()을
+// 그대로 호출한다. 파싱 규칙을 은행 알림 포맷에 맞춰 바꿀 때마다 앱을 다시 빌드/배포할 필요가
+// 없도록 일부러 이 계층(웹)에 둔다.
+//
+// 같은 실제 입금이 두 경로로 동시에 들어올 수 있다(진짜 SMS는 알림창에도 함께 뜬다) - 짧은
+// 시간 안에 같은 입금자명+금액이 다시 감지되면 중복으로 보고 두 번째부터는 등록하지 않는다
+// (isDuplicateDetection).
 const SMS_DETECT_SENDER_KEY = "sms_detect_sender";
 const SMS_DETECT_REGEX_KEY = "sms_detect_regex";
 
 // NH농협 알림 문자(발신 1588-2100) 실제 포맷 기준 기본값 - 예)
-// "농협 입금63,000원\n04/09 19:46 815110-52-\n****14 피파웃\n잔액2,190,941원"
+// "농협 입금10,000원\n08/13 12:12 301-****-7807-01 박용준 잔액2,165,746원"
 // 다른 은행이면 관리자가 화면에서 값을 바꾸면 되고, 저장하기 전(로컬스토리지가 비어있는 상태)
 // 에도 이 기본값으로 바로 동작하도록 저장값 조회 시 항상 이 값으로 폴백한다.
 const SMS_DETECT_SENDER_DEFAULT = "1588-2100";
-const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?\\*{4}\\d+\\s+(?<name>[가-힣]{2,10})";
+const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<name>[가-힣]{2,10})\\s*잔액";
 
 function loadSmsDetectSettings() {
   const senderEl = document.getElementById("sms-detect-sender");
   const regexEl = document.getElementById("sms-detect-regex");
   if (senderEl) senderEl.value = localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT;
   if (regexEl) regexEl.value = localStorage.getItem(SMS_DETECT_REGEX_KEY) ?? SMS_DETECT_REGEX_DEFAULT;
+  renderSmsLog();
+  refreshNotificationAccessStatus();
 }
+
+// ---------------- 알림 접근 권한 (BankNotificationListener용) ----------------
+// AndroidInterface가 없는 일반 브라우저(관리자 앱이 아닌 곳)에서는 아무것도 하지 않는다
+// (kiosk.js의 initWebNFC()와 동일한 판단 방식) - 이 권한은 관리자 앱에서만 의미가 있다.
+function refreshNotificationAccessStatus() {
+  const statusEl = document.getElementById("notif-access-status");
+  const btn = document.getElementById("notif-access-open-btn");
+  if (!statusEl) return;
+
+  if (!window.AndroidInterface || typeof window.AndroidInterface.isNotificationAccessGranted !== "function") {
+    statusEl.textContent = "이 브라우저에서는 상태를 확인할 수 없습니다 (관리자 앱에서만 사용 가능).";
+    statusEl.style.color = "var(--text-muted)";
+    if (btn) btn.style.display = "none";
+    return;
+  }
+
+  const granted = window.AndroidInterface.isNotificationAccessGranted();
+  statusEl.textContent = granted
+    ? "알림 접근 권한이 켜져 있습니다 - 문자/RCS/푸시 알림을 모두 감지합니다."
+    : "알림 접근 권한이 꺼져 있습니다 - SMS만 감지되고 RCS/푸시 알림은 놓칠 수 있습니다.";
+  statusEl.style.color = granted ? "var(--accent-emerald)" : "var(--accent-danger)";
+  if (btn) btn.style.display = granted ? "none" : "inline-flex";
+}
+
+function openNotificationAccessSettingsFromWeb() {
+  if (window.AndroidInterface && typeof window.AndroidInterface.openNotificationAccessSettings === "function") {
+    window.AndroidInterface.openNotificationAccessSettings();
+  }
+}
+
+// 설정 화면에서 권한을 켜고 앱으로 돌아왔을 때 상태를 바로 반영
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshNotificationAccessStatus();
+});
 
 async function saveSmsDetectSettings(btn) {
   const sender = document.getElementById("sms-detect-sender").value.trim();
@@ -1227,6 +1423,16 @@ async function saveSmsDetectSettings(btn) {
   showToast("✅ 문자 자동감지 설정을 저장했습니다.");
 }
 
+// 감지 발신번호/정규식을 기본값으로 되돌린다 - 로컬스토리지에 남아있는 예전 값이 최신
+// 기본값(SMS_DETECT_*_DEFAULT)을 계속 가리는 문제를 화면에서 바로 해결할 수 있게 한다.
+async function resetSmsDetectSettings() {
+  if (!(await showConfirmModal("입금 문자 자동감지 설정을 기본값으로 되돌리시겠습니까?"))) return;
+  localStorage.removeItem(SMS_DETECT_SENDER_KEY);
+  localStorage.removeItem(SMS_DETECT_REGEX_KEY);
+  loadSmsDetectSettings();
+  showToast("✅ 기본값으로 초기화했습니다.");
+}
+
 // SIM이 없는 테스트 기기에서도 실제 수신 시와 동일한 코드 경로(window.onSmsReceived)를 그대로
 // 타게 해서, "테스트에서 되던 게 실기기에서 안 된다"는 괴리가 생기지 않도록 한다.
 function triggerSimulatedSms(btn) {
@@ -1239,19 +1445,114 @@ function triggerSimulatedSms(btn) {
   window.onSmsReceived(sender, body);
 }
 
-// 네이티브 SmsReceiver가 문자 수신 시 호출하는 콜백 (AndroidInterface와 반대 방향의 브릿지 -
-// 네이티브 → 웹). PIN 인증 전에는 백엔드 호출 자체가 의미 없으니 무시한다.
-window.onSmsReceived = function (sender, body) {
-  if (!isAdminAuthenticated) return;
-
-  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT).trim();
-  if (filterSender && !(sender || "").includes(filterSender)) {
-    return; // 지정한 발신번호/발신자가 아니면 무시
+// 푸시 알림(RCS/은행 앱 자체 알림) 경로도 문자와 동일하게 시뮬레이션 가능 (실제 알림 없이 테스트)
+function triggerSimulatedNotification(btn) {
+  const packageName = document.getElementById("notif-test-package").value.trim();
+  const title = document.getElementById("notif-test-title").value.trim();
+  const text = document.getElementById("notif-test-text").value.trim();
+  if (!text) {
+    showAlertModal("테스트할 알림 본문을 입력하세요.");
+    return;
   }
+  window.onNotificationReceived(packageName, title, text);
+}
+
+// ---------------- 중복 감지 방지 ----------------
+// 같은 실제 입금이 SMS와 푸시 알림 두 경로로 동시에 들어올 수 있다(진짜 SMS는 알림창에도
+// 함께 뜬다) - 짧은 시간 안에 같은 입금자명+금액 조합이 다시 감지되면 이미 처리한 것으로
+// 보고 두 번째부터는 건너뛴다.
+const DEDUP_WINDOW_MS = 30000;
+let recentDetections = []; // [{ key, time }]
+
+function isDuplicateDetection(depositorName, amount) {
+  const now = Date.now();
+  recentDetections = recentDetections.filter((d) => now - d.time < DEDUP_WINDOW_MS);
+  const key = `${depositorName}|${amount}`;
+  const isDup = recentDetections.some((d) => d.key === key);
+  if (!isDup) recentDetections.push({ key, time: now });
+  return isDup;
+}
+
+// ---------------- 수신 로그 (필터링/파싱 실패/중복 포함 전체 이벤트) ----------------
+// "문자/알림은 왔는데 왜 자동 충전이 안 됐지?"를 화면에서 바로 진단할 수 있도록, 실제로
+// 성공한 건만이 아니라 두 콜백으로 넘어온 모든 호출을 사유와 함께 기록해 둔다.
+const SMS_LOG_KEY = "sms_detect_log";
+const SMS_LOG_MAX = 50;
+const SMS_LOG_OUTCOME_META = {
+  success: { label: "감지 성공", cls: "status-done" },
+  auth_skip: { label: "인증 전 무시", cls: "status-pending" },
+  sender_filtered: { label: "발신자 불일치", cls: "status-pending" },
+  duplicate: { label: "중복 감지", cls: "status-pending" },
+  no_regex: { label: "정규식 미설정", cls: "status-rejected" },
+  regex_error: { label: "정규식 오류", cls: "status-rejected" },
+  parse_fail: { label: "파싱 실패", cls: "status-rejected" },
+  invalid_value: { label: "추출값 이상", cls: "status-rejected" },
+};
+const SMS_LOG_SOURCE_LABEL = { SMS: "문자", PUSH: "알림" };
+
+function getSmsLog() {
+  try {
+    return JSON.parse(localStorage.getItem(SMS_LOG_KEY) || "[]");
+  } catch (e) {
+    return [];
+  }
+}
+
+function logSmsEvent(entry) {
+  try {
+    const log = getSmsLog();
+    log.unshift(Object.assign({ time: new Date().toISOString() }, entry));
+    while (log.length > SMS_LOG_MAX) log.pop();
+    localStorage.setItem(SMS_LOG_KEY, JSON.stringify(log));
+  } catch (e) {
+    console.error("SMS 로그 저장 실패:", e);
+  }
+  renderSmsLog();
+}
+
+function clearSmsLog() {
+  localStorage.removeItem(SMS_LOG_KEY);
+  renderSmsLog();
+}
+
+function renderSmsLog() {
+  const container = document.getElementById("sms-log-list");
+  if (!container) return;
+  const log = getSmsLog();
+
+  if (log.length === 0) {
+    container.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0; font-size: 0.85rem;">아직 수신된 문자/알림이 없습니다.</p>`;
+    return;
+  }
+
+  container.innerHTML = log.map(entry => {
+    const meta = SMS_LOG_OUTCOME_META[entry.outcome] || { label: entry.outcome, cls: "status-pending" };
+    const sourceLabel = SMS_LOG_SOURCE_LABEL[entry.source] || "문자";
+    const origin = entry.source === "PUSH"
+      ? `${sourceLabel} · ${escapeHtml(entry.packageName || "(패키지명 없음)")}`
+      : `${sourceLabel} · ${escapeHtml(entry.sender || "(발신번호 없음)")}`;
+    return `
+      <div class="glass-container" style="padding: 0.7rem 0.9rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(entry.time).toLocaleString()} · ${origin}</span>
+          <span class="activity-status ${meta.cls}">${meta.label}</span>
+        </div>
+        ${entry.detail ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.35rem;">${escapeHtml(entry.detail)}</div>` : ""}
+        <div style="font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; font-family: monospace; color: var(--text-main); background: rgba(0,0,0,0.3); padding: 0.5rem 0.6rem; border-radius: 8px;">${escapeHtml(entry.body || "")}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+// SMS/푸시 알림 공용 파싱-등록 로직 - onSmsReceived/onNotificationReceived 둘 다 여기로 모인다.
+// source: "SMS" | "PUSH". originMeta: SMS면 {sender}, PUSH면 {packageName}.
+function processDepositDetection(source, body, originMeta) {
+  const logBase = Object.assign({ source, body }, originMeta);
 
   const regexStr = (localStorage.getItem(SMS_DETECT_REGEX_KEY) ?? SMS_DETECT_REGEX_DEFAULT).trim();
   if (!regexStr) {
-    showToast("⚠️ 문자를 받았지만 파싱 정규식이 설정되지 않았습니다. (충전함 > 자동감지 설정)");
+    logSmsEvent(Object.assign({}, logBase, { outcome: "no_regex", detail: "파싱 정규식이 설정되지 않음" }));
+    showToast("⚠️ 문자/알림을 받았지만 파싱 정규식이 설정되지 않았습니다. (설정 탭 > 자동감지 설정)");
     return;
   }
 
@@ -1259,23 +1560,68 @@ window.onSmsReceived = function (sender, body) {
   try {
     match = body.match(new RegExp(regexStr));
   } catch (e) {
+    logSmsEvent(Object.assign({}, logBase, { outcome: "regex_error", detail: e.message }));
     showToast(`⚠️ 정규식 오류: ${e.message}`);
     return;
   }
 
   if (!match || !match.groups || !match.groups.name || !match.groups.amount) {
-    showToast("⚠️ 문자를 받았지만 이름/금액을 추출하지 못했습니다. 정규식을 확인하세요.");
+    logSmsEvent(Object.assign({}, logBase, { outcome: "parse_fail", detail: "정규식이 이름/금액 캡처 그룹과 일치하는 부분을 찾지 못함" }));
+    showToast("⚠️ 문자/알림을 받았지만 이름/금액을 추출하지 못했습니다. 정규식을 확인하세요.");
     return;
   }
 
   const depositorName = match.groups.name.trim();
   const amount = parseInt(match.groups.amount.replace(/[,\s]/g, ""), 10);
   if (!depositorName || !amount || amount <= 0) {
-    showToast("⚠️ 문자에서 추출한 이름/금액이 올바르지 않습니다.");
+    logSmsEvent(Object.assign({}, logBase, { outcome: "invalid_value", detail: `추출된 값이 올바르지 않음 (이름: "${depositorName}", 금액: ${amount})` }));
+    showToast("⚠️ 문자/알림에서 추출한 이름/금액이 올바르지 않습니다.");
     return;
   }
 
-  registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: "SMS", silent: true });
+  if (isDuplicateDetection(depositorName, amount)) {
+    logSmsEvent(Object.assign({}, logBase, {
+      outcome: "duplicate",
+      detail: `${depositorName} / ${amount.toLocaleString()}원 - 같은 내용이 최근(${DEDUP_WINDOW_MS / 1000}초 이내)에 이미 처리되어 건너뜀 (SMS/알림 중복 수신)`,
+    }));
+    return;
+  }
+
+  logSmsEvent(Object.assign({}, logBase, { outcome: "success", detail: `${depositorName} / ${amount.toLocaleString()}원으로 등록 시도` }));
+  registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: source, silent: true });
+}
+
+// 네이티브 SmsReceiver가 문자 수신 시 호출하는 콜백 (AndroidInterface와 반대 방향의 브릿지 -
+// 네이티브 → 웹). 실제로 충전을 등록하는 경우뿐 아니라, 필터/정규식 때문에 조용히 무시되는
+// 경우까지 전부 logSmsEvent로 남겨야 "문자는 왔는데 처리가 안 됐다"를 화면에서 진단할 수 있다.
+window.onSmsReceived = function (sender, body) {
+  if (!isAdminAuthenticated) {
+    logSmsEvent({ source: "SMS", sender, body, outcome: "auth_skip", detail: "관리자 인증 전이라 무시됨" });
+    return;
+  }
+
+  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT).trim();
+  if (filterSender && !(sender || "").includes(filterSender)) {
+    logSmsEvent({ source: "SMS", sender, body, outcome: "sender_filtered", detail: `감지할 발신번호 설정("${filterSender}")과 일치하지 않음` });
+    return; // 지정한 발신번호/발신자가 아니면 무시
+  }
+
+  processDepositDetection("SMS", body, { sender });
+};
+
+// 네이티브 BankNotificationListener가 알림 감지 시 호출하는 콜백 - SMS_RECEIVED 브로드캐스트가
+// 발생하지 않는 RCS/은행 앱 자체 푸시까지 잡기 위한 두 번째 경로("알림 접근" 권한이 켜져 있어야
+// 호출된다). 발신번호 필터는 SMS 전용이라 여기서는 적용하지 않는다 - 패키지명 필터를 따로 두지
+// 않은 이유는, 정규식이 이미 "입금...원...잔액" 형태로 충분히 구체적이라 오탐 위험이 낮고, 은행
+// 알림이 뜨는 앱(메시지 앱/은행 앱 등)이 기기마다 달라 필터를 두면 오히려 놓치기 쉽기 때문.
+window.onNotificationReceived = function (packageName, title, text) {
+  if (!isAdminAuthenticated) {
+    logSmsEvent({ source: "PUSH", packageName, body: `${title}\n${text}`, outcome: "auth_skip", detail: "관리자 인증 전이라 무시됨" });
+    return;
+  }
+
+  const body = title ? `${title}\n${text}` : text;
+  processDepositDetection("PUSH", body, { packageName });
 };
 
 // ============ 가벼운 토스트 알림 (매번 확인이 필요 없는 자동 처리 결과 통지용) ============
@@ -1411,113 +1757,150 @@ async function submitUserInfoEdit(btn) {
   });
 }
 
-// ============ 메뉴(상품) 관리 ============
+// ============ 키오스크 관리 ============
+// 메뉴 자체의 생성/수정/삭제는 각 키오스크 단말기의 관리자 패널에서 하고, 여기서는
+// 등록된 키오스크 목록·단말기별 노출 메뉴 배정·메뉴별 매출만 다룬다(메뉴는 키오스크마다
+// 다르게 노출될 수 있어 전역 메뉴 편집 화면을 여기 두지 않는다).
 
-function renderProductsTable() {
-  const tbody = document.getElementById("admin-product-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
+let kiosks = [];
 
-  products.forEach(p => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${p.name}</strong></td>
-      <td>${p.price_general.toLocaleString()}원</td>
-      <td style="color: var(--accent-amber); font-weight: bold;">${p.price_senior.toLocaleString()}원</td>
-      <td><span style="color: var(--accent-emerald);">판매중</span></td>
-      <td style="display: flex; gap: 0.4rem;">
-        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(59,130,246,0.2); color: #93c5fd;" onclick="editAdminProduct(${p.id})">수정</button>
-        <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteAdminProduct(${p.id})">삭제</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-let editingProductId = null;
-
-function editAdminProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-  editingProductId = id;
-  document.getElementById("prod-name").value = product.name;
-  document.getElementById("prod-price-gen").value = product.price_general;
-  document.getElementById("prod-price-sen").value = product.price_senior;
-  const submitBtn = document.getElementById("prod-submit-btn");
-  if (submitBtn) submitBtn.innerText = "메뉴 수정 완료";
-  const cancelBtn = document.getElementById("prod-cancel-btn");
-  if (cancelBtn) cancelBtn.style.display = "inline-flex";
-  document.getElementById("prod-name").scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelAdminProductEdit() {
-  editingProductId = null;
-  document.getElementById("prod-name").value = "";
-  document.getElementById("prod-price-gen").value = "";
-  document.getElementById("prod-price-sen").value = "";
-  const submitBtn = document.getElementById("prod-submit-btn");
-  if (submitBtn) submitBtn.innerText = "메뉴 추가";
-  const cancelBtn = document.getElementById("prod-cancel-btn");
-  if (cancelBtn) cancelBtn.style.display = "none";
-}
-
-async function deleteAdminProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-  if (!(await showConfirmModal(`"${product.name}" 메뉴를 정말 삭제하시겠습니까?`))) return;
-
+async function loadKiosks() {
   try {
-    const res = await adminFetch(`${API_BASE}/products/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      if (editingProductId === id) cancelAdminProductEdit();
-      loadAdminProducts();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
-    }
+    const res = await adminFetch(`${API_BASE}/admin/kiosks`);
+    if (!res.ok) return;
+    kiosks = await res.json();
+    renderKioskList();
   } catch (err) {
-    console.error("Delete product error:", err);
+    console.error("Failed to load kiosks:", err);
   }
 }
 
-async function submitAddProduct(btn) {
-  const name = document.getElementById("prod-name").value.trim();
-  const genPrice = parseInt(document.getElementById("prod-price-gen").value);
-  const senPrice = parseInt(document.getElementById("prod-price-sen").value);
+function renderKioskSalesRows(rows) {
+  if (!rows || rows.length === 0) {
+    return `<tr><td colspan="3" style="text-align:center; color: var(--text-muted);">판매 내역이 없습니다.</td></tr>`;
+  }
+  return rows.map(r => `
+    <tr>
+      <td>${r.product_name}</td>
+      <td>${r.quantity.toLocaleString()}개</td>
+      <td style="color: var(--accent-emerald); font-weight: bold;">${r.amount.toLocaleString()}원</td>
+    </tr>
+  `).join('');
+}
 
-  if (!name || isNaN(genPrice)) {
-    await showAlertModal("메뉴 이름과 일반 가격을 입력하세요.");
+function renderKioskSalesTable(kioskId, period) {
+  const k = kiosks.find(x => x.id === kioskId);
+  if (!k) return;
+  const tbody = document.querySelector(`.kiosk-sales-table[data-kiosk-sales-id="${kioskId}"] tbody`);
+  if (!tbody) return;
+  tbody.innerHTML = renderKioskSalesRows(k.sales[period]);
+}
+
+function renderKioskList() {
+  const container = document.getElementById("admin-kiosk-list");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (kiosks.length === 0) {
+    container.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 2rem 0;">등록된 키오스크가 없습니다. 단말기에서 접속하면 자동으로 등록됩니다.</p>`;
     return;
   }
 
+  kiosks.forEach(k => {
+    const div = document.createElement("div");
+    div.className = "glass-container kiosk-card";
+    div.dataset.kioskId = k.id;
+    div.style.marginBottom = "1.2rem";
+    div.innerHTML = `
+      <div style="margin-bottom: 0.8rem;">
+        <div style="font-size: 1.05rem; font-weight: 800;">${k.device_name || '이름 없는 단말기'}</div>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">${k.device_uuid}${k.merchant_name ? ' · ' + k.merchant_name : ''}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">최근 동기화: ${new Date(k.updated_at).toLocaleString()}</div>
+      </div>
+
+      <div style="margin-bottom: 0.8rem;">
+        <label class="form-label">단말기 명칭</label>
+        <input type="text" class="form-control kiosk-name-input" value="${k.device_name || ''}" style="margin-bottom: 0;">
+      </div>
+
+      <div style="margin-bottom: 0.8rem;">
+        <label class="form-label">노출 메뉴 (체크한 메뉴만 이 단말기에 표시됩니다 - 전부 해제하면 전체 메뉴가 표시됩니다)</label>
+        <div class="kiosk-product-checklist" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem;">
+          ${products.length === 0 ? `<span style="font-size: 0.8rem; color: var(--text-muted);">등록된 메뉴가 없습니다. 단말기 관리자 패널에서 메뉴를 먼저 추가하세요.</span>` : products.map(p => `
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; background: rgba(255,255,255,0.06); padding: 0.35rem 0.6rem; border-radius: 8px; cursor: pointer;">
+              <input type="checkbox" value="${p.id}" ${k.assigned_products.includes(p.id) ? 'checked' : ''}>
+              ${p.name}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="admin-form-grid admin-form-grid-3" style="margin-bottom: 1rem;">
+        <div>
+          <label class="form-label">기본 결제 메뉴</label>
+          <select class="form-control kiosk-default-product-select" style="margin-bottom: 0;">
+            <option value="">-- 기본 결제 없음 --</option>
+            ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">기본 수량</label>
+          <input type="number" class="form-control kiosk-default-qty-input" value="${k.default_quantity || 1}" min="1" style="margin-bottom: 0;">
+        </div>
+        <button class="btn-action btn-primary" style="height: 52px;" onclick="saveKioskAssignment(${k.id}, this)">저장</button>
+      </div>
+
+      <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
+          <span style="font-size: 0.85rem; color: var(--text-muted);">메뉴별 매출</span>
+          <select class="form-control" style="width: auto; margin-bottom: 0; padding: 0.3rem 0.5rem; font-size: 0.8rem;" onchange="renderKioskSalesTable(${k.id}, this.value)">
+            <option value="today">오늘</option>
+            <option value="this_month">이번달</option>
+            <option value="all_time">전체</option>
+          </select>
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="table-custom kiosk-sales-table" data-kiosk-sales-id="${k.id}">
+            <thead><tr><th>메뉴</th><th>판매 수량</th><th>매출</th></tr></thead>
+            <tbody>${renderKioskSalesRows(k.sales.today)}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function saveKioskAssignment(kioskId, btn) {
+  const card = document.querySelector(`.kiosk-card[data-kiosk-id="${kioskId}"]`);
+  if (!card) return;
+
+  const deviceName = card.querySelector(".kiosk-name-input").value.trim();
+  const assignedProducts = Array.from(card.querySelectorAll(".kiosk-product-checklist input:checked")).map(cb => parseInt(cb.value));
+  const defaultProductVal = card.querySelector(".kiosk-default-product-select").value;
+  const defaultQty = parseInt(card.querySelector(".kiosk-default-qty-input").value) || 1;
+
   await withButtonLock(btn, async () => {
     try {
-      const payload = {
-        name: name,
-        price_general: genPrice,
-        price_senior: isNaN(senPrice) ? genPrice : senPrice
-      };
-      const res = editingProductId !== null
-        ? await adminFetch(`${API_BASE}/products/${editingProductId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          })
-        : await adminFetch(`${API_BASE}/products`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-
+      const res = await adminFetch(`${API_BASE}/admin/kiosks/${kioskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_name: deviceName || null,
+          assigned_products: assignedProducts,
+          default_product_id: defaultProductVal ? parseInt(defaultProductVal) : null,
+          default_quantity: defaultQty
+        })
+      });
       if (res.ok) {
-        cancelAdminProductEdit();
-        loadAdminProducts();
+        showToast("✅ 키오스크 설정을 저장했습니다.");
+        loadKiosks();
       } else {
         const data = await res.json().catch(() => ({}));
-        await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
+        await showAlertModal(`저장 실패: ${data.detail || '오류 발생'}`);
       }
     } catch (err) {
-      console.error("Add/edit product error:", err);
+      console.error("saveKioskAssignment error:", err);
     }
   });
 }

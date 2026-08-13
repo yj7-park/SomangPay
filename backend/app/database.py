@@ -43,6 +43,7 @@ def init_db():
         _run_migration_step(db, "ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS default_quantity INTEGER DEFAULT 1;", "kiosk_devices.default_quantity")
         _run_migration_step(db, "ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS allow_camera_reader_concurrent BOOLEAN DEFAULT FALSE;", "kiosk_devices.allow_camera_reader_concurrent")
         _run_migration_step(db, "ALTER TABLE deposit_histories ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100);", "deposit_histories.transaction_id")
+        _run_migration_step(db, "ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS kiosk_device_id INTEGER;", "payment_transactions.kiosk_device_id")
 
         # 신규 설계: 계좌번호 기반 매칭 폐기 - source_account 컬럼 제거
         _run_migration_step(db, "ALTER TABLE deposit_histories DROP COLUMN IF EXISTS source_account;", "deposit_histories.source_account drop")

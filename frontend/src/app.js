@@ -311,69 +311,6 @@ function onUserSelectChange() {
   }
 }
 
-function selectPresetAmount(amt) {
-  document.getElementById("user-recharge-amount-input").value = amt;
-}
-
-// Trigger Toss or KakaoPay App Deeplink Easy Recharge
-async function triggerPayDeeplink(provider) {
-  const userId = document.getElementById("mobile-user-select").value;
-  const amount = parseInt(document.getElementById("user-recharge-amount-input").value);
-
-  if (!userId || !amount || amount <= 0) {
-    alert("회원을 선택하고 올바른 충전 금액을 입력해주세요.");
-    return;
-  }
-
-  try {
-    // 1. Get Deeplink URL from backend
-    const res = await fetch(`${API_BASE}/payments/deeplink`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: parseInt(userId),
-        amount: amount,
-        provider: provider
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.detail || "딥링크 생성 실패");
-      return;
-    }
-
-    // 2. Open App Deeplink (Toss / KakaoPay App Trigger)
-    console.log(`Opening ${data.app_name} Deeplink:`, data.deeplink_url);
-
-    // Try executing native app scheme
-    window.location.href = data.deeplink_url;
-
-    // 3. Auto-Confirm Simulation for Web Testing
-    setTimeout(async () => {
-      const confirmRes = await fetch(`${API_BASE}/payments/deeplink-confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: parseInt(userId),
-          amount: amount,
-          provider: provider
-        })
-      });
-
-      if (confirmRes.ok) {
-        const confirmData = await confirmRes.json();
-        alert(confirmData.message);
-        loadUsers(); // Refresh balance
-        onUserSelectChange();
-      }
-    }, 1500);
-
-  } catch (err) {
-    console.error("Deeplink error:", err);
-  }
-}
-
 // Register Mobile NFC Card
 async function registerUserNFC() {
   const userId = document.getElementById("mobile-user-select").value;

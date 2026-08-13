@@ -8,8 +8,9 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <meta name="theme-color" content="#06b6d4">
+  <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="src/style.css?v=20260808_0002">
+  <link rel="stylesheet" href="src/instagram-theme.css">
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -250,6 +251,12 @@
           </div>
         </div>
 
+        <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+          <h4 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">노출 메뉴</h4>
+          <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">체크한 메뉴만 이 단말기의 고객 화면에 표시됩니다. 전부 해제하면(기본값) 전체 메뉴가 표시됩니다.</p>
+          <div id="k-assigned-products-checklist" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+        </div>
+
         <h4 id="kiosk-crud-title" style="margin-bottom: 0.8rem; color: var(--accent-emerald);">메뉴 추가</h4>
         <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.6rem; margin-bottom: 1.5rem;">
           <input type="text" id="k-prod-name" class="form-control" placeholder="메뉴명" style="margin-bottom: 0;">
@@ -292,6 +299,7 @@
   </div>
 
   <script src="src/update-widget.js?v=20260811_0001"></script>
+  <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
   <script src="src/kiosk.js?v=20260808_0001"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import datetime
 import hmac
+import json
 import os
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, Body, Header, Request, WebSocket, WebSocketDisconnect, Query
@@ -471,8 +472,17 @@ async def delete_nfc_card(
 # ================= PRODUCTS (MENU) APIs =================
 
 @app.get("/api/products", response_model=List[schemas.ProductResponse])
-def get_products(db: Session = Depends(get_db)):
-    return db.query(models.Product).filter(models.Product.is_active == True).all()
+def get_products(device_uuid: Optional[str] = None, db: Session = Depends(get_db)):
+    """전체 메뉴 카탈로그. device_uuid를 주면 그 키오스크에 배정된 메뉴만 반환하고,
+    배정된 메뉴가 없거나(assigned_products 미설정) 단말기를 못 찾으면 하위호환을 위해
+    전체 메뉴를 반환한다."""
+    query = db.query(models.Product).filter(models.Product.is_active == True)
+    if device_uuid:
+        device = db.query(models.KioskDevice).filter(models.KioskDevice.device_uuid == device_uuid).first()
+        assigned_ids = json.loads(device.assigned_products) if device and device.assigned_products else []
+        if assigned_ids:
+            query = query.filter(models.Product.id.in_(assigned_ids))
+    return query.all()
 
 @app.post("/api/products", response_model=schemas.ProductResponse)
 def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
@@ -633,6 +643,7 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
     # 2. 선택한 메뉴 및 수량 계산 (시니어/일반 자동 할인가 적용)
     total_amount = 0
     item_summaries = []
+    line_items = []  # 메뉴별 매출 집계를 위한 구조화된 라인아이템 (product_details는 사람이 읽는 요약용으로 계속 유지)
 
     for item in effective_items:
         product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
@@ -644,6 +655,13 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
         item_total = unit_price * item.quantity
         total_amount += item_total
         item_summaries.append(f"{product.name} x{item.quantity} ({unit_price:,}원)")
+        line_items.append({
+            "product_id": product.id,
+            "product_name": product.name,
+            "quantity": item.quantity,
+            "unit_price": unit_price,
+            "subtotal": item_total,
+        })
 
     if total_amount <= 0:
         raise HTTPException(status_code=400, detail="메뉴를 먼저 선택해 주세요.")
@@ -672,7 +690,8 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
     tx_success = models.PaymentTransaction(
         user_id=user.id,
         card_id=card.id,
-        merchant_id=req.merchant_id,
+        merchant_id=merchant_id,
+        kiosk_device_id=kiosk_dev.id if kiosk_dev else None,
         product_details=", ".join(item_summaries),
         amount=total_amount,
         balance_after=user.credit_balance,
@@ -681,6 +700,18 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
     db.add(tx_success)
     db.commit()
     db.refresh(tx_success)
+
+    # 메뉴별 매출 집계용 라인아이템 (관리자 키오스크 탭에서 사용)
+    for li in line_items:
+        db.add(models.PaymentLineItem(
+            payment_transaction_id=tx_success.id,
+            product_id=li["product_id"],
+            product_name=li["product_name"],
+            quantity=li["quantity"],
+            unit_price=li["unit_price"],
+            subtotal=li["subtotal"],
+        ))
+    db.commit()
 
     # 결제로 잔액이 바뀌었으므로 관리자 대시보드와 결제한 회원 본인 화면을 갱신
     await notify_admins(["users", "stats"])
@@ -720,75 +751,6 @@ def get_payment_transactions(
         res.user_name = user.name if user else "Unknown"
         result.append(res)
     return result
-
-# ================= TOSS & KAKAOPAY DEEPLINK APIS =================
-
-class DeeplinkRequest(schemas.BaseModel):
-    user_id: int
-    amount: int = schemas.Field(gt=0)
-    provider: str  # TOSS, KAKAOPAY
-
-@app.post("/api/payments/deeplink")
-def create_pay_deeplink(req: DeeplinkRequest, db: Session = Depends(get_db)):
-    """
-    토스 / 카카오페이 1초 간편 송금 트리거 딥링크 생성 API
-    """
-    user = db.query(models.User).filter(models.User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
-
-    target_acc = CHURCH_ACCOUNT_NUMBER
-    memo = f"소망페이_{user.name}"
-
-    if req.provider.upper() == "TOSS":
-        # 토스 앱 송금 딥링크 (supertoss://send)
-        deeplink = f"supertoss://send?bank={CHURCH_BANK_NAME}&account={target_acc}&amount={req.amount}&msg={memo}"
-        fallback_web = f"https://toss.me/somangpay/{req.amount}"
-        app_name = "토스 (Toss)"
-    elif req.provider.upper() == "KAKAOPAY":
-        # 카카오페이 송금 딥링크 (kakaotalk://kakaopay)
-        deeplink = f"kakaotalk://kakaopay/money/to/qr?amount={req.amount}"
-        fallback_web = f"https://qr.kakaopay.com/somangpay?amount={req.amount}"
-        app_name = "카카오페이 (KakaoPay)"
-    else:
-        raise HTTPException(status_code=400, detail="지원하지 않는 결제 수단입니다.")
-
-    return {
-        "success": True,
-        "provider": req.provider,
-        "app_name": app_name,
-        "amount": req.amount,
-        "user_name": user.name,
-        "deeplink_url": deeplink,
-        "fallback_url": fallback_web,
-        "message": f"{app_name} 앱으로 이동합니다. 송금을 승인하시면 즉시 크레딧이 충전됩니다."
-    }
-
-@app.post("/api/payments/deeplink-confirm")
-def confirm_deeplink_payment(req: DeeplinkRequest, db: Session = Depends(get_db)):
-    """
-    토스/카카오페이 송금 승인 후 소망페이 크레딧 즉시 자동 충전 API
-    """
-    user = db.query(models.User).filter(models.User.id == req.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
-
-    user.credit_balance += req.amount
-
-    db.add(models.DepositHistory(
-        user_id=user.id,
-        amount=req.amount,
-        deposit_type=f"{req.provider.upper()}_DEEPLINK",
-        memo=f"{req.provider.upper()} 앱 딥링크 간편 충전 완료"
-    ))
-    db.commit()
-    db.refresh(user)
-
-    return {
-        "success": True,
-        "message": f"🎉 {req.provider} 송금이 완료되어 {user.name}님 계정에 {req.amount:,}원이 1초 만에 자동 충전되었습니다!",
-        "new_balance": user.credit_balance
-    }
 
 # ================= 계좌이체 충전 신청 (회원) =================
 
@@ -1090,8 +1052,6 @@ async def ws_user(websocket: WebSocket, token: str = Query(...), db: Session = D
 
 # ================= KIOSK DEVICE PERSISTENCE APIS =================
 
-import json
-
 @app.post("/api/kiosk/device/sync")
 def sync_kiosk_device(req: dict = Body(...), db: Session = Depends(get_db)):
     """단말기 접속 시 UUID 자동 프로비저닝 및 가맹점/기본결제 설정 동기화 API"""
@@ -1184,3 +1144,82 @@ def get_kiosk_device(device_uuid: str, db: Session = Depends(get_db)):
         "allow_camera_reader_concurrent": device.allow_camera_reader_concurrent,
         "updated_at": device.updated_at
     }
+
+# ================= 관리자 - 키오스크 관리 =================
+# 메뉴별 매출 집계는 PaymentLineItem(이 기능 도입 이후의 결제 건)만 대상으로 한다 -
+# product_details는 자유 텍스트라 소급 집계가 불가능하다.
+
+def _kiosk_sales_for(db: Session, device_id: int, start_utc: Optional[datetime.datetime] = None):
+    from sqlalchemy import func
+
+    query = db.query(
+        models.PaymentLineItem.product_id,
+        models.PaymentLineItem.product_name,
+        func.sum(models.PaymentLineItem.quantity),
+        func.sum(models.PaymentLineItem.subtotal),
+    ).join(
+        models.PaymentTransaction, models.PaymentTransaction.id == models.PaymentLineItem.payment_transaction_id
+    ).filter(
+        models.PaymentTransaction.kiosk_device_id == device_id,
+        models.PaymentTransaction.status == "SUCCESS",
+    )
+    if start_utc:
+        query = query.filter(models.PaymentTransaction.created_at >= start_utc)
+    rows = query.group_by(models.PaymentLineItem.product_id, models.PaymentLineItem.product_name).all()
+    return [
+        schemas.KioskProductSales(product_id=pid, product_name=name, quantity=int(qty), amount=int(amount))
+        for pid, name, qty, amount in rows
+    ]
+
+@app.get("/api/admin/kiosks", response_model=List[schemas.AdminKioskResponse])
+def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    devices = db.query(models.KioskDevice).order_by(models.KioskDevice.id.asc()).all()
+    period_starts = _kst_period_starts_utc()
+
+    result = []
+    for device in devices:
+        merchant = db.query(models.Merchant).filter(models.Merchant.id == device.merchant_id).first() if device.merchant_id else None
+        assigned_list = json.loads(device.assigned_products) if device.assigned_products else []
+        result.append(schemas.AdminKioskResponse(
+            id=device.id,
+            device_uuid=device.device_uuid,
+            device_name=device.device_name,
+            merchant_id=device.merchant_id,
+            merchant_name=merchant.merchant_name if merchant else None,
+            assigned_products=assigned_list,
+            default_product_id=device.default_product_id,
+            default_quantity=device.default_quantity,
+            updated_at=device.updated_at,
+            sales=schemas.KioskSalesSummary(
+                today=_kiosk_sales_for(db, device.id, period_starts["today"]),
+                this_month=_kiosk_sales_for(db, device.id, period_starts["this_month"]),
+                all_time=_kiosk_sales_for(db, device.id),
+            ),
+        ))
+    return result
+
+@app.put("/api/admin/kiosks/{device_id}")
+async def admin_update_kiosk(
+    device_id: int,
+    req: schemas.KioskUpdateRequest,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 화면에서 키오스크에 노출할 메뉴(assigned_products) 및 기본 결제 설정을 변경한다."""
+    device = db.query(models.KioskDevice).filter(models.KioskDevice.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="키오스크를 찾을 수 없습니다.")
+
+    if req.device_name is not None:
+        device.device_name = req.device_name
+    if req.assigned_products is not None:
+        device.assigned_products = json.dumps(req.assigned_products)
+    if req.default_product_id is not None:
+        device.default_product_id = req.default_product_id
+    if req.default_quantity is not None:
+        device.default_quantity = req.default_quantity
+
+    db.commit()
+    db.refresh(device)
+    await notify_admins(["stats"])
+    return {"success": True, "message": "키오스크 설정을 저장했습니다."}

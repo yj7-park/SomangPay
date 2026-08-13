@@ -13,8 +13,8 @@ class User(Base):
     phone = Column(String(20), unique=True, nullable=True, index=True) # 로그인 ID (하이픈 없는 숫자로 정규화해서 저장)
     role = Column(String(20), default="USER") # USER, ADMIN, MERCHANT
     user_type = Column(String(20), default="GENERAL") # GENERAL, SENIOR
-    bank_name = Column(String(50), nullable=True) # 참고용 - 토스/카카오 딥링크 송금 화면에만 쓰임, 입금 매칭에는 미사용
-    account_number = Column(String(50), nullable=True) # 참고용 - 토스/카카오 딥링크 송금 화면에만 쓰임, 입금 매칭에는 미사용
+    bank_name = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)
+    account_number = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)
     credit_balance = Column(Integer, default=0, nullable=False)
     password_hash = Column(String(200), default="1234", nullable=True) # 기본 비밀번호 1234
     status = Column(String(20), default="ACTIVE") # ACTIVE, SUSPENDED
@@ -72,7 +72,7 @@ class DepositHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)
-    deposit_type = Column(String(30), nullable=False) # ADMIN_MANUAL, BANK_TRANSFER, TOSS_DEEPLINK, KAKAOPAY_DEEPLINK
+    deposit_type = Column(String(30), nullable=False) # ADMIN_MANUAL, BANK_TRANSFER (과거 데이터에 TOSS_DEEPLINK/KAKAOPAY_DEEPLINK가 남아 있을 수 있음)
     transaction_id = Column(String(100), nullable=True, index=True)
     admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     memo = Column(String(200), nullable=True)
@@ -134,7 +134,8 @@ class PaymentTransaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     card_id = Column(Integer, ForeignKey("nfc_cards.id"), nullable=True)
     merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True)
-    product_details = Column(Text, nullable=True) # JSON String for items & quantities
+    kiosk_device_id = Column(Integer, ForeignKey("kiosk_devices.id"), nullable=True) # 어느 단말기에서 결제됐는지 - 키오스크별 메뉴 매출 집계에 사용
+    product_details = Column(Text, nullable=True) # 사람이 읽는 요약 텍스트(예: "김밥 x2 (3,000원)") - 집계는 PaymentLineItem을 사용
     amount = Column(Integer, nullable=False)
     balance_after = Column(Integer, nullable=False)
     status = Column(String(20), default="SUCCESS") # SUCCESS, FAILED
@@ -142,3 +143,16 @@ class PaymentTransaction(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User", back_populates="payments")
+
+class PaymentLineItem(Base):
+    """결제 1건에 포함된 메뉴별 상세 - 메뉴별/키오스크별 매출 집계용 (product_details는 텍스트 요약이라 집계 불가).
+    이 테이블 도입 이전 결제 건에는 라인아이템이 없으므로, 집계는 이후 결제부터만 반영된다."""
+    __tablename__ = "payment_transaction_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_transaction_id = Column(Integer, ForeignKey("payment_transactions.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    product_name = Column(String(100), nullable=False) # 결제 시점 이름 스냅샷 (이후 메뉴명이 바뀌어도 이력은 보존)
+    quantity = Column(Integer, nullable=False)
+    unit_price = Column(Integer, nullable=False)
+    subtotal = Column(Integer, nullable=False)

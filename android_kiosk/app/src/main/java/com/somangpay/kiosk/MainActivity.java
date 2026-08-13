@@ -59,6 +59,21 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         return true;
     }
 
+    // BankNotificationListener.onNotificationPosted()에서 호출 - deliverSmsToWebIfAlive와 동일한 패턴.
+    static boolean deliverNotificationToWebIfAlive(String packageName, String title, String text) {
+        MainActivity activity = currentInstance != null ? currentInstance.get() : null;
+        if (activity == null || activity.webView == null || activity.mainHandler == null) return false;
+        final String safePackage = packageName == null ? "" : packageName;
+        final String safeTitle = title == null ? "" : title;
+        activity.mainHandler.post(() -> activity.webView.evaluateJavascript(
+                "window.onNotificationReceived && window.onNotificationReceived("
+                        + org.json.JSONObject.quote(safePackage) + ","
+                        + org.json.JSONObject.quote(safeTitle) + ","
+                        + org.json.JSONObject.quote(text) + ");",
+                null));
+        return true;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -160,6 +175,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             }
             mainHandler.postDelayed(
                     () -> SmsReceiver.drainPendingSmsQueue(this, MainActivity::deliverSmsToWebIfAlive), 3000);
+
+            // 4. 입금 알림 자동감지(2번째 경로) - BankNotificationListener. "알림 접근" 권한은
+            // RECEIVE_SMS와 달리 requestPermissions()로 팝업을 띄울 수 없어 여기서 자동 요청하지
+            // 않는다 - 웹 UI(설정 탭)가 isNotificationAccessGranted()로 현재 상태를 보여주고,
+            // 꺼져있으면 openNotificationAccessSettings()로 관리자가 직접 설정 화면에서 켜게 한다.
+            mainHandler.postDelayed(
+                    () -> BankNotificationListener.drainPendingNotificationQueue(
+                            this, MainActivity::deliverNotificationToWebIfAlive), 3000);
         }
 
         // TTS 엔진 초기화
@@ -312,6 +335,23 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
 
     void setAutoUpdateEnabled(boolean enabled) {
         updateManager.setAutoUpdateEnabled(enabled);
+    }
+
+    // 입금 알림 자동감지(BankNotificationListener)용 "알림 접근" 권한 상태 조회/설정화면 열기 -
+    // 웹 UI(설정 탭)의 상태 표시/버튼이 KioskWebAppInterface를 통해 호출한다.
+    boolean isNotificationAccessGranted() {
+        String enabledListeners = android.provider.Settings.Secure.getString(
+                getContentResolver(), "enabled_notification_listeners");
+        return enabledListeners != null && enabledListeners.contains(getPackageName());
+    }
+
+    void openNotificationAccessSettings() {
+        try {
+            startActivity(new android.content.Intent(
+                    android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+        } catch (Exception e) {
+            Log.e(TAG, "알림 접근 설정 화면 열기 실패: " + e.getMessage());
+        }
     }
 
     // JS의 화면 방향 전환 요청 처리 - Screen Orientation API의 lock()은 전체화면(Fullscreen API) 상태가
@@ -583,6 +623,16 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public void setAutoUpdateEnabled(boolean enabled) {
         activity.setAutoUpdateEnabled(enabled);
+    }
+
+    @android.webkit.JavascriptInterface
+    public boolean isNotificationAccessGranted() {
+        return activity.isNotificationAccessGranted();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void openNotificationAccessSettings() {
+        activity.runOnUiThread(() -> activity.openNotificationAccessSettings());
     }
 
     @android.webkit.JavascriptInterface

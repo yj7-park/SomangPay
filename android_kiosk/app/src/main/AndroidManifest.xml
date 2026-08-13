@@ -58,6 +58,22 @@
             </intent-filter>
         </receiver>
 
+        <!-- 입금 알림 자동감지의 두 번째 경로(BankNotificationListener, 관리자 앱 전용 -
+             BuildConfig.SMS_DETECT_ENABLED로 onNotificationPosted 시작부에서 게이팅).
+             RCS/은행 앱 자체 푸시는 SMS_RECEIVED 브로드캐스트가 발생하지 않아 SmsReceiver로는
+             못 잡으므로, 발신 경로와 무관하게 기기에 뜨는 모든 알림을 볼 수 있는
+             NotificationListenerService로 그 빈틈을 메운다. RECEIVE_SMS와 달리 이 권한은
+             requestPermissions()로 팝업을 띄울 수 없고, 사용자가 설정 > 알림 접근 화면에서
+             직접 켜야 한다 - MainActivity.openNotificationAccessSettings()가 그 화면을 연다. -->
+        <service
+            android:name=".BankNotificationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- 다운로드한 업데이트 APK 파일을 file:// 대신 content:// URI로 시스템 설치
              화면(PackageInstaller)에 안전하게 넘기기 위한 FileProvider - 세 플레이버가
              applicationId만 다르므로 authorities도 매니페스트 플레이스홀더로 함께 갈린다. -->
