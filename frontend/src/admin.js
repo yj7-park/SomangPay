@@ -39,6 +39,23 @@ function escapeHtml(str) {
   }[ch]));
 }
 
+// 표에서 "등록일시/신청일시" 칸이 한 줄로 길게 나오면 모바일 폭을 다 잡아먹어 스크롤이
+// 생긴다 - 날짜/시간을 두 줄로 나눠 칸 폭을 줄인다.
+function formatDateTimeTwoLine(dateStr) {
+  const d = new Date(dateStr);
+  return `<div style="white-space: nowrap;">${d.toLocaleDateString()}</div>` +
+    `<div style="white-space: nowrap; color: var(--text-muted); font-size: 0.85em;">${d.toLocaleTimeString()}</div>`;
+}
+
+// 입금자명/회원명이 길면(동명이인 구분용으로 "홍길동B" 이상 붙이는 경우 등) 표 폭을 넓혀버려서
+// 5자까지만 그대로 보여주고, 그보다 길면 4자+"..."로 줄인다. 전체 이름은 title 속성으로 유지해
+// 길게 눌러/마우스 올려서 확인할 수 있다.
+function renderTruncatedName(name) {
+  const safe = name || "";
+  const display = safe.length <= 5 ? safe : `${safe.slice(0, 4)}...`;
+  return `<span title="${escapeHtml(safe)}">${escapeHtml(display)}</span>`;
+}
+
 let users = [];
 let products = [];
 let cards = [];
@@ -1166,8 +1183,8 @@ function renderRechargeQueueTable() {
          <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${r.id})">반려</button>`
       : `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
     tr.innerHTML = `
-      <td>${new Date(r.created_at).toLocaleString()}</td>
-      <td><strong>${r.user_name}</strong></td>
+      <td>${formatDateTimeTwoLine(r.created_at)}</td>
+      <td><strong>${renderTruncatedName(r.user_name)}</strong></td>
       <td style="color: var(--accent-emerald); font-weight: bold;">${r.requested_amount.toLocaleString()}원</td>
       <td><span class="activity-status ${RECHARGE_STATUS_CLASS[r.status] || 'status-pending'}">${RECHARGE_STATUS_LABEL[r.status] || r.status}</span></td>
       <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">${actions}</td>
@@ -1253,8 +1270,8 @@ function renderBankTransactionsTable() {
       ? `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${t.id})">삭제</button>`
       : `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
     tr.innerHTML = `
-      <td>${new Date(t.created_at).toLocaleString()}</td>
-      <td><strong>${t.depositor_name}</strong></td>
+      <td>${formatDateTimeTwoLine(t.created_at)}</td>
+      <td><strong>${renderTruncatedName(t.depositor_name)}</strong></td>
       <td style="color: var(--accent-emerald); font-weight: bold;">${t.amount.toLocaleString()}원</td>
       <td><span class="activity-status ${isUnmatched ? 'status-pending' : 'status-done'}">${isUnmatched ? '대기' : '완료'}</span></td>
       <td>${actions}</td>

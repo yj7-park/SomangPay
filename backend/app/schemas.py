@@ -1,6 +1,20 @@
-from typing import Optional, List
-from pydantic import BaseModel, Field
-from datetime import datetime
+from typing import Optional, List, Annotated
+from pydantic import BaseModel, Field, PlainSerializer
+from datetime import datetime, timezone
+
+# DB의 시각 컬럼은 전부 datetime.utcnow() 기준 naive UTC라, 그대로 JSON으로 내보내면
+# 타임존 표기가 없는 "2026-08-13T04:27:22" 같은 문자열이 된다. 프론트엔드의 new Date(...)는
+# 오프셋이 없는 ISO 문자열을 "로컬 시각"으로 해석해버려서, 실제로는 UTC인 값을 그대로
+# 한국 시각인 것처럼 표시하는 버그가 생긴다(9시간 차이 - 관리자 대시보드에서 확인됨).
+# naive datetime을 UTC로 간주해 응답 시에만 'Z' 오프셋을 붙여서, 프론트엔드가 항상
+# 올바르게 로컬(한국) 시간으로 변환해 표시하도록 한다. DB/내부 로직에는 영향 없음
+# (when_used="json" - JSON 직렬화 시에만 적용).
+def _serialize_utc_datetime(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+UTCDatetime = Annotated[datetime, PlainSerializer(_serialize_utc_datetime, return_type=str, when_used="json")]
 
 # User Schemas
 class UserBase(BaseModel):
@@ -46,7 +60,7 @@ class UserResponse(UserBase):
     id: int
     credit_balance: int
     status: str
-    created_at: datetime
+    created_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -79,7 +93,7 @@ class KioskDeviceResponse(BaseModel):
     default_product_id: Optional[int] = None
     default_quantity: Optional[int] = 1
     allow_camera_reader_concurrent: Optional[bool] = False
-    updated_at: datetime
+    updated_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -106,7 +120,7 @@ class AdminKioskResponse(BaseModel):
     assigned_products: List[int] = []
     default_product_id: Optional[int] = None
     default_quantity: Optional[int] = 1
-    updated_at: datetime
+    updated_at: UTCDatetime
     sales: KioskSalesSummary
 
 class KioskUpdateRequest(BaseModel):
@@ -129,7 +143,7 @@ class NFCCardResponse(BaseModel):
     card_type: Optional[str] = "NFC"
     user_id: int
     user_name: Optional[str] = None
-    issued_at: datetime
+    issued_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -173,7 +187,7 @@ class PaymentResponse(BaseModel):
     balance_after: Optional[int] = 0
     status: str # SUCCESS, CONFIRM_REQUIRED, FAILED
     message: str
-    created_at: Optional[datetime] = None
+    created_at: Optional[UTCDatetime] = None
 
 class PaymentTransactionResponse(BaseModel):
     id: int
@@ -184,7 +198,7 @@ class PaymentTransactionResponse(BaseModel):
     balance_after: int
     status: str
     product_details: Optional[str] = None
-    created_at: datetime
+    created_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -198,7 +212,7 @@ class DepositHistoryResponse(BaseModel):
     deposit_type: str
     transaction_id: Optional[str] = None
     memo: Optional[str]
-    created_at: datetime
+    created_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -216,8 +230,8 @@ class RechargeRequestResponse(BaseModel):
     status: str
     matched_bank_transaction_id: Optional[int] = None
     memo: Optional[str] = None
-    created_at: datetime
-    resolved_at: Optional[datetime] = None
+    created_at: UTCDatetime
+    resolved_at: Optional[UTCDatetime] = None
 
     class Config:
         from_attributes = True
@@ -251,12 +265,12 @@ class BankTransactionCreate(BaseModel):
 class BankTransactionResponse(BaseModel):
     id: int
     external_txn_id: str
-    transaction_at: datetime
+    transaction_at: UTCDatetime
     amount: int
     depositor_name: str
     status: str
     matched_user_id: Optional[int] = None
-    created_at: datetime
+    created_at: UTCDatetime
 
     class Config:
         from_attributes = True
