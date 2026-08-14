@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from sqlalchemy import Column, Integer, String, BigInteger, Boolean, DateTime, ForeignKey, Text, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, BigInteger, Boolean, Date, DateTime, ForeignKey, Text, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -13,6 +13,7 @@ class User(Base):
     phone = Column(String(20), unique=True, nullable=True, index=True) # 로그인 ID (하이픈 없는 숫자로 정규화해서 저장)
     role = Column(String(20), default="USER") # USER, ADMIN, MERCHANT
     user_type = Column(String(20), default="GENERAL") # GENERAL, SENIOR
+    birth_date = Column(Date, nullable=True) # 선택 입력 - 시니어 할인 등 참고용, 로그인/매칭에는 미사용
     bank_name = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)
     account_number = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)
     credit_balance = Column(Integer, default=0, nullable=False)

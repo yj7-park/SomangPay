@@ -1,6 +1,6 @@
 from typing import Optional, List, Annotated
 from pydantic import BaseModel, Field, PlainSerializer
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 
 # DB의 시각 컬럼은 전부 datetime.utcnow() 기준 naive UTC라, 그대로 JSON으로 내보내면
 # 타임존 표기가 없는 "2026-08-13T04:27:22" 같은 문자열이 된다. 프론트엔드의 new Date(...)는
@@ -23,6 +23,7 @@ class UserBase(BaseModel):
     phone: Optional[str] = None
     role: str = "USER" # USER, ADMIN, MERCHANT
     user_type: str = "GENERAL" # GENERAL, SENIOR
+    birth_date: Optional[date] = None
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
 
@@ -31,6 +32,7 @@ class UserProxyCreate(BaseModel):
     name: str
     phone: str
     user_type: str = "GENERAL" # GENERAL, SENIOR
+    birth_date: Optional[date] = None
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     initial_credit: int = Field(default=0, ge=0)
@@ -44,10 +46,13 @@ class UserLoginRequest(BaseModel):
 
 class UserAdminUpdateInfo(BaseModel):
     """관리자가 회원 정보를 수정할 때 쓰는 스키마. new_password는 회원이 비밀번호를
-    잊어버렸을 때 관리자가 초기화해주는 용도."""
+    잊어버렸을 때 관리자가 초기화해주는 용도. birth_date는 다른 필드와 달리 선택 항목
+    자체가 값이라 None도 유효한 "지움" 의미이므로(주석 있는 admin_update_user 참고),
+    다른 필드처럼 "생략하면 안 바꿈"이 아니라 항상 그대로 반영한다."""
     name: Optional[str] = None
     phone: Optional[str] = None
     user_type: Optional[str] = None
+    birth_date: Optional[date] = None
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     new_password: Optional[str] = None

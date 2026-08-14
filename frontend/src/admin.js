@@ -18,6 +18,7 @@ const ICON_SVGS = {
   lock: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
   card: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>',
   user: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>',
+  users: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="7.5" r="3.2"/><path d="M2.5 20c1-3.5 3.4-5.4 6-5.4s5 1.9 6 5.4"/><circle cx="17" cy="8.2" r="2.5"/><path d="M15.3 11.9c2.2.4 3.9 2.1 4.7 4.9"/></svg>',
   refresh: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.3L3 16"/><path d="M3 21v-5h5"/></svg>',
 };
 function icon(name) {
@@ -64,6 +65,26 @@ let rechargeQueue = [];
 let bankTransactions = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
+
+// 충전함(Inbox) 두 목록의 무한 스크롤 페이지 크기/현재 표시 개수.
+const INBOX_PAGE_SIZE = 15;
+let bankTxnLimit = INBOX_PAGE_SIZE;
+let rechargeQueueLimit = INBOX_PAGE_SIZE;
+
+// 정해진 높이 영역(.table-wrap 등) 안에서 스크롤이 바닥 80px 이내로 들어오면 다음 페이지를
+// 이어서 그리는 공용 헬퍼 - 홈 대시보드 활동 피드, 충전함의 두 목록이 함께 쓴다.
+function wireInfiniteScroll(scrollElId, { pageSize, getLimit, setLimit, getTotal, onGrow }) {
+  const el = document.getElementById(scrollElId);
+  if (!el || el.dataset.scrollWired) return;
+  el.dataset.scrollWired = "1";
+  el.addEventListener("scroll", () => {
+    if (getLimit() >= getTotal()) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+      setLimit(getLimit() + pageSize);
+      onGrow();
+    }
+  });
+}
 
 // 요청 진행 중 버튼을 비활성화해 두 번 눌러서 중복 충전/중복 등록되는 걸 막는다.
 async function withButtonLock(btn, fn) {
@@ -154,6 +175,15 @@ function formatPhoneInput(input) {
 
 document.addEventListener("DOMContentLoaded", () => {
   hydrateIconPlaceholders();
+  updateFixedViewLayoutMetrics(); // PIN 인증 전에도 --header-h/뷰 높이를 미리 맞춰 둔다
+
+  // APK 다운로드 링크는 웹 브라우저에서만 의미가 있다 - 이미 설치된 네이티브 앱
+  // 안(AndroidInterface 있음)에서는 굳이 보여줄 필요가 없어 숨긴다.
+  if (window.AndroidInterface) {
+    const downloadSection = document.getElementById("app-download-links");
+    if (downloadSection) downloadSection.style.display = "none";
+  }
+
   const savedToken = sessionStorage.getItem("admin_token");
   if (savedToken && sessionStorage.getItem("admin_auth") === "true") {
     adminToken = savedToken;
@@ -202,6 +232,7 @@ async function submitAdminPin() {
 }
 
 function initAdminDashboard() {
+  updateFixedViewLayoutMetrics(); // 첫 로드 시 기본 활성 뷰(홈)는 switchAdminView를 안 거치므로 직접 호출
   loadAdminUsers();
   loadAdminProducts();
   loadDepositHistories();
@@ -276,11 +307,59 @@ function switchAdminView(viewName) {
     document.querySelectorAll(".admin-tab-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === viewName);
     });
-    if (viewName === "search") renderMemberFeed();
-    if (viewName === "home") { activityFeedLimit = ACTIVITY_PAGE_SIZE; renderHomeActivityFeed(); }
+    if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
+    if (viewName === "home") { activityFeedLimit = ACTIVITY_PAGE_SIZE; renderHomeActivityFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") renderKioskList();
+    if (viewName === "inbox") {
+      bankTxnLimit = INBOX_PAGE_SIZE;
+      rechargeQueueLimit = INBOX_PAGE_SIZE;
+      updateFixedViewLayoutMetrics();
+      renderBankTransactionsTable();
+      renderRechargeQueueTable();
+    }
   }
 }
+
+// 홈/회원 관리/충전함 탭 공용: "헤더/하단 탭바를 제외한 나머지 공간"만 차지하고 그 안에서만
+// 스크롤되는 레이아웃(style.css의 #admin-view-*.active)에 필요한 실제 렌더된 높이를 잰다.
+// 뷰가 display:none이면 getBoundingClientRect가 0을 주므로 활성 상태인 뷰만 계산한다.
+//
+// 하단 여백은 탭바 높이를 따로 재지 않고 .admin-main의 padding-bottom을 그대로 쓴다 -
+// 그 값 자체가 이미 "모바일은 하단 고정 탭바에 안 가리게 5.5rem, 데스크톱(>=900px)은
+// 탭바가 왼쪽 사이드바로 바뀌어 1.5rem"로 튜닝되어 있어(style.css 참고), 탭바 높이를 따로
+// 재서 빼면 이 padding-bottom과 이중으로 겹쳐 계산되어 실제로는 페이지가 그만큼 더 길어져
+// 바깥 스크롤이 살짝 생기는 문제가 있었다(테스트 렌더로 확인).
+const FIXED_HEIGHT_VIEWS = [
+  { id: "admin-view-home", cssVar: "--home-view-h" },
+  { id: "admin-view-search", cssVar: "--search-view-h" },
+  { id: "admin-view-inbox", cssVar: "--inbox-view-h" },
+];
+
+function updateFixedViewLayoutMetrics() {
+  // .app-header는 .admin-shell 바깥의 형제 요소라 style.css가 --header-h로 실제 높이를
+  // 받아써야 .admin-shell의 min-height(고정 헤더 아래 남은 전체 화면 높이)가 정확해진다 -
+  // 하드코딩된 추정치(60px)는 safe-area-inset-top이 있는 기기 등에서 어긋나 아래 admin-main이
+  // (flex:1로) 필요 이상 늘어나 바깥 스크롤이 생기는 원인이었다.
+  const header = document.querySelector(".app-header");
+  if (header) {
+    document.documentElement.style.setProperty("--header-h", `${header.getBoundingClientRect().height}px`);
+  }
+
+  const main = document.querySelector(".admin-main");
+  const mainPaddingBottom = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+  FIXED_HEIGHT_VIEWS.forEach(({ id, cssVar }) => {
+    const view = document.getElementById(id);
+    if (!view || !view.classList.contains("active")) return;
+    const top = view.getBoundingClientRect().top;
+    const available = Math.max(280, window.innerHeight - top - mainPaddingBottom);
+    view.style.setProperty(cssVar, `${available}px`);
+  });
+}
+
+window.addEventListener("resize", () => {
+  clearTimeout(window._fixedViewLayoutResizeTimer);
+  window._fixedViewLayoutResizeTimer = setTimeout(updateFixedViewLayoutMetrics, 150);
+});
 
 let adminScanMode = "NFC";
 let adminCameraScanning = false;
@@ -320,7 +399,30 @@ function switchAdminScanMode(mode) {
     nfcBtn.style.color = "#fff";
     qrView.style.display = "block";
     nfcView.style.display = "none";
+
+    const nativePanel = document.getElementById("admin-qr-native-panel");
+    const webPanel = document.getElementById("admin-qr-web-panel");
+    if (hasNativeQrBridge()) {
+      // http로 접속하는 관리자/회원 앱은 비보안 컨텍스트라 브라우저 getUserMedia(카메라)가
+      // OS 권한을 이미 줬어도 아예 막힌다 - 대신 네이티브 카메라 액티비티를 띄운다
+      // (window.onAndroidQrScanned로 결과가 돌아옴). "카메라 켜기" 버튼 없이 QR 모드로
+      // 전환하는 즉시 카메라가 뜨게 한다.
+      if (nativePanel) nativePanel.style.display = "block";
+      if (webPanel) webPanel.style.display = "none";
+      window.AndroidInterface.startQrScan();
+    } else {
+      if (nativePanel) nativePanel.style.display = "none";
+      if (webPanel) webPanel.style.display = "block";
+      // "카메라 켜기" 버튼을 따로 누르지 않아도 QR 모드로 전환하는 즉시 카메라가 켜지게 한다.
+      if (!adminCameraScanning) startAdminCameraScanner();
+    }
   }
+}
+
+// 관리자 앱 안(AndroidInterface에 startQrScan이 있는 경우)인지 판별 - 일반 브라우저는
+// 이 메서드 자체가 없으므로 기존 getUserMedia 경로를 그대로 쓴다.
+function hasNativeQrBridge() {
+  return !!(window.AndroidInterface && typeof window.AndroidInterface.startQrScan === "function");
 }
 
 let adminCheckTimeout = null;
@@ -369,6 +471,34 @@ function triggerDetectionFeedback() {
       check.style.display = "none";
     }, 2000);
   }
+
+  maybeAutoConfirmDetection();
+}
+
+// ---------------- 자동 식별 (검색 모드에서 스캔 즉시 "검색하기"를 누른 것처럼 동작) ----------------
+// 단말기(브라우저)별로 켜둔 상태를 기억한다 - 기본값은 켜짐.
+const ADMIN_AUTO_DETECT_KEY = "admin_auto_detect_enabled";
+
+function loadAdminAutoDetectPref() {
+  const toggle = document.getElementById("admin-auto-detect-toggle");
+  if (!toggle) return;
+  const stored = localStorage.getItem(ADMIN_AUTO_DETECT_KEY);
+  toggle.checked = stored === null ? true : stored === "true";
+}
+
+function saveAdminAutoDetectPref(checked) {
+  localStorage.setItem(ADMIN_AUTO_DETECT_KEY, checked ? "true" : "false");
+}
+
+// 회원 찾기(SEARCH) 모드에 한해 - 카드 등록(REGISTER)은 실수로 잘못된 카드를 회원에게
+// 잘못 등록할 위험이 있어 자동 식별 대상에서 제외하고 항상 수동 확인을 받는다.
+function maybeAutoConfirmDetection() {
+  if (scannerMode !== "SEARCH") return;
+  const modal = document.getElementById("card-scanner-modal");
+  if (!modal || !modal.classList.contains("active")) return;
+  const toggle = document.getElementById("admin-auto-detect-toggle");
+  if (!toggle || !toggle.checked) return;
+  handleScannerConfirm();
 }
 
 // kiosk.js의 initWebNFC()와 동일한 판단 순서: Android 네이티브 래퍼(AndroidInterface) 안이면
@@ -463,6 +593,22 @@ window.onKioskReaderError = function (message) {
   currentReaderMode = "NONE";
 };
 
+// 네이티브 QR 스캔(startNativeQrScan) 결과 콜백 - MainActivity.onActivityResult가 호출한다.
+// 함수명을 바꾸면 안 된다.
+window.onAndroidQrScanned = function (text) {
+  const modal = document.getElementById("card-scanner-modal");
+  if (!modal || !modal.classList.contains("active")) return;
+  document.getElementById("admin-card-uid-input").value = text;
+  triggerDetectionFeedback();
+  console.log("⚡ [Android Native App] 네이티브 QR 스캔 성공:", text);
+};
+
+// 네이티브 스캔 화면에서 사용자가 뒤로가기 등으로 취소했을 때 - 별도 처리 없이 "다시 열기"
+// 버튼(admin-qr-native-panel)으로 재시도할 수 있어 여기서는 로그만 남긴다.
+window.onAndroidQrScanCancelled = function () {
+  console.log("ℹ️ [Android Native App] QR 스캔이 취소되었습니다.");
+};
+
 // USB 키보드 에뮬레이션형 리더(드라이버 불필요, 태그 시 UID를 키 입력처럼 전송) 지원.
 // 카드 스캐너 모달이 열려 있을 때만 버퍼링해서, 검색창 등 다른 입력 중에는 간섭하지 않는다.
 window.addEventListener("keydown", (e) => {
@@ -485,18 +631,6 @@ window.addEventListener("keydown", (e) => {
     adminHidTimeout = setTimeout(() => { adminHidBuffer = ""; }, 300);
   }
 });
-
-function triggerSimulatedNfcScan() {
-  const simUid = `CARD_SIM_${Math.floor(1000 + Math.random() * 9000)}`;
-  document.getElementById("admin-card-uid-input").value = simUid;
-  triggerDetectionFeedback();
-}
-
-function triggerSimulatedQrScan() {
-  const simQr = `CHURCH_QR_${Math.floor(10000 + Math.random() * 90000)}`;
-  document.getElementById("admin-card-uid-input").value = simQr;
-  triggerDetectionFeedback();
-}
 
 async function toggleAdminCameraScanner() {
   if (adminCameraScanning) {
@@ -549,7 +683,7 @@ async function startAdminCameraScanner(facingMode) {
     scanAdminQrFrame();
   } catch (err) {
     console.error("Camera access error:", err);
-    await showAlertModal("카메라에 접근할 수 없습니다. 실시간 QR 스캔 시뮬레이션 버튼을 이용해 주세요.");
+    await showAlertModal("카메라에 접근할 수 없습니다. 카메라 권한을 확인하거나 NFC 태깅을 이용해 주세요.");
   }
 }
 
@@ -652,6 +786,9 @@ function openScannerModal(mode, context) {
   const desc = document.getElementById("scanner-modal-desc");
   const confirmBtn = document.getElementById("scanner-confirm-btn");
   document.getElementById("admin-card-uid-input").value = "";
+  loadAdminAutoDetectPref();
+  const autoDetectRow = document.getElementById("admin-auto-detect-row");
+  if (autoDetectRow) autoDetectRow.style.display = mode === "SEARCH" ? "flex" : "none";
 
   if (mode === "SEARCH") {
     title.innerHTML = `${icon("card")} NFC/QR 태그로 회원 찾기`;
@@ -987,6 +1124,7 @@ function renderMemberDetail() {
   statusEl.style.color = isActive ? "var(--accent-emerald)" : "var(--accent-danger)";
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("detail-member-phone").innerText = user.phone || "-";
+  document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
 
   const statusBtn = document.getElementById("detail-status-btn");
   statusBtn.innerText = isActive ? "정지" : "재활성화";
@@ -995,6 +1133,32 @@ function renderMemberDetail() {
 
   renderDetailCardSlots();
   renderDetailHistory();
+}
+
+// 잔액이 남아있어도 삭제는 허용한다(관리자의 명시적 선택). 다만 결제/입금/충전 이력이
+// 있는 회원은 그 기록들이 삭제된 회원을 참조하게 되어 정합성이 깨지므로 백엔드가 거부한다
+// (admin_delete_user 참고) - 그런 회원은 "정지"를 대신 안내받는다.
+async function deleteDetailUser() {
+  const user = users.find(u => u.id === currentDetailUserId);
+  if (!user) return;
+  if (!(await showConfirmModal(`${user.name}님을 정말 삭제하시겠습니까? 되돌릴 수 없습니다.\n(잔액이 남아있어도 삭제됩니다. 단, 결제/입금/충전 이력이 있는 회원은 삭제할 수 없습니다 - 그런 경우 "정지"를 이용하세요.)`))) return;
+
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/users/${currentDetailUserId}`, { method: "DELETE" });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      closeMemberDetail();
+      await loadAdminUsers();
+      await loadStatsSummary();
+      showToast(`✅ ${data.message || "회원을 삭제했습니다."}`);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`삭제 실패: ${data.detail || "오류 발생"}`);
+    }
+  } catch (err) {
+    console.error("deleteDetailUser error:", err);
+    await showAlertModal("서버 연결에 실패했습니다.");
+  }
 }
 
 function renderDetailCardSlots() {
@@ -1176,7 +1340,7 @@ function renderRechargeQueueTable() {
     return;
   }
 
-  rechargeQueue.forEach(r => {
+  rechargeQueue.slice(0, rechargeQueueLimit).forEach(r => {
     const tr = document.createElement("tr");
     const actions = r.status === "PENDING"
       ? `<button class="btn-action btn-emerald" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto;" onclick="approveRechargeRequest(${r.id})">입금 확인, 승인</button>
@@ -1190,6 +1354,14 @@ function renderRechargeQueueTable() {
       <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">${actions}</td>
     `;
     tbody.appendChild(tr);
+  });
+
+  wireInfiniteScroll("admin-recharge-queue-scroll", {
+    pageSize: INBOX_PAGE_SIZE,
+    getLimit: () => rechargeQueueLimit,
+    setLimit: (v) => { rechargeQueueLimit = v; },
+    getTotal: () => rechargeQueue.length,
+    onGrow: renderRechargeQueueTable,
   });
 }
 
@@ -1263,7 +1435,7 @@ function renderBankTransactionsTable() {
     return;
   }
 
-  bankTransactions.forEach(t => {
+  bankTransactions.slice(0, bankTxnLimit).forEach(t => {
     const tr = document.createElement("tr");
     const isUnmatched = t.status === "UNMATCHED";
     const actions = isUnmatched
@@ -1277,6 +1449,14 @@ function renderBankTransactionsTable() {
       <td>${actions}</td>
     `;
     tbody.appendChild(tr);
+  });
+
+  wireInfiniteScroll("admin-bank-transactions-scroll", {
+    pageSize: INBOX_PAGE_SIZE,
+    getLimit: () => bankTxnLimit,
+    setLimit: (v) => { bankTxnLimit = v; },
+    getTotal: () => bankTransactions.length,
+    onGrow: renderBankTransactionsTable,
   });
 }
 
@@ -1362,28 +1542,42 @@ async function submitBankTransaction(btn) {
 //   - BankNotificationListener → window.onNotificationReceived(pkg, title, text)
 //     (SMS/RCS/은행 앱 자체 푸시 등 화면에 뜨는 모든 알림을 잡음 - SmsReceiver의 사각지대를 메움.
 //      "알림 접근" 권한은 사용자가 설정 화면에서 직접 켜야 동작한다.)
-// 여기서 저장된 발신번호 필터(SMS 전용)/정규식(공용)으로 파싱해서 registerBankTransaction()을
-// 그대로 호출한다. 파싱 규칙을 은행 알림 포맷에 맞춰 바꿀 때마다 앱을 다시 빌드/배포할 필요가
-// 없도록 일부러 이 계층(웹)에 둔다.
+// 여기서 저장된 발신번호 필터(SMS 전용)/알림 앱 패키지·제목 필터(PUSH 전용)/정규식(공용)으로
+// 파싱해서 registerBankTransaction()을 그대로 호출한다. 파싱 규칙을 은행 알림 포맷에 맞춰
+// 바꿀 때마다 앱을 다시 빌드/배포할 필요가 없도록 일부러 이 계층(웹)에 둔다.
 //
-// 같은 실제 입금이 두 경로로 동시에 들어올 수 있다(진짜 SMS는 알림창에도 함께 뜬다) - 짧은
-// 시간 안에 같은 입금자명+금액이 다시 감지되면 중복으로 보고 두 번째부터는 등록하지 않는다
-// (isDuplicateDetection).
+// 같은 실제 입금이 두 경로로 동시에 들어올 수 있다(진짜 SMS는 알림창에도 함께 뜬다) - 이름/
+// 금액/날짜/시각/잔액이 모두 같은 조합이 다시 감지되면 중복으로 보고 두 번째부터는 등록하지
+// 않는다 (isDuplicateDetection 참고).
 const SMS_DETECT_SENDER_KEY = "sms_detect_sender";
 const SMS_DETECT_REGEX_KEY = "sms_detect_regex";
+const SMS_DETECT_PUSH_PACKAGE_KEY = "sms_detect_push_package";
+const SMS_DETECT_PUSH_TITLE_KEY = "sms_detect_push_title";
 
 // NH농협 알림 문자(발신 1588-2100) 실제 포맷 기준 기본값 - 예)
 // "농협 입금10,000원\n08/13 12:12 301-****-7807-01 박용준 잔액2,165,746원"
 // 다른 은행이면 관리자가 화면에서 값을 바꾸면 되고, 저장하기 전(로컬스토리지가 비어있는 상태)
 // 에도 이 기본값으로 바로 동작하도록 저장값 조회 시 항상 이 값으로 폴백한다.
 const SMS_DETECT_SENDER_DEFAULT = "1588-2100";
-const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<name>[가-힣]{2,10})\\s*잔액";
+// name/amount 외에 date/time/balance도 이름의 캡처 그룹으로 함께 뽑는다 - 중복 감지 키
+// (buildDetectionKey)가 이 값들을 쓴다. 커스텀 정규식에 이 그룹들이 없어도 에러 없이 그냥
+// undefined로 빠지니(중복 감지가 이름+금액만으로 헐거워질 뿐) 필수는 아니다.
+const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<date>\\d{2}/\\d{2})\\s+(?<time>\\d{2}:\\d{2})[\\s\\S]*?(?<name>[가-힣]{2,10})\\s*잔액(?<balance>[\\d,]+)원";
+// PUSH 경로(알림 접근 권한)는 기기에 뜨는 모든 알림을 다 보므로, 필터가 없으면 카카오톡/브라우저
+// 등 은행과 무관한 알림까지 전부 로그에 쌓여 정작 입금 알림을 찾기 어려워진다 - 삼성 기본 문자
+// 앱으로 오는 NH농협 알림 기준 기본값을 둔다. 두 값 다 비워두면 필터 없이 전체 허용.
+const SMS_DETECT_PUSH_PACKAGE_DEFAULT = "com.samsung.android.messaging";
+const SMS_DETECT_PUSH_TITLE_DEFAULT = "NH농협";
 
 function loadSmsDetectSettings() {
   const senderEl = document.getElementById("sms-detect-sender");
   const regexEl = document.getElementById("sms-detect-regex");
+  const pushPackageEl = document.getElementById("sms-detect-push-package");
+  const pushTitleEl = document.getElementById("sms-detect-push-title");
   if (senderEl) senderEl.value = localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT;
   if (regexEl) regexEl.value = localStorage.getItem(SMS_DETECT_REGEX_KEY) ?? SMS_DETECT_REGEX_DEFAULT;
+  if (pushPackageEl) pushPackageEl.value = localStorage.getItem(SMS_DETECT_PUSH_PACKAGE_KEY) ?? SMS_DETECT_PUSH_PACKAGE_DEFAULT;
+  if (pushTitleEl) pushTitleEl.value = localStorage.getItem(SMS_DETECT_PUSH_TITLE_KEY) ?? SMS_DETECT_PUSH_TITLE_DEFAULT;
   renderSmsLog();
   refreshNotificationAccessStatus();
 }
@@ -1425,6 +1619,8 @@ document.addEventListener("visibilitychange", () => {
 async function saveSmsDetectSettings(btn) {
   const sender = document.getElementById("sms-detect-sender").value.trim();
   const regexStr = document.getElementById("sms-detect-regex").value.trim();
+  const pushPackage = document.getElementById("sms-detect-push-package").value.trim();
+  const pushTitle = document.getElementById("sms-detect-push-title").value.trim();
 
   if (regexStr) {
     try {
@@ -1437,15 +1633,19 @@ async function saveSmsDetectSettings(btn) {
 
   localStorage.setItem(SMS_DETECT_SENDER_KEY, sender);
   localStorage.setItem(SMS_DETECT_REGEX_KEY, regexStr);
+  localStorage.setItem(SMS_DETECT_PUSH_PACKAGE_KEY, pushPackage);
+  localStorage.setItem(SMS_DETECT_PUSH_TITLE_KEY, pushTitle);
   showToast("✅ 문자 자동감지 설정을 저장했습니다.");
 }
 
-// 감지 발신번호/정규식을 기본값으로 되돌린다 - 로컬스토리지에 남아있는 예전 값이 최신
-// 기본값(SMS_DETECT_*_DEFAULT)을 계속 가리는 문제를 화면에서 바로 해결할 수 있게 한다.
+// 감지 발신번호/정규식/알림 필터를 기본값으로 되돌린다 - 로컬스토리지에 남아있는 예전 값이
+// 최신 기본값(SMS_DETECT_*_DEFAULT)을 계속 가리는 문제를 화면에서 바로 해결할 수 있게 한다.
 async function resetSmsDetectSettings() {
   if (!(await showConfirmModal("입금 문자 자동감지 설정을 기본값으로 되돌리시겠습니까?"))) return;
   localStorage.removeItem(SMS_DETECT_SENDER_KEY);
   localStorage.removeItem(SMS_DETECT_REGEX_KEY);
+  localStorage.removeItem(SMS_DETECT_PUSH_PACKAGE_KEY);
+  localStorage.removeItem(SMS_DETECT_PUSH_TITLE_KEY);
   loadSmsDetectSettings();
   showToast("✅ 기본값으로 초기화했습니다.");
 }
@@ -1476,17 +1676,25 @@ function triggerSimulatedNotification(btn) {
 
 // ---------------- 중복 감지 방지 ----------------
 // 같은 실제 입금이 SMS와 푸시 알림 두 경로로 동시에 들어올 수 있다(진짜 SMS는 알림창에도
-// 함께 뜬다) - 짧은 시간 안에 같은 입금자명+금액 조합이 다시 감지되면 이미 처리한 것으로
-// 보고 두 번째부터는 건너뛴다.
-const DEDUP_WINDOW_MS = 30000;
-let recentDetections = []; // [{ key, time }]
+// 함께 뜬다) - 이름+금액만으로는 우연히 같은 사람이 짧은 시간 안에 같은 금액을 두 번 입금하는
+// 정상적인 케이스와 구분이 안 돼서 시간 제한(30초)을 뒀었는데, 그래도 여전히 오탐 가능성이
+// 있었다. 대신 문자/알림 본문에서 이름·금액뿐 아니라 날짜·시각·잔액까지 함께 추출해 그
+// 조합으로 키를 만든다 - 은행 잔액은 거래마다 값이 달라지므로 이 5개가 모두 같다는 건
+// "같은 거래를 SMS/알림 두 경로로 동시에 받은 것"이라고 사실상 확정할 수 있어, 시간 제한
+// 없이 같은 키를 한 번이라도 봤으면 계속 중복으로 처리해도 안전하다(날짜·시각·잔액을 못 뽑는
+// 정규식이면 그만큼 키가 헐거워지므로, 기본 정규식은 이 값들도 캡처하도록 해뒀다 - 아래
+// SMS_DETECT_REGEX_DEFAULT 참고).
+const seenDetectionKeys = new Set();
 
-function isDuplicateDetection(depositorName, amount) {
-  const now = Date.now();
-  recentDetections = recentDetections.filter((d) => now - d.time < DEDUP_WINDOW_MS);
-  const key = `${depositorName}|${amount}`;
-  const isDup = recentDetections.some((d) => d.key === key);
-  if (!isDup) recentDetections.push({ key, time: now });
+function buildDetectionKey(groups) {
+  return [groups.name, groups.amount, groups.date, groups.time, groups.balance]
+    .map((v) => (v ?? "").trim())
+    .join("|");
+}
+
+function isDuplicateDetection(key) {
+  const isDup = seenDetectionKeys.has(key);
+  if (!isDup) seenDetectionKeys.add(key);
   return isDup;
 }
 
@@ -1536,6 +1744,9 @@ function renderSmsLog() {
   const container = document.getElementById("sms-log-list");
   if (!container) return;
   const log = getSmsLog();
+
+  const countEl = document.getElementById("sms-log-count");
+  if (countEl) countEl.textContent = log.length > 0 ? `(${log.length}/${SMS_LOG_MAX}건)` : "";
 
   if (log.length === 0) {
     container.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0; font-size: 0.85rem;">아직 수신된 문자/알림이 없습니다.</p>`;
@@ -1596,10 +1807,10 @@ function processDepositDetection(source, body, originMeta) {
     return;
   }
 
-  if (isDuplicateDetection(depositorName, amount)) {
+  if (isDuplicateDetection(buildDetectionKey(match.groups))) {
     logSmsEvent(Object.assign({}, logBase, {
       outcome: "duplicate",
-      detail: `${depositorName} / ${amount.toLocaleString()}원 - 같은 내용이 최근(${DEDUP_WINDOW_MS / 1000}초 이내)에 이미 처리되어 건너뜀 (SMS/알림 중복 수신)`,
+      detail: `${depositorName} / ${amount.toLocaleString()}원 - 이름·금액·날짜·시각·잔액이 동일한 내용이 이미 처리되어 건너뜀 (SMS/알림 중복 수신)`,
     }));
     return;
   }
@@ -1628,9 +1839,10 @@ window.onSmsReceived = function (sender, body) {
 
 // 네이티브 BankNotificationListener가 알림 감지 시 호출하는 콜백 - SMS_RECEIVED 브로드캐스트가
 // 발생하지 않는 RCS/은행 앱 자체 푸시까지 잡기 위한 두 번째 경로("알림 접근" 권한이 켜져 있어야
-// 호출된다). 발신번호 필터는 SMS 전용이라 여기서는 적용하지 않는다 - 패키지명 필터를 따로 두지
-// 않은 이유는, 정규식이 이미 "입금...원...잔액" 형태로 충분히 구체적이라 오탐 위험이 낮고, 은행
-// 알림이 뜨는 앱(메시지 앱/은행 앱 등)이 기기마다 달라 필터를 두면 오히려 놓치기 쉽기 때문.
+// 호출된다). "알림 접근"은 기기에 뜨는 모든 알림을 다 넘겨주므로(카카오톡/브라우저 등 은행과
+// 무관한 것까지), 발신번호 필터(SMS 전용)와 별개로 패키지명/제목 필터를 둬서 수신 로그가
+// 무관한 알림으로 가득 차 정작 입금 알림을 찾기 어려워지는 걸 막는다. 둘 다 비워두면(기본값을
+// 지우면) 필터 없이 전체 허용 - 정규식만으로 걸러진다.
 window.onNotificationReceived = function (packageName, title, text) {
   if (!isAdminAuthenticated) {
     logSmsEvent({ source: "PUSH", packageName, body: `${title}\n${text}`, outcome: "auth_skip", detail: "관리자 인증 전이라 무시됨" });
@@ -1638,6 +1850,18 @@ window.onNotificationReceived = function (packageName, title, text) {
   }
 
   const body = title ? `${title}\n${text}` : text;
+
+  // 패키지/제목이 다르면 로그도 남기지 않고 조용히 무시한다 - "알림 접근"은 기기에 뜨는
+  // 모든 알림을 다 넘기므로, 걸러지는 쪽까지 다 기록하면 수신 로그가 무관한 알림으로
+  // 뒤덮여 정작 봐야 할 입금 알림 로그를 찾기 어려워진다. 부분 일치(includes)로 걸러내면
+  // 예를 들어 제목을 "NH농협2"로 걸어둔 앱이 필터 "NH농협"에 잘못 걸려 통과해버릴 수 있어
+  // (실제로 확인된 문제) 정확히 일치할 때만 통과시킨다.
+  const filterPackage = (localStorage.getItem(SMS_DETECT_PUSH_PACKAGE_KEY) ?? SMS_DETECT_PUSH_PACKAGE_DEFAULT).trim();
+  if (filterPackage && packageName !== filterPackage) return;
+
+  const filterTitle = (localStorage.getItem(SMS_DETECT_PUSH_TITLE_KEY) ?? SMS_DETECT_PUSH_TITLE_DEFAULT).trim();
+  if (filterTitle && title !== filterTitle) return;
+
   processDepositDetection("PUSH", body, { packageName });
 };
 
@@ -1669,6 +1893,7 @@ async function submitProxyRegister(btn) {
   const name = document.getElementById("reg-name").value.trim();
   const phone = document.getElementById("reg-phone").value.trim();
   const userType = document.getElementById("reg-type").value;
+  const birthDate = document.getElementById("reg-birth-date").value;
   const credit = parseInt(document.getElementById("reg-credit").value) || 0;
 
   if (!name) {
@@ -1689,6 +1914,7 @@ async function submitProxyRegister(btn) {
           name: name,
           phone: phone,
           user_type: userType,
+          birth_date: birthDate || null,
           initial_credit: credit
         })
       });
@@ -1698,6 +1924,7 @@ async function submitProxyRegister(btn) {
         closeProxyRegisterModal();
         document.getElementById("reg-name").value = "";
         document.getElementById("reg-phone").value = "";
+        document.getElementById("reg-birth-date").value = "";
         document.getElementById("reg-credit").value = "0";
         await loadAdminUsers();
         await loadStatsSummary();
@@ -1724,6 +1951,8 @@ function openEditUserModal(userId) {
     `${user.name} (${user.user_type === 'SENIOR' ? '시니어' : '일반'} · 잔액 ${user.credit_balance.toLocaleString()}원)`;
   document.getElementById("edit-user-name").value = user.name || "";
   document.getElementById("edit-user-phone").value = user.phone || "";
+  document.getElementById("edit-user-type").value = user.user_type === "SENIOR" ? "SENIOR" : "GENERAL";
+  document.getElementById("edit-user-birth-date").value = user.birth_date || "";
   document.getElementById("edit-user-password").value = "";
 
   showModal("admin-user-edit-modal");
@@ -1740,6 +1969,8 @@ async function submitUserInfoEdit(btn) {
   if (!editingUserId) return;
   const name = document.getElementById("edit-user-name").value.trim();
   const phone = document.getElementById("edit-user-phone").value.trim();
+  const userType = document.getElementById("edit-user-type").value;
+  const birthDate = document.getElementById("edit-user-birth-date").value; // "" -> 지움
   const newPassword = document.getElementById("edit-user-password").value.trim();
 
   if (!name) {
@@ -1755,6 +1986,8 @@ async function submitUserInfoEdit(btn) {
         body: JSON.stringify({
           name: name,
           phone: phone,
+          user_type: userType,
+          birth_date: birthDate || null,
           new_password: newPassword || null
         })
       });

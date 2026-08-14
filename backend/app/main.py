@@ -264,6 +264,7 @@ async def admin_register_user(
         name=req.name,
         phone=phone,
         user_type=req.user_type,
+        birth_date=req.birth_date,
         bank_name=req.bank_name,
         account_number=req.account_number,
         credit_balance=req.initial_credit,
@@ -313,6 +314,10 @@ async def admin_update_user(
         user.phone = phone
     if req.user_type is not None:
         user.user_type = req.user_type
+    # birth_date는 다른 필드와 달리 "생략하면 안 바꿈"이 아니라 항상 그대로 반영한다 -
+    # 선택 항목이라 비워서 지우는 것 자체가 유효한 수정이라, None을 "생략됨"으로 취급하면
+    # 한 번 입력한 생년월일을 다시 지울 방법이 없어진다.
+    user.birth_date = req.birth_date
     if req.bank_name is not None:
         user.bank_name = req.bank_name
     if req.account_number is not None:
@@ -379,6 +384,37 @@ async def update_user_status(
     await notify_admins(["users"])
     await notify_user(user.id, ["me"])
     return {"success": True, "message": f"{user.name}님의 상태가 {req.status}로 변경되었습니다.", "status": user.status}
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """회원 삭제 - 잔액이 남아있어도(관리자가 명시적으로 삭제를 선택한 것이므로) 삭제를
+    막지 않는다. 다만 결제/입금/충전 이력이 하나라도 있으면 그 기록들이 삭제된 회원을
+    참조하는 FK라 하드 삭제 시 정합성이 깨지므로(레코드가 DB 제약에 걸리거나, 제약이 없는
+    환경에서는 이름을 알 수 없는 유령 참조로 남음) 여기서는 막고 "정지"를 대신 안내한다."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+
+    has_history = (
+        db.query(models.PaymentTransaction).filter(models.PaymentTransaction.user_id == user_id).first() is not None
+        or db.query(models.DepositHistory).filter(models.DepositHistory.user_id == user_id).first() is not None
+        or db.query(models.RechargeRequest).filter(models.RechargeRequest.user_id == user_id).first() is not None
+        or db.query(models.BankTransaction).filter(models.BankTransaction.matched_user_id == user_id).first() is not None
+    )
+    if has_history:
+        raise HTTPException(status_code=400, detail="결제/입금/충전 이력이 있는 회원은 삭제할 수 없습니다. 대신 '정지' 처리를 이용하세요.")
+
+    user_name = user.name
+    db.query(models.NFCCard).filter(models.NFCCard.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
+
+    await notify_admins(["users", "stats"])
+    return {"success": True, "message": f"{user_name}님을 삭제했습니다."}
 
 # ================= NFC/QR 카드 APIs (관리자 전용) =================
 

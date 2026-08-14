@@ -28,7 +28,7 @@
         <span class="tab-icon" data-icon="home"></span><span>홈</span>
       </button>
       <button class="admin-tab-btn" data-view="search" onclick="switchAdminView('search')">
-        <span class="tab-icon" data-icon="search"></span><span>검색</span>
+        <span class="tab-icon" data-icon="users"></span><span>회원 관리</span>
       </button>
       <button class="admin-tab-btn" data-view="inbox" onclick="switchAdminView('inbox')">
         <span class="tab-icon"><span data-icon="bell"></span><span id="inbox-tab-badge" class="admin-tab-badge" style="display:none;">0</span></span><span>충전함</span>
@@ -44,6 +44,8 @@
     <main class="admin-main">
 
       <!-- ================= HOME (대시보드) ================= -->
+      <!-- 통계 카드는 고정, "최근 처리 내역"만 헤더/탭바를 제외한 남은 공간을 차지하며
+           그 안에서만 스크롤된다 (admin.js의 updateFixedViewLayoutMetrics - style.css 참고). -->
       <div id="admin-view-home" class="admin-view active">
         <div class="stat-row-primary">
           <div class="glass-container hero-stat">
@@ -98,7 +100,9 @@
         </div>
       </div>
 
-      <!-- ================= SEARCH (회원 검색) ================= -->
+      <!-- ================= SEARCH (회원 관리) ================= -->
+      <!-- 검색창/스캔 버튼은 고정, 목록만 남은 공간을 차지하며 그 안에서만 스크롤된다
+           (홈 탭과 동일한 패턴 - admin.js의 updateFixedViewLayoutMetrics). -->
       <div id="admin-view-search" class="admin-view">
         <div class="glass-container" style="padding: 1rem; margin-bottom: 1rem;">
           <input type="text" id="member-search-input" class="form-control" placeholder="이름 또는 연락처로 검색" style="margin-bottom: 0.8rem;" oninput="renderMemberFeed()">
@@ -110,13 +114,17 @@
       </div>
 
       <!-- ================= INBOX (충전함) ================= -->
+      <!-- 헤더/하단 탭바를 제외한 영역을 반씩 나눠 위(계좌 입금)/아래(충전 신청)에 배치하고
+           각자 안에서만 스크롤되게 한다 (admin.js의 updateFixedViewLayoutMetrics가 실제 렌더된
+           헤더/탭바 높이를 재서 --inbox-view-h로 넘겨줌 - style.css 참고). 목록이 길어지면
+           표 전체가 아니라 .table-wrap 안에서만 스크롤되고, 스크롤이 바닥에 가까워지면
+           다음 페이지를 이어서 그린다(무한 스크롤 - wireInfiniteScroll). -->
       <div id="admin-view-inbox" class="admin-view">
-        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
-          <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">계좌 입금 목록</h3>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
-            수동 등록 또는 문자 자동감지(설정 탭)로 확인된 입금 전체 내역입니다. "대기"는 아직 충전 신청과 이름+금액이 일치하지 않아 매칭되지 못한 건이고, 회원이 나중에 신청하면 자동으로 매칭되어 "완료"로 바뀝니다.
-          </p>
-          <div style="overflow-x: auto;">
+        <div class="glass-container inbox-half">
+          <div class="inbox-half-header">
+            <h3 style="font-size: 1.05rem; margin: 0;">계좌 입금 목록</h3>
+          </div>
+          <div class="table-wrap" id="admin-bank-transactions-scroll">
             <table class="table-custom">
               <thead>
                 <tr>
@@ -134,12 +142,11 @@
           </div>
         </div>
 
-        <div class="glass-container" style="padding: 1.5rem;">
-          <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">충전 신청 목록</h3>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
-            회원이 제출한 충전 신청 전체 내역입니다. 입금이 자동으로 확인되지 않은 "대기" 건은 통장에서 입금을 확인한 뒤 승인하세요.
-          </p>
-          <div style="overflow-x: auto;">
+        <div class="glass-container inbox-half">
+          <div class="inbox-half-header">
+            <h3 style="font-size: 1.05rem; margin: 0;">충전 신청 목록</h3>
+          </div>
+          <div class="table-wrap" id="admin-recharge-queue-scroll">
             <table class="table-custom">
               <thead>
                 <tr>
@@ -160,13 +167,45 @@
 
       <!-- ================= SETTINGS (설정) ================= -->
       <div id="admin-view-settings" class="admin-view">
+
+        <!-- 앱 버전 · 다운로드 · 화면 전환 (자주 찾는 정보라 최상단 배치) -->
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
+            <h3 style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 0.4rem;">
+              <span data-icon="refresh" style="color: var(--accent-cyan);"></span>앱 버전
+            </h3>
+            <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+          </div>
+
+          <div id="app-download-links" style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">앱 다운로드</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <a href="/SomangPayKiosk.apk?v=15" download="SomangPayKiosk.apk" class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid #6781c0; color: #6781c0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
+                Kiosk APK 다운로드
+              </a>
+              <a href="/SomangPayAdmin.apk?v=15" download="SomangPayAdmin.apk" class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid #6781c0; color: #6781c0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
+                Admin APK 다운로드
+              </a>
+              <a href="/SomangPayUser.apk?v=15" download="SomangPayUser.apk" class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid #6781c0; color: #6781c0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
+                User APK 다운로드
+              </a>
+            </div>
+          </div>
+
+          <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">다른 화면으로 이동</div>
+            <nav class="nav-pills">
+              <a href="kiosk.html" class="nav-item">키오스크</a>
+              <a href="user.html" class="nav-item">회원 PWA</a>
+              <a href="admin.html" class="nav-item active">관리자</a>
+            </nav>
+          </div>
+        </div>
+
         <div class="glass-container" style="padding: 1.5rem; border-color: var(--accent-cyan); margin-bottom: 1.5rem; background: rgba(6,182,212,0.06);">
-          <h2 style="color: var(--accent-cyan); font-size: 1.15rem; margin-bottom: 0.5rem;">
-            계좌이체 입금 확인 등록
+          <h2 style="color: var(--accent-cyan); font-size: 1.15rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span data-icon="bank"></span>계좌이체 입금 확인 등록
           </h2>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-            통장에서 입금을 확인하면 여기에 <strong>입금자명(통장 표시 그대로)</strong>과 금액을 입력해 두세요. 회원이 제출한 충전 신청과 이름+금액이 일치하면 자동으로 충전됩니다. (실제 농협 계좌조회 API 연동 전까지의 임시 입력 방식)
-          </p>
 
           <div class="admin-form-grid admin-form-grid-3">
             <div>
@@ -184,10 +223,9 @@
         </div>
 
         <div class="glass-container" style="padding: 1.5rem;">
-          <h3 style="font-size: 1.05rem; margin-bottom: 0.5rem;">입금 알림 자동감지 설정 (문자 + RCS/푸시 알림)</h3>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem;">
-            은행 입금 알림을 관리자 앱이 직접 인식해서 위 등록을 자동으로 처리합니다. 일반 SMS뿐 아니라 RCS(리치 문자)나 은행 앱 자체 푸시 알림처럼 SMS로 잡히지 않는 알림도 함께 감지합니다(아래 "알림 접근 권한" 필요). 문자를 보낸 발신번호/발신자와, 본문에서 입금자명·금액을 뽑아낼 정규식을 지정하세요 - 이 정규식은 문자/알림 두 경로 모두에 똑같이 적용됩니다. 이름은 <code>(?&lt;name&gt;...)</code>, 금액은 <code>(?&lt;amount&gt;...)</code> 이름의 캡처 그룹으로 표시해야 합니다. 기본값은 NH농협 알림 문자(발신 1588-2100) 포맷 기준이며, 다른 은행이면 아래 값을 실제 형식에 맞게 바꾸세요. 같은 입금이 문자+알림 양쪽으로 동시에 들어와도 30초 이내 같은 입금자명·금액은 자동으로 중복 처리되지 않습니다.
-          </p>
+          <h3 style="font-size: 1.05rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span data-icon="bell"></span>입금 알림 자동감지 설정 (문자 + RCS/푸시 알림)
+          </h3>
 
           <div class="admin-form-grid admin-form-grid-3" style="margin-bottom: 1rem;">
             <div>
@@ -196,7 +234,18 @@
             </div>
             <div style="grid-column: span 2;">
               <label class="form-label">파싱 정규식 (name / amount 캡처 그룹, 문자+알림 공용)</label>
-              <input type="text" id="sms-detect-regex" class="form-control" value="입금\s*(?<amount>[\d,]+)원[\s\S]*?(?<name>[가-힣]{2,10})\s*잔액" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
+              <input type="text" id="sms-detect-regex" class="form-control" value="입금\s*(?<amount>[\d,]+)원[\s\S]*?(?<date>\d{2}/\d{2})\s+(?<time>\d{2}:\d{2})[\s\S]*?(?<name>[가-힣]{2,10})\s*잔액(?<balance>[\d,]+)원" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
+            </div>
+          </div>
+
+          <div class="admin-form-grid" style="margin-bottom: 1rem;">
+            <div>
+              <label class="form-label">감지할 알림 앱 패키지명 (PUSH 전용, 비워두면 전체 허용)</label>
+              <input type="text" id="sms-detect-push-package" class="form-control" value="com.samsung.android.messaging" placeholder="예: com.samsung.android.messaging" style="margin-bottom: 0;">
+            </div>
+            <div>
+              <label class="form-label">감지할 알림 제목 (PUSH 전용, 비워두면 전체 허용)</label>
+              <input type="text" id="sms-detect-push-title" class="form-control" value="NH농협" placeholder="예: NH농협" style="margin-bottom: 0;">
             </div>
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.2rem;">
@@ -248,41 +297,13 @@
 
           <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap;">
-              <h4 style="font-size: 0.92rem; margin: 0; color: var(--text-muted);">수신 로그 (최근 50건 - 필터링/파싱 실패/중복 포함 전체)</h4>
+              <h4 style="font-size: 0.92rem; margin: 0; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
+                <span data-icon="receipt"></span>수신 로그 <span id="sms-log-count" style="font-weight: normal;"></span>
+              </h4>
               <button class="btn-action" style="width: auto; padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="clearSmsLog()">로그 지우기</button>
             </div>
-            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">
-              문자/알림을 실제로 받았는데도 충전이 안 됐다면 여기서 원인을 확인하세요 - "발신자 불일치"면 위 발신번호 필터를, "파싱 실패"면 정규식을, "중복 감지"면 문자+알림이 같은 입금을 동시에 잡은 정상적인 상황입니다.
-            </p>
-            <div id="sms-log-list" style="max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;"></div>
+            <div id="sms-log-list" class="sms-log-scroll"></div>
           </div>
-        </div>
-
-        <div class="glass-container" style="padding: 1.5rem; margin-top: 1.5rem;">
-          <h3 style="font-size: 1.05rem; margin-bottom: 0.8rem;">화면 전환 · 앱 다운로드 · 버전</h3>
-
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">다른 화면으로 이동</div>
-          <nav class="nav-pills" style="margin-bottom: 1.2rem;">
-            <a href="kiosk.html" class="nav-item">키오스크</a>
-            <a href="user.html" class="nav-item">회원 PWA</a>
-            <a href="admin.html" class="nav-item active">관리자</a>
-          </nav>
-
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">앱 다운로드</div>
-          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.2rem;">
-            <a href="/SomangPayKiosk.apk?v=15" download="SomangPayKiosk.apk" class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid #6781c0; color: #6781c0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
-              Kiosk APK 다운로드
-            </a>
-            <a href="/SomangPayAdmin.apk?v=15" download="SomangPayAdmin.apk" class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid #6781c0; color: #6781c0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
-              Admin APK 다운로드
-            </a>
-            <a href="/SomangPayUser.apk?v=15" download="SomangPayUser.apk" class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid #6781c0; color: #6781c0; padding: 0.35rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: 0.8rem; text-decoration: none; min-height: 28px; height: 32px;">
-              User APK 다운로드
-            </a>
-          </div>
-
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">앱 버전</div>
-          <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
         </div>
       </div>
 
@@ -313,13 +334,17 @@
               <div style="font-size: 0.8rem; color: var(--text-muted);">현재 잔액</div>
               <div style="font-size: 1.8rem; font-weight: 800; color: var(--accent-emerald);" id="detail-member-balance">0원</div>
             </div>
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="btn-action" style="width: auto; padding: 0.5rem 0.9rem; background: rgba(59,130,246,0.2); color: #93c5fd;" onclick="openEditUserModal(currentDetailUserId)"><span data-icon="edit"></span> 정보수정</button>
               <button id="detail-status-btn" class="btn-action" style="width: auto; padding: 0.5rem 0.9rem;" onclick="toggleDetailUserStatus()">정지</button>
+              <button class="btn-action" style="width: auto; padding: 0.5rem 0.9rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="deleteDetailUser()">삭제</button>
             </div>
           </div>
           <div style="margin-top: 0.7rem; font-size: 0.85rem; color: var(--text-muted);">
             연락처 (로그인 ID): <strong id="detail-member-phone" style="color: #fff;">-</strong>
+          </div>
+          <div style="margin-top: 0.3rem; font-size: 0.85rem; color: var(--text-muted);">
+            생년월일: <strong id="detail-member-birth-date" style="color: #fff;">-</strong>
           </div>
         </div>
 
@@ -377,6 +402,10 @@
             <option value="GENERAL">일반 / 어린이 회원</option>
           </select>
         </div>
+        <div class="form-group">
+          <label class="form-label">생년월일 (선택)</label>
+          <input type="date" id="reg-birth-date" class="form-control">
+        </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label">초기 크레딧 충전액 (원)</label>
           <input type="number" id="reg-credit" class="form-control" value="0">
@@ -404,7 +433,13 @@
       </div>
 
       <div style="background: rgba(0,0,0,0.4); padding: 0.85rem; border-radius: 12px; border: 1px dashed var(--accent-cyan); margin-bottom: 1rem;">
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">감지된 식별자 코드 (자동 인식)</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap;">
+          <div style="font-size: 0.8rem; color: var(--text-muted);">감지된 식별자 코드 (자동 인식)</div>
+          <label id="admin-auto-detect-row" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); cursor: pointer; user-select: none;">
+            <input type="checkbox" id="admin-auto-detect-toggle" onchange="saveAdminAutoDetectPref(this.checked)" style="width: 16px; height: 16px; cursor: pointer;">
+            자동 식별
+          </label>
+        </div>
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           <input type="text" id="admin-card-uid-input" class="form-control" placeholder="태깅 또는 스캔 시 자동 입력됩니다." readonly style="flex: 1; margin: 0; background: rgba(6,182,212,0.1); color: var(--accent-cyan); font-family: monospace; font-weight: bold;">
           <span id="admin-detect-check" data-icon="check" style="font-size: 1.4rem; display: none; line-height: 1; color: var(--accent-emerald);" title="인식 성공"></span>
@@ -418,24 +453,36 @@
           <div style="font-size: 2.6rem; margin-bottom: 0.4rem; color: var(--accent-cyan);" class="nfc-wave-icon" data-icon="nfc"></div>
           <h4 style="font-size: 1rem; color: var(--accent-cyan); margin-bottom: 0.3rem;">실물 NFC 카드를 대주세요</h4>
           <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">NFC 카드를 리더기/스마트폰에 접촉하는 순간 자동 인식됩니다.</p>
-          <button class="btn-action btn-emerald" style="padding: 0.4rem 0.9rem; font-size: 0.82rem;" onclick="triggerSimulatedNfcScan()">[데모] NFC 태깅 시뮬레이션</button>
         </div>
 
         <!-- Mode 2: Camera QR Scanner View -->
         <div id="admin-qr-scan-view" style="display: none; width: 100%;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 0.82rem; color: #67e8f9; font-weight: bold;">카메라 실시간 QR 스캐너</span>
-            <div style="display: flex; gap: 0.4rem; align-items: center;">
-              <button id="admin-camera-flip-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(139,92,246,0.2); color: #c4b5fd; border: 1px solid #8b5cf6; display: none;" onclick="flipAdminCamera()" title="전면/후면 카메라 전환"><span data-icon="refresh"></span> 전환</button>
-              <button id="admin-camera-toggle-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(6,182,212,0.2); color: #67e8f9;" onclick="toggleAdminCameraScanner()">카메라 켜기</button>
+
+          <!-- 네이티브 앱(AndroidInterface.startQrScan 존재): 별도 카메라 액티비티가 뜨므로
+               여기는 안내 문구 + 재시도 버튼만 - http 접속(웹소켓 유지 목적)에서는 브라우저
+               getUserMedia가 비보안 컨텍스트라 아예 막혀 네이티브로 대체했다. -->
+          <div id="admin-qr-native-panel" style="display: none;">
+            <div style="font-size: 2.6rem; margin-bottom: 0.4rem; color: var(--accent-cyan);" data-icon="camera"></div>
+            <h4 style="font-size: 1rem; color: var(--accent-cyan); margin-bottom: 0.3rem;">카메라 화면에서 QR 코드를 비춰주세요</h4>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">카메라 화면이 뜨지 않았다면 아래 버튼을 눌러 다시 열어주세요.</p>
+            <button class="btn-action btn-primary" style="padding: 0.4rem 0.9rem; font-size: 0.82rem;" onclick="window.AndroidInterface.startQrScan()">QR 스캔 다시 열기</button>
+          </div>
+
+          <!-- 일반 브라우저: 기존 getUserMedia 인라인 실시간 미리보기 -->
+          <div id="admin-qr-web-panel" style="width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-size: 0.82rem; color: #67e8f9; font-weight: bold;">카메라 실시간 QR 스캐너</span>
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <button id="admin-camera-flip-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(139,92,246,0.2); color: #c4b5fd; border: 1px solid #8b5cf6; display: none;" onclick="flipAdminCamera()" title="전면/후면 카메라 전환"><span data-icon="refresh"></span> 전환</button>
+                <button id="admin-camera-toggle-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(6,182,212,0.2); color: #67e8f9;" onclick="toggleAdminCameraScanner()">카메라 켜기</button>
+              </div>
+            </div>
+            <div id="admin-camera-video-box" style="position: relative; width: 100%; max-width: 260px; height: 150px; margin: 0 auto; overflow: hidden; border-radius: 10px; background: #000; display: none;">
+              <video id="admin-qr-video" playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+              <canvas id="admin-qr-canvas" style="display: none;"></canvas>
+              <div style="position: absolute; inset: 10px; border: 2px dashed var(--accent-cyan); border-radius: 8px; pointer-events: none;"></div>
             </div>
           </div>
-          <div id="admin-camera-video-box" style="position: relative; width: 100%; max-width: 260px; height: 150px; margin: 0 auto; overflow: hidden; border-radius: 10px; background: #000; display: none;">
-            <video id="admin-qr-video" playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
-            <canvas id="admin-qr-canvas" style="display: none;"></canvas>
-            <div style="position: absolute; inset: 10px; border: 2px dashed var(--accent-cyan); border-radius: 8px; pointer-events: none;"></div>
-          </div>
-          <button class="btn-action btn-primary" style="margin-top: 0.6rem; padding: 0.4rem 0.9rem; font-size: 0.82rem; background: var(--accent-cyan); color: #000;" onclick="triggerSimulatedQrScan()">[데모] QR 스캔 시뮬레이션</button>
         </div>
 
       </div>
@@ -461,6 +508,17 @@
         <div class="form-group">
           <label class="form-label">연락처 (로그인 ID)</label>
           <input type="text" id="edit-user-phone" class="form-control" placeholder="010-0000-0000" maxlength="13" oninput="formatPhoneInput(this)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">회원 구분</label>
+          <select id="edit-user-type" class="form-control">
+            <option value="GENERAL">일반 / 어린이 회원</option>
+            <option value="SENIOR">시니어 회원 (할인 적용)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">생년월일 (선택 - 비워두면 지워짐)</label>
+          <input type="date" id="edit-user-birth-date" class="form-control">
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label">비밀번호 초기화 (선택 - 비워두면 변경 안 함)</label>

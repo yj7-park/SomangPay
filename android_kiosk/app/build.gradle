@@ -100,4 +100,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.webkit:webkit:1.8.0'
+    // 관리자 앱은 웹소켓(wss)이 WebView에서 자체서명 인증서와 막히는 문제 때문에 http로
+    // 접속하는데, http에서는 브라우저 getUserMedia(웹 카메라)가 OS 권한과 무관하게 아예
+    // 동작하지 않는다(비보안 컨텍스트 제약). 그래서 QR 스캔은 네이티브로 대체한다 - Play
+    // Services 의존성이 없는 zxing-android-embedded를 사용(ML Kit은 Play Services 필요).
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }

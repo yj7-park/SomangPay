@@ -5,6 +5,7 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.hardware.usb.UsbManager;
 import android.nfc.NfcAdapter;
@@ -19,6 +20,8 @@ import android.webkit.JsResult;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 import com.somangpay.kiosk.reader.CardReaderManager;
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
@@ -315,6 +318,56 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         return cardReaderManager.getCurrentModeName();
     }
 
+    // ============ 네이티브 QR 스캔 (zxing-android-embedded) ============
+    // 관리자/회원 앱은 http 대신 https로 접속하면 웹소켓(wss)이 WebView에서 막히는 문제 때문에
+    // 계속 http로 접속한다 - 그런데 브라우저의 getUserMedia(웹 카메라 API)는 http 같은 "비보안
+    // 컨텍스트"에서는 OS 카메라 권한을 이미 줬어도 아예 동작하지 않는다(별개의 제약). 그래서
+    // 웹 카메라 대신 이 네이티브 스캐너를 쓴다 - 별도 액티비티를 띄우고 그동안 MainActivity는
+    // onPause() 되면서 cardReaderManager.onPause()가 자동으로 호출돼 NFC 리더와 충돌하지 않는다
+    // (웹 카메라 플로우의 pauseReaderForCamera()/reenableNfcReader()와 동일한 효과를 별도 코드
+    // 없이 액티비티 생명주기만으로 얻는다). 일반 브라우저(AndroidInterface 없음)는 이 메서드
+    // 자체가 존재하지 않으므로 admin.js가 기존 getUserMedia 경로를 그대로 쓴다.
+    void startNativeQrScan() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
+                && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            new AlertDialog.Builder(this)
+                    .setMessage("카메라 권한이 꺼져 있습니다. 기기 설정 > 앱 > 권한에서 카메라 권한을 켜주세요.")
+                    .setPositiveButton(android.R.string.ok, (d, w) -> d.dismiss())
+                    .show();
+            return;
+        }
+
+        IntentIntegrator integrator = new IntentIntegrator(this);
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+        integrator.setPrompt("QR 코드를 카메라에 비춰주세요");
+        integrator.setBeepEnabled(false);
+        integrator.setOrientationLocked(false);
+        integrator.initiateScan();
+    }
+
+    // IntentIntegrator.parseActivityResult()가 requestCode를 자체 검사해 이 스캐너가 보낸
+    // 결과가 아니면 null을 반환하므로(라이브러리 표준 사용 패턴), 여기서 별도로 requestCode를
+    // 직접 비교할 필요가 없다.
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (result == null || webView == null) return;
+
+        String scannedText = result.getContents();
+        if (scannedText != null) {
+            webView.evaluateJavascript(
+                    "window.onAndroidQrScanned && window.onAndroidQrScanned("
+                            + org.json.JSONObject.quote(scannedText) + ");",
+                    null);
+        } else {
+            // 사용자가 뒤로가기 등으로 스캔을 취소한 경우 - 웹 쪽이 "카메라 켜기" 버튼 상태로
+            // 되돌릴 수 있게 알려준다.
+            webView.evaluateJavascript("window.onAndroidQrScanCancelled && window.onAndroidQrScanCancelled();", null);
+        }
+    }
+
     // 아래 업데이트 관련 메서드들은 모두 KioskWebAppInterface(JS 브릿지)의 위임 대상 -
     // 웹 UI의 업데이트 배지/설정 모달이 이 메서드들을 통해 UpdateManager를 제어한다.
     String getAppVersionInfo() {
@@ -598,6 +651,14 @@ class KioskWebAppInterface implements Runnable {
     public void pauseReaderForCamera() {
         // 카메라 사용 시작 시 JS가 호출 - 기기 내장 NFC만 잠시 멈춤(외부 USB 리더는 영향 없음)
         activity.runOnUiThread(() -> activity.pauseCardReaderForCamera());
+    }
+
+    // admin.js가 이 메서드의 존재 여부(typeof ... === "function")로 네이티브 QR 스캔 지원을
+    // 감지한다 - 앱 안(이 브릿지가 있는 곳)에서는 이걸로 스캔하고, 일반 브라우저는 기존
+    // getUserMedia 경로를 그대로 쓴다. 결과는 window.onAndroidQrScanned(text)로 돌아온다.
+    @android.webkit.JavascriptInterface
+    public void startQrScan() {
+        activity.runOnUiThread(activity::startNativeQrScan);
     }
 
     @android.webkit.JavascriptInterface

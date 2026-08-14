@@ -77,6 +77,11 @@ html, body {
   width: 100%;
   max-width: 100vw;
   min-height: 100vh;
+  /* 100vh는 모바일 브라우저에서 주소창이 보이는/숨는 상태와 무관하게 "가장 큰" 뷰포트
+     기준으로 고정되는 경우가 많아, 실제 보이는 화면보다 커져서 바깥 스크롤이 생기는
+     원인이 된다. 100dvh(동적 뷰포트 높이)를 지원하는 브라우저에서는 이 값으로 덮어써서
+     실제 보이는 높이에 맞춘다 (미지원 브라우저는 유효하지 않은 값이라 무시되고 위 100vh가 유지됨). */
+  min-height: 100dvh;
   background-color: var(--bg-dark);
   color: var(--text-main);
   font-family: var(--font-family);
@@ -287,6 +292,38 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   overflow: hidden;
 }
 
+/* 설정 > 수신 로그: 항목이 아무리 많이 쌓여도(최대 50건) 패널 높이는 고정되고
+   내부에서만 스크롤된다. overscroll-behavior로 끝까지 스크롤했을 때 페이지 전체가
+   같이 스크롤되는(scroll chaining) 것도 막는다. */
+.sms-log-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 0.3rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-glass) transparent;
+}
+/* flex 컨테이너에 overflow:auto가 붙으면 자식의 "콘텐츠 크기만큼은 안 줄어드는" 기본 동작이
+   사라져서(min-height:auto -> 0), 로그가 많이 쌓였을 때 각 항목이 컨테이너 높이(340px)에
+   맞춰 다 같이 짜부라지며 겹쳐 보인다 - 항목마다 자기 콘텐츠 높이를 유지하고 컨테이너가
+   스크롤되도록 고정한다. */
+.sms-log-scroll > * {
+  flex-shrink: 0;
+}
+.sms-log-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sms-log-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sms-log-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-glass);
+  border-radius: 999px;
+}
+
 .admin-wrapper {
   max-width: 1360px;
   margin: 0 auto;
@@ -331,7 +368,12 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   flex-direction: column;
   max-width: 1360px;
   margin: 0 auto;
+  /* --header-h는 admin.js가 .app-header의 실제 렌더된 높이를 재서 채워준다(고정된 60px
+     추정치는 safe-area-inset-top이 있는 기기 등에서 실제 헤더 높이와 어긋나 아래 admin-main이
+     (flex:1로) 필요 이상 늘어나 바깥 스크롤이 생기는 원인이었다). 100dvh 우선, 미지원
+     브라우저는 100vh로 폴백. */
   min-height: calc(100vh - 60px);
+  min-height: calc(100dvh - var(--header-h, 60px));
 }
 
 .admin-tabbar {
@@ -426,6 +468,35 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   justify-content: center;
 }
 
+/* admin.js의 showToast()가 #admin-toast를 만들어 .show 클래스로 토글하는데, 지금까지 이
+   id에 대한 스타일이 전혀 없어서 그냥 body 맨 끝에 평범한 문서 흐름 콘텐츠로 붙어 하단
+   고정 탭바와 겹쳐 보이고, 그 실제 텍스트 높이만큼 body가 늘어나 바깥(페이지) 스크롤이
+   생기는 원인이 되고 있었다. position:fixed로 흐름에서 완전히 빼서 그 문제를 없앤다. */
+#admin-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.2rem + env(safe-area-inset-bottom));
+  transform: translate(-50%, 10px);
+  max-width: min(92vw, 420px);
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-subtle);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-align: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#admin-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 @media screen and (min-width: 900px) {
   .admin-shell {
     flex-direction: row;
@@ -470,6 +541,9 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
     right: 1.5rem;
     bottom: 1.5rem;
   }
+  #admin-toast {
+    bottom: 1.5rem; /* 데스크톱은 하단 탭바가 왼쪽 사이드바로 바뀌므로 여유를 둘 필요 없음 */
+  }
 }
 
 /* Dashboard stat tiles */
@@ -504,6 +578,12 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 .stat-row-primary .stat-tile {
   flex: 1 1 0%;
+  /* 옆의 hero-stat이 훨씬 커서 같은 행 높이로 늘어나므로(align-items 기본값 stretch),
+     내용(라벨+값)을 위쪽에 붙이지 않고 세로로 가운데 오도록 맞춘다. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: right;
 }
 @media screen and (max-width: 480px) {
   .stat-row-primary {
@@ -539,6 +619,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   margin-top: 0.2rem;
 }
 
+/* 총 회원수(위 stat-row-primary)를 제외한 나머지 통계 셀은 라벨/값 모두 우측 정렬. */
+.stat-grid .stat-tile {
+  text-align: right;
+}
+
 .attention-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -555,6 +640,10 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 .attention-tile .attention-icon {
   font-size: 1.5rem;
+}
+.attention-tile > div {
+  flex: 1 1 auto;
+  text-align: right;
 }
 .attention-tile .stat-label {
   font-size: 0.78rem;
@@ -576,11 +665,35 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   color: var(--text-muted);
 }
 
-/* Member search feed (검색 탭) */
+/* 회원 관리 탭 - 검색창/스캔 버튼은 고정, 목록만 남은 공간을 차지하며 그 안에서
+   스크롤된다 (홈 탭과 동일한 패턴). --search-view-h는 admin.js의
+   updateFixedViewLayoutMetrics()가 채워준다. */
+#admin-view-search.active {
+  display: flex;
+  flex-direction: column;
+  height: var(--search-view-h, 70vh);
+  overflow: hidden;
+}
+#admin-view-search.active > *:not(.member-feed) {
+  flex-shrink: 0;
+}
+
+/* Member search feed (회원 관리 탭) */
 .member-feed {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* flex 컨테이너 자신에 overflow:auto가 붙으면 자식의 "콘텐츠 크기 밑으로는 안 줄어드는"
+   기본 동작이 사라져서(min-height:auto -> 0), 회원이 많아지면 카드가 컨테이너 높이에 맞춰
+   다 같이 짜부라질 수 있다 - 카드마다 자기 콘텐츠 높이를 유지하도록 고정한다
+   (설정 > 수신 로그의 .sms-log-scroll과 동일한 이슈/수정). */
+.member-feed > * {
+  flex-shrink: 0;
 }
 
 .member-card {
@@ -588,7 +701,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
-  padding: 0.9rem 1.1rem;
+  padding: 1.3rem 1.1rem;
   cursor: pointer;
   transition: background 0.15s ease;
 }
@@ -623,17 +736,26 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   background: var(--accent-danger);
 }
 
-/* Home "최근 처리 내역" 실시간 피드 - 정해진 높이 안에서만 스크롤되고, 스크롤이
+/* 홈 탭 - 통계 카드들은 고정, "최근 처리 내역"만 남은 공간을 차지하며 그 안에서 스크롤된다
+   (충전함 탭과 동일한 패턴). --home-view-h는 admin.js의 updateFixedViewLayoutMetrics()가
+   실제 렌더된 헤더/탭바 높이를 재서 채워준다. */
+#admin-view-home.active {
+  display: flex;
+  flex-direction: column;
+  height: var(--home-view-h, 70vh);
+  overflow: hidden;
+}
+#admin-view-home.active > *:not(.activity-feed-scroll) {
+  flex-shrink: 0;
+}
+
+/* Home "최근 처리 내역" 실시간 피드 - 남은 공간 안에서만 스크롤되고, 스크롤이
    하단에 가까워지면 admin.js가 다음 페이지를 이어붙인다(무한 스크롤). */
 .activity-feed-scroll {
-  max-height: 60vh;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-}
-@media screen and (min-width: 900px) {
-  .activity-feed-scroll {
-    max-height: 520px;
-  }
 }
 
 .activity-feed {
@@ -641,6 +763,38 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   flex-direction: column;
   gap: 0.6rem;
   margin-bottom: 1rem;
+}
+
+/* 충전함(Inbox) - 헤더/하단 탭바를 제외한 영역을 계좌 입금/충전 신청 목록이 반씩 나눠 쓰고,
+   각자 안에서만 스크롤된다. --inbox-view-h는 admin.js의 updateInboxLayoutMetrics()가
+   실제 렌더된 헤더/탭바 높이를 재서 채워준다(모바일 하단 고정 탭바 vs 데스크톱 사이드바
+   전환 때문에 고정 px로는 정확히 계산할 수 없어 런타임에 측정). */
+#admin-view-inbox.active {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: var(--inbox-view-h, 70vh);
+  overflow: hidden;
+}
+
+.inbox-half {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1.5rem;
+}
+
+.inbox-half-header {
+  flex-shrink: 0;
+  margin-bottom: 0.75rem;
+}
+
+.inbox-half .table-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .activity-row {
