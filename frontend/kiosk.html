@@ -45,6 +45,11 @@
           <span id="qr-status-text">QR 스캔 비활성</span>
         </span>
         <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+        <!-- 전용 키오스크 락다운 빌드에서만 보인다(initKioskPinToggle) - 화면 고정 중이면 🔒(눌러서
+             해제), 꺼져 있으면 🔓(눌러서 고정)로 상태를 그대로 아이콘에 반영한다. -->
+        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: #fff; padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="화면 고정">
+          🔒
+        </button>
         <button onclick="openKioskAdminPinModal()" style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: #fff; padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정">
           ⚙️
         </button>

@@ -150,6 +150,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadProducts();
   resetCart(); // 기본 결제 상품으로 장바구니 자동 세팅 및 메뉴 UI 갱신
   initWebNFC(); // 권한 상태 확인 후 자동 NFC 활성화 시도
+  initKioskPinToggle();
 
   // USB Barcode / QR Code Scanner Keyboard Emulation Listener
   window.addEventListener("keydown", (e) => {
@@ -987,6 +988,43 @@ async function kioskAdminFetch(url, options = {}) {
   }
   return res;
 }
+
+// ---------------- 화면 고정(Screen Pinning) 토글 버튼 ----------------
+// 전용 키오스크 락다운 빌드에서만 의미가 있다 - AndroidInterface가 없는 일반 브라우저나
+// 락다운이 꺼진 admin/user 빌드에서는 버튼 자체를 숨겨둔다(initWebNFC()와 동일한 판단 방식).
+function initKioskPinToggle() {
+  const btn = document.getElementById("kiosk-pin-toggle-btn");
+  if (!btn) return;
+  if (!window.AndroidInterface || typeof window.AndroidInterface.isKioskLockdownEnabled !== "function"
+      || !window.AndroidInterface.isKioskLockdownEnabled()) {
+    return; // 조건이 안 맞으면 버튼은 기본 display:none 그대로 숨겨둔다
+  }
+  btn.style.display = "inline-flex";
+  refreshKioskPinButtonUi();
+}
+
+function refreshKioskPinButtonUi() {
+  const btn = document.getElementById("kiosk-pin-toggle-btn");
+  if (!btn || btn.style.display === "none") return;
+  if (!window.AndroidInterface || typeof window.AndroidInterface.isScreenPinningActive !== "function") return;
+  const active = window.AndroidInterface.isScreenPinningActive();
+  btn.textContent = active ? "🔒" : "🔓";
+  btn.title = active ? "화면 고정 중 (눌러서 해제)" : "화면 고정 꺼짐 (눌러서 다시 고정)";
+}
+
+// AndroidInterface.toggleScreenPinning()은 runOnUiThread로 실제 처리를 예약만 하고 바로
+// 리턴하는 비동기 호출이라, 여기서 곧바로 상태를 다시 물어보면 아직 안 바뀐 값을 읽을 수
+// 있다 - 실제 처리가 끝나면 네이티브가 window.refreshKioskPinButtonUi()를 직접 호출해준다.
+function toggleKioskScreenPinning() {
+  if (!window.AndroidInterface || typeof window.AndroidInterface.toggleScreenPinning !== "function") return;
+  window.AndroidInterface.toggleScreenPinning();
+}
+
+// 시스템 제스처(뒤로가기+최근 앱 길게 누르기)로 화면 고정이 풀렸다가 앱으로 포커스가 돌아왔을
+// 때도 버튼 아이콘을 실제 상태에 맞춰 다시 그린다.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshKioskPinButtonUi();
+});
 
 function openKioskAdminPinModal() {
   // 설정 화면으로 들어가는 동안엔 상시 켜기 카메라를 잠시 꺼둔다 (모달 닫을 때 다시 켜짐)

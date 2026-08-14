@@ -242,7 +242,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     // (기기에 화면 잠금 PIN이 설정되어 있으면 해제 시 PIN도 함께 요구하도록 설정 가능 -
     // 설정 > 보안 > 화면 고정 > "고정 해제 시 PIN 요청").
     // 이미 고정된 상태에서 다시 호출하면 예외가 발생하므로 현재 상태를 먼저 확인한다.
+    //
+    // screenPinningUserDisabled가 켜져 있으면 아무것도 하지 않는다 - 웹 UI의 자물쇠 버튼으로
+    // 관리자가 명시적으로 고정을 풀었을 때, onWindowFocusChanged가 포커스를 다시 얻을 때마다
+    // (거의 매 상호작용마다) 자동으로 재진입시켜버리면 버튼으로 푼 게 곧바로 무효화된다.
+    private boolean screenPinningUserDisabled = false;
+
     private void enterKioskLockTaskIfNeeded() {
+        if (screenPinningUserDisabled) return;
         ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
         if (am == null) return;
         if (am.getLockTaskModeState() == ActivityManager.LOCK_TASK_MODE_NONE) {
@@ -252,6 +259,40 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             } catch (Exception e) {
                 Log.e(TAG, "화면 고정 진입 실패: " + e.getMessage());
             }
+        }
+    }
+
+    // 설정 버튼 옆 자물쇠 버튼(kiosk.html)이 호출 - 지금 고정돼 있으면 풀고(이후
+    // onWindowFocusChanged의 자동 재진입도 막고), 풀려 있으면 다시 고정한다.
+    boolean isKioskLockdownEnabled() {
+        return BuildConfig.KIOSK_LOCKDOWN_ENABLED;
+    }
+
+    boolean isScreenPinningActive() {
+        ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        return am != null && am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE;
+    }
+
+    // KioskWebAppInterface.toggleScreenPinning()이 runOnUiThread로 이 메서드를 큐에 올리기만
+    // 하고 바로 리턴하므로, JS가 호출 직후 isScreenPinningActive()를 곧바로 다시 물어보면
+    // 아직 실행 전(비동기) 상태를 읽어 아이콘이 한 박자 늦게/틀리게 그려질 수 있다 - 실제 변경이
+    // (이 메서드 안에서, UI 스레드 위에서) 끝난 뒤 여기서 직접 웹으로 콜백해 갱신을 트리거한다.
+    void toggleScreenPinning() {
+        if (!BuildConfig.KIOSK_LOCKDOWN_ENABLED) return;
+        if (isScreenPinningActive()) {
+            try {
+                stopLockTask();
+                screenPinningUserDisabled = true;
+                Log.d(TAG, "화면 고정(Screen Pinning) 해제 요청 완료 (버튼)");
+            } catch (Exception e) {
+                Log.e(TAG, "화면 고정 해제 실패: " + e.getMessage());
+            }
+        } else {
+            screenPinningUserDisabled = false;
+            enterKioskLockTaskIfNeeded();
+        }
+        if (webView != null) {
+            webView.evaluateJavascript("window.refreshKioskPinButtonUi && window.refreshKioskPinButtonUi();", null);
         }
     }
 
@@ -659,6 +700,23 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public void startQrScan() {
         activity.runOnUiThread(activity::startNativeQrScan);
+    }
+
+    // kiosk.js가 설정 버튼 옆 자물쇠 버튼을 이 값들로 켜고(kiosk 락다운 빌드일 때만) 아이콘을
+    // 현재 화면 고정 상태에 맞춰 그린다.
+    @android.webkit.JavascriptInterface
+    public boolean isKioskLockdownEnabled() {
+        return activity.isKioskLockdownEnabled();
+    }
+
+    @android.webkit.JavascriptInterface
+    public boolean isScreenPinningActive() {
+        return activity.isScreenPinningActive();
+    }
+
+    @android.webkit.JavascriptInterface
+    public void toggleScreenPinning() {
+        activity.runOnUiThread(activity::toggleScreenPinning);
     }
 
     @android.webkit.JavascriptInterface
