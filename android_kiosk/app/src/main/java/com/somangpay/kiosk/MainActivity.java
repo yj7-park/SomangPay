@@ -43,36 +43,22 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private UpdateManager updateManager;
     static TextToSpeech tts;
 
-    // SmsReceiver(매니페스트에 정적 등록됨)가 문자를 받았을 때, 지금 액티비티/웹뷰가 살아있으면
-    // 바로 웹으로 전달할 수 있도록 약한 참조로 현재 인스턴스를 들고 있는다 - onCreate에서 채우고
-    // onDestroy에서 비운다(onResume/onPause에 걸면 백그라운드 상태에서 온 문자를 놓치게 된다).
+    // DepositAutoDetector가 입금 문자/알림을 처리(등록/필터링/실패 등)하고 나서, 지금
+    // 액티비티/웹뷰가 살아있으면 바로 결과를 웹의 "수신 로그"로 보여줄 수 있도록 약한 참조로
+    // 현재 인스턴스를 들고 있는다 - onCreate에서 채우고 onDestroy에서 비운다(onResume/onPause에
+    // 걸면 백그라운드 상태에서 처리된 건을 놓치게 된다).
     private static WeakReference<MainActivity> currentInstance;
 
-    // SmsReceiver.onReceive()에서 호출 - 웹뷰가 살아있으면 바로 전달하고 true, 없으면(프로세스가
-    // 완전히 종료된 상태) false를 반환해 SmsReceiver가 대기열에 남기도록 한다.
-    static boolean deliverSmsToWebIfAlive(String sender, String body) {
+    // DepositAutoDetector.log()에서 호출 - 실제 등록(백엔드 API 호출)은 이미 끝난 뒤이므로 여기서는
+    // 결과를 화면에 "표시"만 한다(window.onNativeDetectionLogged, admin.js 참고 - 다시 등록을
+    // 시도하지 않음). 웹뷰가 살아있으면 바로 전달하고 true, 없으면(프로세스가 완전히 종료된 상태)
+    // false를 반환해 DepositAutoDetector가 대기열에 남기도록 한다.
+    static boolean deliverNativeLogToWebIfAlive(String entryJson) {
         MainActivity activity = currentInstance != null ? currentInstance.get() : null;
         if (activity == null || activity.webView == null || activity.mainHandler == null) return false;
-        final String safeSender = sender == null ? "" : sender;
         activity.mainHandler.post(() -> activity.webView.evaluateJavascript(
-                "window.onSmsReceived && window.onSmsReceived("
-                        + org.json.JSONObject.quote(safeSender) + ","
-                        + org.json.JSONObject.quote(body) + ");",
-                null));
-        return true;
-    }
-
-    // BankNotificationListener.onNotificationPosted()에서 호출 - deliverSmsToWebIfAlive와 동일한 패턴.
-    static boolean deliverNotificationToWebIfAlive(String packageName, String title, String text) {
-        MainActivity activity = currentInstance != null ? currentInstance.get() : null;
-        if (activity == null || activity.webView == null || activity.mainHandler == null) return false;
-        final String safePackage = packageName == null ? "" : packageName;
-        final String safeTitle = title == null ? "" : title;
-        activity.mainHandler.post(() -> activity.webView.evaluateJavascript(
-                "window.onNotificationReceived && window.onNotificationReceived("
-                        + org.json.JSONObject.quote(safePackage) + ","
-                        + org.json.JSONObject.quote(safeTitle) + ","
-                        + org.json.JSONObject.quote(text) + ");",
+                "window.onNativeDetectionLogged && window.onNativeDetectionLogged("
+                        + org.json.JSONObject.quote(entryJson) + ");",
                 null));
         return true;
     }
@@ -90,12 +76,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         mainHandler = new Handler(Looper.getMainLooper());
         nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 
-        // Fullscreen Hide Status / Navigation Bars
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        );
+        // Fullscreen Hide Status / Navigation Bars - 전용 키오스크 단말기 빌드에서만.
+        // admin/user는 직원 개인 휴대폰에서 쓰므로 시간/배터리 등이 보이는 상태바를 그대로 둔다.
+        if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            );
+        }
 
         webView = new WebView(this);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
@@ -166,26 +155,25 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
 
         // 3. 입금 문자 자동감지 - 관리자 앱 전용(SMS_DETECT_ENABLED, build.gradle 참고).
         // SmsReceiver는 onResume/onPause로 등록/해제하지 않는다 - 앱이 백그라운드에 있을 때(예:
-        // 문자 앱으로 전환) 도착한 실제 입금 문자를 놓쳐버리는 게 실사용에서 확인됐다. 대신
-        // AndroidManifest.xml에 정적으로 등록해 시스템이 프로세스 상태와 무관하게 깨워서 전달하고,
-        // 지금 이 액티비티가 살아있으면 currentInstance를 통해 바로 웹으로, 죽어있었으면
-        // SmsReceiver가 대기열에 남겨둔 걸 여기서 웹뷰가 준비된 뒤 흘려보낸다.
+        // 문자 앱으로 전환)는 물론 프로세스가 완전히 종료된 상태에서도 AndroidManifest.xml에
+        // 정적으로 등록된 리시버가 시스템에 의해 깨워지고, DepositAutoDetector가 웹뷰 없이도
+        // 직접 파싱/등록까지 끝낸다(처리 결과만 currentInstance를 통해 웹의 "수신 로그"로 보여줌).
         currentInstance = new WeakReference<>(this);
         if (BuildConfig.SMS_DETECT_ENABLED) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
                     && checkSelfPermission(android.Manifest.permission.RECEIVE_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{android.Manifest.permission.RECEIVE_SMS}, 104);
             }
+            // 앱이 죽어있는 동안 DepositAutoDetector가 처리해둔 결과(성공/필터링/실패 등)를
+            // 웹뷰가 준비된 뒤 한꺼번에 "수신 로그"로 흘려보낸다 - 이미 등록까지 끝난 뒤라
+            // 여기서 다시 처리(재등록)하지 않는다.
             mainHandler.postDelayed(
-                    () -> SmsReceiver.drainPendingSmsQueue(this, MainActivity::deliverSmsToWebIfAlive), 3000);
+                    () -> DepositAutoDetector.drainLogQueue(this, MainActivity::deliverNativeLogToWebIfAlive), 3000);
 
             // 4. 입금 알림 자동감지(2번째 경로) - BankNotificationListener. "알림 접근" 권한은
             // RECEIVE_SMS와 달리 requestPermissions()로 팝업을 띄울 수 없어 여기서 자동 요청하지
             // 않는다 - 웹 UI(설정 탭)가 isNotificationAccessGranted()로 현재 상태를 보여주고,
             // 꺼져있으면 openNotificationAccessSettings()로 관리자가 직접 설정 화면에서 켜게 한다.
-            mainHandler.postDelayed(
-                    () -> BankNotificationListener.drainPendingNotificationQueue(
-                            this, MainActivity::deliverNotificationToWebIfAlive), 3000);
         }
 
         // TTS 엔진 초기화
@@ -316,15 +304,13 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) {
+        if (hasFocus && BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_FULLSCREEN |
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             );
-            if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
-                enterKioskLockTaskIfNeeded();
-            }
+            enterKioskLockTaskIfNeeded();
         }
     }
 
@@ -707,6 +693,21 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public boolean isKioskLockdownEnabled() {
         return activity.isKioskLockdownEnabled();
+    }
+
+    // admin.js가 로그인(PIN 인증) 성공 시 호출 - DepositAutoDetector가 앱이 완전히 꺼진 상태
+    // (웹뷰 없음)에서도 백엔드에 직접 입금을 등록할 수 있도록 토큰을 SharedPreferences로
+    // 미러링해둔다. SharedPreferences 쓰기만 하므로 UI 스레드로 안 넘겨도 안전하다.
+    @android.webkit.JavascriptInterface
+    public void saveAdminToken(String token) {
+        DepositAutoDetector.saveAdminToken(activity.getApplicationContext(), token);
+    }
+
+    // admin.js가 자동감지 설정을 저장/초기화/로드할 때마다 호출 - saveAdminToken과 같은 이유로
+    // 발신번호·알림 패키지/제목 필터·정규식을 SharedPreferences에도 같이 저장해둔다.
+    @android.webkit.JavascriptInterface
+    public void saveDetectSettings(String sender, String regex, String pushPackage, String pushTitle) {
+        DepositAutoDetector.saveDetectSettings(activity.getApplicationContext(), sender, regex, pushPackage, pushTitle);
     }
 
     @android.webkit.JavascriptInterface

@@ -20,6 +20,8 @@ const ICON_SVGS = {
   user: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>',
   users: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="7.5" r="3.2"/><path d="M2.5 20c1-3.5 3.4-5.4 6-5.4s5 1.9 6 5.4"/><circle cx="17" cy="8.2" r="2.5"/><path d="M15.3 11.9c2.2.4 3.9 2.1 4.7 4.9"/></svg>',
   refresh: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.3L3 16"/><path d="M3 21v-5h5"/></svg>',
+  "chevron-down": '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  trash: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
 };
 function icon(name) {
   return ICON_SVGS[name] || "";
@@ -112,8 +114,8 @@ async function adminFetch(url, options = {}) {
   if (res.status === 401) {
     adminToken = null;
     isAdminAuthenticated = false;
-    sessionStorage.removeItem("admin_auth");
-    sessionStorage.removeItem("admin_token");
+    localStorage.removeItem("admin_auth");
+    localStorage.removeItem("admin_token");
     showAlertModal("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
     showModal("admin-pin-modal");
   }
@@ -182,18 +184,41 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.AndroidInterface) {
     const downloadSection = document.getElementById("app-download-links");
     if (downloadSection) downloadSection.style.display = "none";
+
+    // 앱 안에서만: 처음 설치해서 PIN 모달을 처음 보는 순간부터 "로그인 = 실시간 자동감지 켜짐"
+    // 이라는 걸 안내한다 - 웹 브라우저 세션에서는 백그라운드 자동감지 자체가 의미 없어 숨긴다.
+    const detectNotice = document.getElementById("admin-pin-detect-notice");
+    if (detectNotice) detectNotice.style.display = "block";
   }
 
-  const savedToken = sessionStorage.getItem("admin_token");
-  if (savedToken && sessionStorage.getItem("admin_auth") === "true") {
+  // admin_token/admin_auth는 (sessionStorage가 아니라) localStorage에 저장한다 - 입금 문자/알림
+  // 자동감지는 관리자가 화면을 보고 있지 않아도 계속 동작해야 하는데, sessionStorage는 앱
+  // 프로세스가 죽었다가(백그라운드에서 OS가 회수, 최근 앱에서 스와이프 등) 다시 뜨면 비워져서
+  // 매번 PIN을 다시 입력하기 전까지 감지가 멈춰버렸다. localStorage로 두면 토큰 자체의 만료
+  // 시간(백엔드 ADMIN_TOKEN_TTL_SECONDS, 현재 12시간) 안에서는 앱이 재시작돼도 인증 상태가
+  // 유지되어 감지가 끊기지 않는다 - 그 이후엔 정상적으로 다시 PIN을 요구한다(위 adminFetch의
+  // 401 처리 참고).
+  const savedToken = localStorage.getItem("admin_token");
+  if (savedToken && localStorage.getItem("admin_auth") === "true") {
     adminToken = savedToken;
     isAdminAuthenticated = true;
     hideModal("admin-pin-modal");
     initAdminDashboard();
+    syncAdminTokenToNative();
   } else {
     showModal("admin-pin-modal");
   }
 });
+
+// 네이티브 앱 안(DepositAutoDetector)이 웹뷰 없이도 입금을 직접 등록할 수 있도록 로그인 토큰을
+// SharedPreferences로도 미러링한다 - 로그인 직후와, 저장돼 있던 토큰으로 자동 로그인됐을 때
+// (위 DOMContentLoaded) 둘 다 호출한다. 일반 브라우저에서는 AndroidInterface가 없어 아무 일도
+// 안 한다.
+function syncAdminTokenToNative() {
+  if (window.AndroidInterface && typeof window.AndroidInterface.saveAdminToken === "function") {
+    window.AndroidInterface.saveAdminToken(adminToken);
+  }
+}
 
 async function submitAdminPin() {
   const pinInput = document.getElementById("admin-pin-input");
@@ -214,11 +239,12 @@ async function submitAdminPin() {
 
     if (res.ok && data.token) {
       adminToken = data.token;
-      sessionStorage.setItem("admin_auth", "true");
-      sessionStorage.setItem("admin_token", adminToken);
+      localStorage.setItem("admin_auth", "true");
+      localStorage.setItem("admin_token", adminToken);
       isAdminAuthenticated = true;
       hideModal("admin-pin-modal");
       initAdminDashboard();
+      syncAdminTokenToNative();
     } else if (res.status === 429) {
       await showAlertModal(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
@@ -308,14 +334,15 @@ function switchAdminView(viewName) {
       btn.classList.toggle("active", btn.dataset.view === viewName);
     });
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
-    if (viewName === "home") { activityFeedLimit = ACTIVITY_PAGE_SIZE; renderHomeActivityFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") renderKioskList();
     if (viewName === "inbox") {
       bankTxnLimit = INBOX_PAGE_SIZE;
       rechargeQueueLimit = INBOX_PAGE_SIZE;
+      activityFeedLimit = ACTIVITY_PAGE_SIZE;
       updateFixedViewLayoutMetrics();
       renderBankTransactionsTable();
       renderRechargeQueueTable();
+      renderInboxActivityFeed();
     }
   }
 }
@@ -330,7 +357,6 @@ function switchAdminView(viewName) {
 // 재서 빼면 이 padding-bottom과 이중으로 겹쳐 계산되어 실제로는 페이지가 그만큼 더 길어져
 // 바깥 스크롤이 살짝 생기는 문제가 있었다(테스트 렌더로 확인).
 const FIXED_HEIGHT_VIEWS = [
-  { id: "admin-view-home", cssVar: "--home-view-h" },
   { id: "admin-view-search", cssVar: "--search-view-h" },
   { id: "admin-view-inbox", cssVar: "--inbox-view-h" },
 ];
@@ -910,7 +936,7 @@ async function loadStatsSummary() {
 
 function renderDashboard(stats) {
   document.getElementById("stat-total-balance").innerText = `${stats.total_balance.toLocaleString()}원`;
-  document.getElementById("stat-total-users").innerText = `${stats.total_users.toLocaleString()}명`;
+  document.getElementById("stat-users-with-balance").innerText = `${stats.users_with_balance.toLocaleString()}명`;
   document.getElementById("stat-today-deposit").innerText = `${stats.today.deposit_amount.toLocaleString()}원`;
   document.getElementById("stat-today-payment").innerText = `${stats.today.payment_amount.toLocaleString()}원`;
   document.getElementById("stat-month-deposit").innerText = `${stats.this_month.deposit_amount.toLocaleString()}원`;
@@ -999,11 +1025,13 @@ function buildMergedActivityEvents() {
           time: matchedTxn.created_at, icon: icon("bank"),
           title: `계좌 입금 - ${matchedTxn.depositor_name}`, amount: matchedTxn.amount,
           status: "완료", statusClass: "status-done",
+          type: "bank", id: matchedTxn.id,
         },
         {
           time: r.created_at, icon: icon("receipt"),
           title: `충전 신청 - ${r.user_name}`, amount: r.requested_amount,
           status, statusClass,
+          type: "recharge", id: r.id,
         },
       ].sort((a, b) => new Date(a.time) - new Date(b.time));
       events.push({
@@ -1019,6 +1047,7 @@ function buildMergedActivityEvents() {
         title: `충전 신청 - ${r.user_name}`,
         amount: r.requested_amount,
         status, statusClass,
+        type: "recharge", id: r.id,
       });
     }
   });
@@ -1033,10 +1062,29 @@ function buildMergedActivityEvents() {
       amount: t.amount,
       status: t.status === "MATCHED" ? "완료" : "대기",
       statusClass: t.status === "MATCHED" ? "status-done" : "status-pending",
+      type: "bank", id: t.id,
     });
   });
 
   return events.sort((a, b) => new Date(b.time) - new Date(a.time));
+}
+
+// 대기 상태 줄에만 관리 버튼을 붙인다 - 계좌 입금은 삭제만, 충전 신청은 승인/반려
+// (기존 충전함 표의 관리 버튼과 동일한 함수를 그대로 재사용한다).
+function renderActivityLineActions(line) {
+  if (line.status !== "대기") return "";
+  if (line.type === "bank") {
+    return `<div class="activity-actions">
+      <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${line.id})">삭제</button>
+    </div>`;
+  }
+  if (line.type === "recharge") {
+    return `<div class="activity-actions">
+      <button class="btn-action btn-emerald" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; width: auto;" onclick="approveRechargeRequest(${line.id})">승인</button>
+      <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${line.id})">반려</button>
+    </div>`;
+  }
+  return "";
 }
 
 function renderActivityLine(line) {
@@ -1047,7 +1095,10 @@ function renderActivityLine(line) {
       <div class="activity-sub">${new Date(line.time).toLocaleString()}</div>
       <span class="activity-status ${line.statusClass}">${line.status}</span>
     </div>
-    <div class="activity-amount">${line.amount.toLocaleString()}원</div>
+    <div class="activity-amount-col">
+      <div class="activity-amount">${line.amount.toLocaleString()}원</div>
+      ${renderActivityLineActions(line)}
+    </div>
   `;
 }
 
@@ -1063,8 +1114,8 @@ function renderActivityCard(ev) {
   return div;
 }
 
-function renderHomeActivityFeed() {
-  const feed = document.getElementById("home-activity-feed");
+function renderInboxActivityFeed() {
+  const feed = document.getElementById("inbox-activity-feed");
   if (!feed) return;
 
   activityFeedMergedCache = buildMergedActivityEvents();
@@ -1080,14 +1131,14 @@ function renderHomeActivityFeed() {
 
 // 스크롤이 하단 80px 이내로 들어오면 다음 페이지를 이어서 그린다 (드래그/휠 스크롤 모두 대응).
 function setupActivityFeedInfiniteScroll() {
-  const scrollBox = document.getElementById("home-activity-feed-scroll");
+  const scrollBox = document.getElementById("inbox-activity-feed-scroll");
   if (!scrollBox || scrollBox.dataset.scrollWired) return;
   scrollBox.dataset.scrollWired = "1";
   scrollBox.addEventListener("scroll", () => {
     if (activityFeedLimit >= activityFeedMergedCache.length) return;
     if (scrollBox.scrollTop + scrollBox.clientHeight >= scrollBox.scrollHeight - 80) {
       activityFeedLimit += ACTIVITY_PAGE_SIZE;
-      renderHomeActivityFeed();
+      renderInboxActivityFeed();
     }
   });
 }
@@ -1321,7 +1372,7 @@ async function loadRechargeQueue() {
     if (!res.ok) return;
     rechargeQueue = await res.json();
     renderRechargeQueueTable();
-    renderHomeActivityFeed();
+    renderInboxActivityFeed();
   } catch (err) {
     console.error("Failed to load recharge queue:", err);
   }
@@ -1419,7 +1470,7 @@ async function loadBankTransactions() {
     if (!res.ok) return;
     bankTransactions = await res.json();
     renderBankTransactionsTable();
-    renderHomeActivityFeed();
+    renderInboxActivityFeed();
   } catch (err) {
     console.error("Failed to load bank transactions:", err);
   }
@@ -1580,6 +1631,20 @@ function loadSmsDetectSettings() {
   if (pushTitleEl) pushTitleEl.value = localStorage.getItem(SMS_DETECT_PUSH_TITLE_KEY) ?? SMS_DETECT_PUSH_TITLE_DEFAULT;
   renderSmsLog();
   refreshNotificationAccessStatus();
+  syncDetectSettingsToNative(); // 처음 설치해서 아직 한 번도 "설정 저장"을 안 눌렀어도(기본값
+  // 그대로) 네이티브가 최신 설정을 갖고 있도록, 화면에 값을 채울 때마다 같이 밀어준다.
+}
+
+// 네이티브 앱 안(DepositAutoDetector)이 웹뷰 없이도 같은 필터/정규식으로 판단할 수 있도록
+// 현재 유효한 설정값(로컬스토리지 저장값 또는 기본값)을 SharedPreferences로도 미러링한다.
+// loadSmsDetectSettings()(최초 로드/초기화 후) 및 saveSmsDetectSettings()(저장 시)에서 호출.
+function syncDetectSettingsToNative() {
+  if (!window.AndroidInterface || typeof window.AndroidInterface.saveDetectSettings !== "function") return;
+  const sender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT).trim();
+  const regexStr = (localStorage.getItem(SMS_DETECT_REGEX_KEY) ?? SMS_DETECT_REGEX_DEFAULT).trim();
+  const pushPackage = (localStorage.getItem(SMS_DETECT_PUSH_PACKAGE_KEY) ?? SMS_DETECT_PUSH_PACKAGE_DEFAULT).trim();
+  const pushTitle = (localStorage.getItem(SMS_DETECT_PUSH_TITLE_KEY) ?? SMS_DETECT_PUSH_TITLE_DEFAULT).trim();
+  window.AndroidInterface.saveDetectSettings(sender, regexStr, pushPackage, pushTitle);
 }
 
 // ---------------- 알림 접근 권한 (BankNotificationListener용) ----------------
@@ -1635,6 +1700,7 @@ async function saveSmsDetectSettings(btn) {
   localStorage.setItem(SMS_DETECT_REGEX_KEY, regexStr);
   localStorage.setItem(SMS_DETECT_PUSH_PACKAGE_KEY, pushPackage);
   localStorage.setItem(SMS_DETECT_PUSH_TITLE_KEY, pushTitle);
+  syncDetectSettingsToNative();
   showToast("✅ 문자 자동감지 설정을 저장했습니다.");
 }
 
@@ -1819,50 +1885,79 @@ function processDepositDetection(source, body, originMeta) {
   registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: source, silent: true });
 }
 
-// 네이티브 SmsReceiver가 문자 수신 시 호출하는 콜백 (AndroidInterface와 반대 방향의 브릿지 -
-// 네이티브 → 웹). 실제로 충전을 등록하는 경우뿐 아니라, 필터/정규식 때문에 조용히 무시되는
-// 경우까지 전부 logSmsEvent로 남겨야 "문자는 왔는데 처리가 안 됐다"를 화면에서 진단할 수 있다.
+// 문자 수신 시뮬레이션(SIM 없는 테스트, triggerSimulatedSms) 전용 진입점 - 실제 기기에서 온
+// 문자는 더 이상 여기로 오지 않는다. 예전에는 네이티브 SmsReceiver가 원본을 그대로 여기로
+// 넘기고 여기서 파싱/등록까지 했었는데, 그러면 웹뷰(이 페이지)가 떠 있을 때만 동작해서 앱이
+// 완전히 꺼져 있으면 입금이 실시간으로 반영되지 않았다. 지금은 DepositAutoDetector(네이티브,
+// Java)가 웹뷰 생존 여부와 무관하게 직접 파싱/등록까지 끝내고, 그 결과만
+// window.onNativeDetectionLogged로 화면에 보여준다(아래) - 실제로 충전을 등록하는 경우뿐
+// 아니라 필터/정규식 때문에 조용히 무시되는 경우까지 전부 logSmsEvent로 남겨야 "문자는 왔는데
+// 처리가 안 됐다"를 화면에서 진단할 수 있다는 원칙은 그대로다.
 window.onSmsReceived = function (sender, body) {
+  // 필터를 인증 여부보다 먼저 본다 - 어차피 감지 대상이 아닌 문자까지 "인증 전 무시"로 로그에
+  // 남기면, 정작 놓치면 안 되는(감지 대상인데 인증이 안 돼서 놓친) 건과 섞여 로그에서 원인을
+  // 찾기 어려워진다. 감지 대상이 아닌 건 무조건 조용히 무시(로그도 안 남김), 감지 대상인데
+  // 인증 전이라 못 넘긴 경우만 auth_skip으로 남긴다.
+  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT).trim();
+  if (filterSender && !(sender || "").includes(filterSender)) return;
+
   if (!isAdminAuthenticated) {
     logSmsEvent({ source: "SMS", sender, body, outcome: "auth_skip", detail: "관리자 인증 전이라 무시됨" });
     return;
   }
 
-  const filterSender = (localStorage.getItem(SMS_DETECT_SENDER_KEY) ?? SMS_DETECT_SENDER_DEFAULT).trim();
-  if (filterSender && !(sender || "").includes(filterSender)) {
-    logSmsEvent({ source: "SMS", sender, body, outcome: "sender_filtered", detail: `감지할 발신번호 설정("${filterSender}")과 일치하지 않음` });
-    return; // 지정한 발신번호/발신자가 아니면 무시
-  }
-
   processDepositDetection("SMS", body, { sender });
 };
 
-// 네이티브 BankNotificationListener가 알림 감지 시 호출하는 콜백 - SMS_RECEIVED 브로드캐스트가
-// 발생하지 않는 RCS/은행 앱 자체 푸시까지 잡기 위한 두 번째 경로("알림 접근" 권한이 켜져 있어야
-// 호출된다). "알림 접근"은 기기에 뜨는 모든 알림을 다 넘겨주므로(카카오톡/브라우저 등 은행과
-// 무관한 것까지), 발신번호 필터(SMS 전용)와 별개로 패키지명/제목 필터를 둬서 수신 로그가
-// 무관한 알림으로 가득 차 정작 입금 알림을 찾기 어려워지는 걸 막는다. 둘 다 비워두면(기본값을
-// 지우면) 필터 없이 전체 허용 - 정규식만으로 걸러진다.
+// 푸시 알림 수신 시뮬레이션(triggerSimulatedNotification) 전용 진입점 - 위 onSmsReceived와
+// 동일한 이유로 실제 기기 알림은 더 이상 여기로 오지 않는다(DepositAutoDetector가 직접 처리).
 window.onNotificationReceived = function (packageName, title, text) {
-  if (!isAdminAuthenticated) {
-    logSmsEvent({ source: "PUSH", packageName, body: `${title}\n${text}`, outcome: "auth_skip", detail: "관리자 인증 전이라 무시됨" });
-    return;
-  }
-
-  const body = title ? `${title}\n${text}` : text;
-
-  // 패키지/제목이 다르면 로그도 남기지 않고 조용히 무시한다 - "알림 접근"은 기기에 뜨는
-  // 모든 알림을 다 넘기므로, 걸러지는 쪽까지 다 기록하면 수신 로그가 무관한 알림으로
-  // 뒤덮여 정작 봐야 할 입금 알림 로그를 찾기 어려워진다. 부분 일치(includes)로 걸러내면
-  // 예를 들어 제목을 "NH농협2"로 걸어둔 앱이 필터 "NH농협"에 잘못 걸려 통과해버릴 수 있어
-  // (실제로 확인된 문제) 정확히 일치할 때만 통과시킨다.
+  // 패키지/제목 필터를 인증 여부보다 먼저 본다 - "알림 접근"은 기기에 뜨는 모든 알림을 다
+  // 넘기므로(카카오톡/날씨/배터리 알림 등), 감지 대상도 아닌 걸 인증 여부부터 확인해서
+  // "인증 전 무시"로 로그에 남기면 그 무관한 알림들로 로그가 뒤덮여 정작 봐야 할 입금 알림
+  // 로그를 찾기 어려워진다. 감지 대상이 아니면 로그도 안 남기고 무조건 조용히 무시하고,
+  // 감지 대상인데 인증 전이라 못 넘긴 경우만 auth_skip으로 남긴다.
+  // 부분 일치(includes)로 걸러내면 예를 들어 제목을 "NH농협2"로 걸어둔 앱이 필터 "NH농협"에
+  // 잘못 걸려 통과해버릴 수 있어(실제로 확인된 문제) 정확히 일치할 때만 통과시킨다.
   const filterPackage = (localStorage.getItem(SMS_DETECT_PUSH_PACKAGE_KEY) ?? SMS_DETECT_PUSH_PACKAGE_DEFAULT).trim();
   if (filterPackage && packageName !== filterPackage) return;
 
   const filterTitle = (localStorage.getItem(SMS_DETECT_PUSH_TITLE_KEY) ?? SMS_DETECT_PUSH_TITLE_DEFAULT).trim();
   if (filterTitle && title !== filterTitle) return;
 
+  const body = title ? `${title}\n${text}` : text;
+
+  if (!isAdminAuthenticated) {
+    logSmsEvent({ source: "PUSH", packageName, body, outcome: "auth_skip", detail: "관리자 인증 전이라 무시됨" });
+    return;
+  }
+
   processDepositDetection("PUSH", body, { packageName });
+};
+
+// DepositAutoDetector(네이티브)가 문자/알림을 직접 처리(등록/필터링/실패 등)한 뒤 그 결과를
+// 알려주는 콜백 - 앱이 완전히 꺼져 있는 동안 처리된 것도 다음에 앱을 열면(대기열 drain) 여기로
+// 한꺼번에 들어온다. 실제 백엔드 등록은 네이티브에서 이미 끝난 뒤이므로, 여기서는 로그에
+// 표시만 하고 processDepositDetection처럼 다시 등록을 시도하면 안 된다(중복 등록됨).
+window.onNativeDetectionLogged = function (entryJson) {
+  let entry;
+  try {
+    entry = JSON.parse(entryJson);
+  } catch (e) {
+    console.error("네이티브 감지 로그 파싱 실패:", e);
+    return;
+  }
+
+  logSmsEvent(entry);
+
+  if (entry.outcome === "success") {
+    showToast(`✅ ${entry.detail || "입금이 자동 등록되었습니다."}`);
+    loadAdminUsers();
+    loadDepositHistories();
+    loadRechargeQueue();
+    loadBankTransactions();
+    loadStatsSummary();
+  }
 };
 
 // ============ 가벼운 토스트 알림 (매번 확인이 필요 없는 자동 처리 결과 통지용) ============
@@ -2009,16 +2104,21 @@ async function submitUserInfoEdit(btn) {
 
 // ============ 키오스크 관리 ============
 // 메뉴 자체의 생성/수정/삭제는 각 키오스크 단말기의 관리자 패널에서 하고, 여기서는
-// 등록된 키오스크 목록·단말기별 노출 메뉴 배정·메뉴별 매출만 다룬다(메뉴는 키오스크마다
-// 다르게 노출될 수 있어 전역 메뉴 편집 화면을 여기 두지 않는다).
+// 등록된 키오스크 중 하나를 골라 노출 메뉴 배정·메뉴별 매출만 다룬다(메뉴는 키오스크마다
+// 다르게 노출될 수 있어 전역 메뉴 편집 화면을 여기 두지 않는다). 단말기가 늘어도 화면이
+// 한없이 길어지지 않도록 제목 옆 선택기로 한 번에 하나만 펼쳐서 보여준다.
 
 let kiosks = [];
+let selectedKioskId = null;
+let kioskSelectorOpen = false;
+let kioskSalesPeriod = "today";
 
 async function loadKiosks() {
   try {
     const res = await adminFetch(`${API_BASE}/admin/kiosks`);
     if (!res.ok) return;
     kiosks = await res.json();
+    if (selectedKioskId && !kiosks.some(k => k.id === selectedKioskId)) selectedKioskId = null;
     renderKioskList();
   } catch (err) {
     console.error("Failed to load kiosks:", err);
@@ -2031,126 +2131,213 @@ function renderKioskSalesRows(rows) {
   }
   return rows.map(r => `
     <tr>
-      <td>${r.product_name}</td>
+      <td>${escapeHtml(r.product_name)}</td>
       <td>${r.quantity.toLocaleString()}개</td>
       <td style="color: var(--accent-emerald); font-weight: bold;">${r.amount.toLocaleString()}원</td>
     </tr>
   `).join('');
 }
 
-function renderKioskSalesTable(kioskId, period) {
-  const k = kiosks.find(x => x.id === kioskId);
-  if (!k) return;
-  const tbody = document.querySelector(`.kiosk-sales-table[data-kiosk-sales-id="${kioskId}"] tbody`);
-  if (!tbody) return;
-  tbody.innerHTML = renderKioskSalesRows(k.sales[period]);
+const KIOSK_SALES_PERIOD_LABEL = { today: "오늘", this_month: "이번달", all_time: "전체" };
+
+// 자체 select box 대신 모달에서 오늘/이번달/전체를 고른다 (kiosk-sales-period-modal, admin.html).
+function openKioskSalesPeriodModal() {
+  showModal("kiosk-sales-period-modal");
+}
+
+function selectKioskSalesPeriod(period) {
+  kioskSalesPeriod = period;
+  hideModal("kiosk-sales-period-modal");
+  const label = document.getElementById("kiosk-sales-period-label");
+  if (label) label.innerText = KIOSK_SALES_PERIOD_LABEL[period];
+  const k = kiosks.find(x => x.id === selectedKioskId);
+  const tbody = document.querySelector(".kiosk-sales-table tbody");
+  if (k && tbody) tbody.innerHTML = renderKioskSalesRows(k.sales[period]);
+}
+
+// ---------- 상단 선택기: "키오스크를 선택하세요" 옆 화살표를 누르면 목록이 펼쳐진다 ----------
+function toggleKioskSelector() {
+  kioskSelectorOpen = !kioskSelectorOpen;
+  renderKioskSelector();
+}
+
+function selectKiosk(id) {
+  selectedKioskId = id;
+  kioskSelectorOpen = false;
+  kioskSalesPeriod = "today";
+  renderKioskSelector();
+  renderKioskDetail();
+}
+
+function renderKioskSelector() {
+  const label = document.getElementById("kiosk-selector-label");
+  const arrow = document.getElementById("kiosk-selector-arrow");
+  const list = document.getElementById("kiosk-selector-list");
+  const deleteBtn = document.getElementById("kiosk-delete-btn");
+  if (!label || !list) return;
+
+  const selected = kiosks.find(k => k.id === selectedKioskId);
+  label.innerText = kiosks.length === 0 ? "등록된 키오스크가 없습니다"
+    : selected ? (selected.device_name || "이름 없는 단말기") : "키오스크를 선택하세요";
+  if (arrow) arrow.style.transform = kioskSelectorOpen ? "rotate(180deg)" : "rotate(0deg)";
+  if (deleteBtn) deleteBtn.disabled = !selected;
+
+  list.style.display = kioskSelectorOpen ? "flex" : "none";
+  if (!kioskSelectorOpen) return;
+
+  list.innerHTML = kiosks.length === 0
+    ? `<div style="padding: 0.6rem 0.2rem; font-size: 0.85rem; color: var(--text-muted);">단말기에서 접속하면 자동으로 등록됩니다.</div>`
+    : kiosks.map(k => `
+      <button type="button" class="kiosk-selector-item ${k.id === selectedKioskId ? 'active' : ''}" onclick="selectKiosk(${k.id})">
+        <span class="kiosk-selector-item-name">${escapeHtml(k.device_name || '이름 없는 단말기')}</span>
+        <span class="kiosk-selector-item-uuid">${escapeHtml(k.device_uuid)}</span>
+      </button>
+    `).join('');
 }
 
 function renderKioskList() {
-  const container = document.getElementById("admin-kiosk-list");
-  if (!container) return;
-  container.innerHTML = "";
+  renderKioskSelector();
+  renderKioskDetail();
+}
 
-  if (kiosks.length === 0) {
-    container.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 2rem 0;">등록된 키오스크가 없습니다. 단말기에서 접속하면 자동으로 등록됩니다.</p>`;
+function renderKioskDetail() {
+  const wrap = document.getElementById("admin-kiosk-detail");
+  if (!wrap) return;
+
+  const k = kiosks.find(x => x.id === selectedKioskId);
+  if (!k) {
+    wrap.innerHTML = "";
     return;
   }
 
-  kiosks.forEach(k => {
-    const div = document.createElement("div");
-    div.className = "glass-container kiosk-card";
-    div.dataset.kioskId = k.id;
-    div.style.marginBottom = "1.2rem";
-    div.innerHTML = `
-      <div style="margin-bottom: 0.8rem;">
-        <div style="font-size: 1.05rem; font-weight: 800;">${k.device_name || '이름 없는 단말기'}</div>
-        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">${k.device_uuid}${k.merchant_name ? ' · ' + k.merchant_name : ''}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">최근 동기화: ${new Date(k.updated_at).toLocaleString()}</div>
+  wrap.innerHTML = `
+    <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+        <label class="form-label" style="margin-bottom: 0;">키오스크 이름</label>
+        <span id="kiosk-detail-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
+      </div>
+      <input type="text" class="form-control kiosk-name-input" value="${escapeHtml(k.device_name || '')}" style="margin-bottom: 1rem;"
+        onblur="autoSaveKiosk(${k.id})" onkeyup="if(event.key==='Enter') this.blur();">
+
+      <label class="form-label">메뉴</label>
+      <div class="kiosk-menu-assign-grid">
+        ${products.length === 0 ? `<span style="font-size: 0.8rem; color: var(--text-muted);">등록된 메뉴가 없습니다.</span>` : products.map(p => `
+          <div class="menu-card ${k.assigned_products.includes(p.id) ? 'assigned' : ''}" data-product-id="${p.id}" onclick="toggleKioskProduct(${k.id}, ${p.id})">
+            <span class="menu-toggle-badge">${icon('check')}</span>
+            <div>
+              <div class="menu-name">${escapeHtml(p.name)}</div>
+              <div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
+              <div class="menu-price-senior">시니어 ${p.price_senior.toLocaleString()}원</div>
+            </div>
+          </div>
+        `).join('')}
       </div>
 
-      <div style="margin-bottom: 0.8rem;">
-        <label class="form-label">단말기 명칭</label>
-        <input type="text" class="form-control kiosk-name-input" value="${k.device_name || ''}" style="margin-bottom: 0;">
-      </div>
+      <label class="form-label" style="display: block; margin-top: 1rem;">기본 결제 메뉴</label>
+      <select class="form-control kiosk-default-product-select" style="margin-bottom: 0;" onchange="autoSaveKiosk(${k.id})">
+        <option value="">-- 기본 결제 없음 --</option>
+        ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+      </select>
+    </div>
 
-      <div style="margin-bottom: 0.8rem;">
-        <label class="form-label">노출 메뉴 (체크한 메뉴만 이 단말기에 표시됩니다 - 전부 해제하면 전체 메뉴가 표시됩니다)</label>
-        <div class="kiosk-product-checklist" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem;">
-          ${products.length === 0 ? `<span style="font-size: 0.8rem; color: var(--text-muted);">등록된 메뉴가 없습니다. 단말기 관리자 패널에서 메뉴를 먼저 추가하세요.</span>` : products.map(p => `
-            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; background: rgba(255,255,255,0.06); padding: 0.35rem 0.6rem; border-radius: 8px; cursor: pointer;">
-              <input type="checkbox" value="${p.id}" ${k.assigned_products.includes(p.id) ? 'checked' : ''}>
-              ${p.name}
-            </label>
-          `).join('')}
-        </div>
+    <div class="glass-container" style="padding: 1.5rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">메뉴별 매출</span>
+        <button type="button" class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; font-size: 0.8rem; background: rgba(255,255,255,0.08); color: #fff;" onclick="openKioskSalesPeriodModal()">
+          <span id="kiosk-sales-period-label">${KIOSK_SALES_PERIOD_LABEL[kioskSalesPeriod]}</span>
+          <span data-icon="chevron-down" style="font-size: 0.65em;"></span>
+        </button>
       </div>
-
-      <div class="admin-form-grid admin-form-grid-3" style="margin-bottom: 1rem;">
-        <div>
-          <label class="form-label">기본 결제 메뉴</label>
-          <select class="form-control kiosk-default-product-select" style="margin-bottom: 0;">
-            <option value="">-- 기본 결제 없음 --</option>
-            ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
-          </select>
-        </div>
-        <div>
-          <label class="form-label">기본 수량</label>
-          <input type="number" class="form-control kiosk-default-qty-input" value="${k.default_quantity || 1}" min="1" style="margin-bottom: 0;">
-        </div>
-        <button class="btn-action btn-primary" style="height: 52px;" onclick="saveKioskAssignment(${k.id}, this)">저장</button>
+      <div style="overflow-x: auto;">
+        <table class="table-custom kiosk-sales-table">
+          <thead><tr><th>메뉴</th><th>판매 수량</th><th>매출</th></tr></thead>
+          <tbody>${renderKioskSalesRows(k.sales[kioskSalesPeriod])}</tbody>
+        </table>
       </div>
-
-      <div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
-          <span style="font-size: 0.85rem; color: var(--text-muted);">메뉴별 매출</span>
-          <select class="form-control" style="width: auto; margin-bottom: 0; padding: 0.3rem 0.5rem; font-size: 0.8rem;" onchange="renderKioskSalesTable(${k.id}, this.value)">
-            <option value="today">오늘</option>
-            <option value="this_month">이번달</option>
-            <option value="all_time">전체</option>
-          </select>
-        </div>
-        <div style="overflow-x: auto;">
-          <table class="table-custom kiosk-sales-table" data-kiosk-sales-id="${k.id}">
-            <thead><tr><th>메뉴</th><th>판매 수량</th><th>매출</th></tr></thead>
-            <tbody>${renderKioskSalesRows(k.sales.today)}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-    container.appendChild(div);
-  });
+    </div>
+  `;
+  hydrateIconPlaceholders(wrap);
 }
 
-async function saveKioskAssignment(kioskId, btn) {
-  const card = document.querySelector(`.kiosk-card[data-kiosk-id="${kioskId}"]`);
-  if (!card) return;
+// 메뉴 카드를 누르면 체크박스+저장 버튼 없이 즉시 배정 상태를 뒤집고(activate/deactivate
+// 토글 느낌) 바로 저장한다.
+function toggleKioskProduct(kioskId, productId) {
+  const k = kiosks.find(x => x.id === kioskId);
+  if (!k) return;
+  const idx = k.assigned_products.indexOf(productId);
+  if (idx >= 0) k.assigned_products.splice(idx, 1);
+  else k.assigned_products.push(productId);
 
-  const deviceName = card.querySelector(".kiosk-name-input").value.trim();
-  const assignedProducts = Array.from(card.querySelectorAll(".kiosk-product-checklist input:checked")).map(cb => parseInt(cb.value));
-  const defaultProductVal = card.querySelector(".kiosk-default-product-select").value;
-  const defaultQty = parseInt(card.querySelector(".kiosk-default-qty-input").value) || 1;
+  const card = document.querySelector(`.kiosk-menu-assign-grid [data-product-id="${productId}"]`);
+  if (card) card.classList.toggle("assigned", k.assigned_products.includes(productId));
 
-  await withButtonLock(btn, async () => {
-    try {
-      const res = await adminFetch(`${API_BASE}/admin/kiosks/${kioskId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_name: deviceName || null,
-          assigned_products: assignedProducts,
-          default_product_id: defaultProductVal ? parseInt(defaultProductVal) : null,
-          default_quantity: defaultQty
-        })
-      });
-      if (res.ok) {
-        showToast("✅ 키오스크 설정을 저장했습니다.");
-        loadKiosks();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        await showAlertModal(`저장 실패: ${data.detail || '오류 발생'}`);
-      }
-    } catch (err) {
-      console.error("saveKioskAssignment error:", err);
+  autoSaveKiosk(kioskId);
+}
+
+// 저장 버튼 없이 이름 입력창에서 포커스가 빠지거나 / 메뉴를 토글하거나 / 기본 결제 메뉴를
+// 바꾸면 즉시 자동 저장한다.
+async function autoSaveKiosk(kioskId) {
+  const wrap = document.getElementById("admin-kiosk-detail");
+  const k = kiosks.find(x => x.id === kioskId);
+  if (!wrap || !k) return;
+
+  const nameInput = wrap.querySelector(".kiosk-name-input");
+  const deviceName = nameInput ? nameInput.value.trim() : k.device_name;
+  const defaultProductSelect = wrap.querySelector(".kiosk-default-product-select");
+  const defaultProductVal = defaultProductSelect ? defaultProductSelect.value : "";
+
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/kiosks/${kioskId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        device_name: deviceName || null,
+        assigned_products: k.assigned_products,
+        default_product_id: defaultProductVal ? parseInt(defaultProductVal) : null,
+      })
+    });
+    if (res.ok) {
+      k.device_name = deviceName;
+      k.default_product_id = defaultProductVal ? parseInt(defaultProductVal) : null;
+      flashKioskSaveStatus(true);
+      renderKioskSelector();
+    } else {
+      flashKioskSaveStatus(false);
     }
-  });
+  } catch (err) {
+    console.error("autoSaveKiosk error:", err);
+    flashKioskSaveStatus(false);
+  }
+}
+
+// 저장 버튼이 없는 대신 "키오스크 이름" 라벨 옆에 잠깐 뜨는 저장 결과 표시
+// (kiosk.js의 flashDeviceSaveStatus와 동일한 패턴).
+function flashKioskSaveStatus(success) {
+  const el = document.getElementById("kiosk-detail-save-status");
+  if (!el) return;
+  el.innerText = success ? "저장됨" : "저장 실패";
+  el.style.color = success ? "var(--accent-emerald)" : "var(--accent-danger)";
+  el.style.opacity = "1";
+  clearTimeout(window._kioskSaveStatusTimer);
+  window._kioskSaveStatusTimer = setTimeout(() => { el.style.opacity = "0"; }, 1600);
+}
+
+async function confirmDeleteSelectedKiosk() {
+  const k = kiosks.find(x => x.id === selectedKioskId);
+  if (!k) return;
+  if (!(await showConfirmModal(`"${k.device_name || '이름 없는 단말기'}" 키오스크를 삭제하시겠습니까?\n메뉴 배정 등 설정이 모두 사라지며 되돌릴 수 없습니다. (지난 결제 이력은 남습니다)`))) return;
+
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/kiosks/${selectedKioskId}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast("키오스크를 삭제했습니다.");
+      selectedKioskId = null;
+      loadKiosks();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("confirmDeleteSelectedKiosk error:", err);
+  }
 }
