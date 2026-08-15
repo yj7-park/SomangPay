@@ -142,7 +142,44 @@ function onLoginSuccess(user) {
 
   loadChargeGuide();
   loadMyRechargeRequests();
+  loadUserQrCard();
   connectUserWebSocket();
+}
+
+// ============ 등록된 QR 카드(있으면) 표시 ============
+// card_uid 문자열 자체는 서버가 이미 알고 있는 값이라 클라이언트에서 QR 이미지로 그리기만
+// 하면 된다 - qrcode-generator.js(자체 호스팅, 외부 CDN 의존 없음)로 생성.
+let _userQrDataUrl = null;
+
+async function loadUserQrCard() {
+  const thumb = document.getElementById("user-qr-thumb");
+  if (!thumb) return;
+  try {
+    const res = await authFetch(`${API_BASE}/users/me/qr-card`);
+    if (!res.ok) { thumb.style.display = "none"; return; }
+    const data = await res.json();
+    if (!data.card_uid) { thumb.style.display = "none"; return; }
+
+    const qr = qrcode(0, "M");
+    qr.addData(data.card_uid);
+    qr.make();
+    _userQrDataUrl = qr.createDataURL(6, 4);
+    thumb.src = _userQrDataUrl;
+    thumb.style.display = "block";
+  } catch (err) {
+    console.error("QR 카드 조회 오류:", err);
+    thumb.style.display = "none";
+  }
+}
+
+function openUserQrModal() {
+  if (!_userQrDataUrl) return;
+  document.getElementById("user-qr-modal-img").src = _userQrDataUrl;
+  showModal("user-qr-modal");
+}
+
+function closeUserQrModal() {
+  hideModal("user-qr-modal");
 }
 
 // ============ 실시간 갱신 (WebSocket) ============

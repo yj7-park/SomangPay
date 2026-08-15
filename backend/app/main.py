@@ -217,6 +217,16 @@ def get_my_info(user: models.User = Depends(require_user_auth)):
     """로그인한 본인 정보 + 잔액 조회."""
     return user
 
+@app.get("/api/users/me/qr-card")
+def get_my_qr_card(user: models.User = Depends(require_user_auth), db: Session = Depends(get_db)):
+    """로그인한 본인이 등록한 QR 카드(있으면)의 카드 값 조회 - 크레딧 카드 화면에 QR로
+    표시해주기 위함. NFC 카드는 대상이 아니므로 card_type == QR_CODE만 조회한다."""
+    card = db.query(models.NFCCard).filter(
+        models.NFCCard.user_id == user.id,
+        models.NFCCard.card_type == "QR_CODE",
+    ).first()
+    return {"card_uid": card.card_uid if card else None}
+
 @app.put("/api/users/me/password")
 def change_my_password(
     req: schemas.UserPasswordChange,
