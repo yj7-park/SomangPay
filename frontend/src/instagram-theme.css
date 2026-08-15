@@ -53,7 +53,7 @@
   --text-muted: #a8a8a8;
   --text-dim: #737373;
 
-  --font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -65,6 +65,136 @@
   /* 브랜드 그라디언트는 로고 톤 두 개(진한 남색 → 중간 블루)만 섞은 단색 계통 -
      user.html 잔액 카드처럼 넓은 히어로 면 하나에만 쓴다. */
   --brand-gradient: linear-gradient(135deg, var(--brand-navy), var(--brand-blue));
+}
+
+/* ==========================================================================
+   라이트 테마 - 키오스크 화면(.kiosk-wrapper)부터 적용한다. 위 다크 스킨과 같은 브랜드
+   톤(로고 남색/블루/스카이)을 그대로 쓰되, 인스타그램 실제 라이트 모드 구조(흰 배경
+   #fafafa, 옅은 회색 경계선 #dbdbdb, 거의 검정에 가까운 텍스트)로 다시 배치한다 -
+   "청록 계열 대신 새 색을 아무거나 찾지 말고, 이 앱의 인스타 스킨과 같은 브랜드 톤을
+   라이트에서도 참조해달라"는 요청 반영. 다크 모드의 --brand-blue(#6781c0)는 흰 배경
+   위에서는 대비가 약해(흰 텍스트를 얹는 버튼 배경으로는 괜찮지만 텍스트/테두리로 쓰기엔
+   너무 옅음) 같은 색상 계열에서 더 짙은 톤으로 다시 잡았다 - 어두운 남색(--brand-navy)은
+   원래도 흰 배경에서 대비가 좋아 그대로 유지.
+   --brand-gradient는 여기서 다시 선언하지 않아도 --brand-navy/--brand-blue를 참조하는
+   값이라 이 스코프 안에서는 자동으로 라이트 버전으로 바뀐다.
+   admin/user 페이지는 아직 라이트 테마 대응이 안 돼 있어 일부러 이 규칙 밖에 뒀다 -
+   .kiosk-wrapper로 범위를 좁혀서 시스템이 라이트여도 admin/user는 지금처럼 다크로 그대로
+   보인다. 나중에 그쪽도 준비되면 같은 패턴(해당 페이지의 최상위 래퍼에 스코프)으로
+   확장하면 된다. */
+@media (prefers-color-scheme: light) {
+  .kiosk-wrapper:not([data-theme="dark"]) {
+    --bg-dark: #fafafa;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f5f5f5;
+    --border-glass: #dbdbdb;
+    --border-active: #6781c0;
+
+    --brand-navy: #1f1e59;
+    --brand-blue: #33489e;
+    --brand-sky: #e4e9f7;
+
+    /* "이 색을 메인색으로" - 다크 모드에서 이미 쓰던 로고 중간 톤(#6781c0)/어두운 톤(#1f1e59)을
+       라이트에서도 그대로. 위 --brand-blue(#33489e)는 흰 배경 위 텍스트/로고용으로 대비를
+       낮춘 별도 톤이라 그대로 두고, 버튼/포커스/링크 등 실제 액센트만 다크와 동일하게
+       맞춘다 - 흰 텍스트를 얹는 버튼 배경으로는 문제없고, 오히려 라이트/다크 전환 시 액센트
+       색이 그대로 유지돼 일관돼 보인다. */
+    --accent-cyan: #6781c0;
+    --accent-cyan-glow: rgba(103, 129, 192, 0.18);
+    --accent-blue: #6781c0;
+    --accent-indigo: #1f1e59;
+    --accent-senior: #b45309;
+    --accent-amber: #b45309;
+    --accent-emerald: #0e9f6e;
+    --accent-success: #0e9f6e;
+    --accent-danger: #dc2626;
+
+    --text-main: #262626;
+    --text-muted: #737373;
+    --text-dim: #8e8e8e;
+    /* 메뉴 이름만 --text-main보다 살짝 옅은 회색 섞인 차콜로 - 완전 검정처럼 안 보이게
+       (요청: "완전 검은색 말고 회색을 섞은 차콜 느낌으로 조금만"). */
+    --text-menu-name: #45454b;
+
+    /* style.css :root의 다크 기본값(rgba(255,255,255,0.06)/rgba(0,0,0,0.35))을 여기서
+       다시 정의 안 해두면, kiosk.html 곳곳(설정 패널 배경, 버튼 비활성 배경, 결제 금액
+       박스 등)에서 쓰는 var(--surface-1)/var(--surface-2)가 라이트 모드에서도 다크
+       기본값 그대로 남아 흰 배경과 안 어울리게 된다. */
+    --surface-1: rgba(31, 30, 89, 0.035);
+    --surface-2: rgba(31, 30, 89, 0.055);
+    --modal-bg: #ffffff;
+
+    --shadow-subtle: 0 4px 18px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.kiosk-wrapper[data-theme="light"] {
+  --bg-dark: #fafafa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f5f5;
+  --border-glass: #dbdbdb;
+  --border-active: #6781c0;
+
+  --brand-navy: #1f1e59;
+  --brand-blue: #33489e;
+  --brand-sky: #e4e9f7;
+
+  --accent-cyan: #6781c0;
+  --accent-cyan-glow: rgba(103, 129, 192, 0.18);
+  --accent-blue: #6781c0;
+  --accent-indigo: #1f1e59;
+  --accent-senior: #b45309;
+  --accent-amber: #b45309;
+  --accent-emerald: #0e9f6e;
+  --accent-success: #0e9f6e;
+  --accent-danger: #dc2626;
+
+  --text-main: #262626;
+  --text-muted: #737373;
+  --text-dim: #8e8e8e;
+  --text-menu-name: #45454b;
+
+  --surface-1: rgba(31, 30, 89, 0.035);
+  --surface-2: rgba(31, 30, 89, 0.055);
+  --modal-bg: #ffffff;
+
+  --shadow-subtle: 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* 위 :root의 하드코딩 값(다크 전용)을 쓰던 규칙 중 kiosk.html에서 실제로 쓰이는 것만
+   라이트에서도 보이도록 스코프 덮어쓰기 - .form-control/헤더 배경이 옅은 흰색 반투명이라
+   흰 카드 위에서는 거의 안 보였다. [data-theme="light"]는 시스템 설정과 무관하게 항상,
+   :not([data-theme="dark"])는 시스템이 라이트일 때만(위 변수 블록과 동일한 조건) 걸어야
+   해서 둘을 하나의 media 쿼리 밖 콤마 선택자로 합치면 안 된다 - 시스템이 다크인데도 이
+   보정이 걸려버린다. */
+.kiosk-wrapper[data-theme="light"] .kiosk-header {
+  background: rgba(255, 255, 255, 0.92);
+}
+.kiosk-wrapper[data-theme="light"] .form-control {
+  background: #f5f5f5;
+}
+.kiosk-wrapper[data-theme="light"] .table-custom tbody tr:hover {
+  background: rgba(31, 30, 89, 0.04);
+}
+/* 설정 모달(#kiosk-admin-modal 등 .modal-overlay)도 라이트에서는 검은 블러가 아니라
+   흰 블러로 - 위 dark :root(rgba(0,0,0,0.8))/style.css 기본값(rgba(4,7,13,0.9))을 덮어씀.
+   blur(14px) 자체는 style.css에서 그대로 유지, 여기서는 틴트 색만 라이트로. */
+.kiosk-wrapper[data-theme="light"] .modal-overlay {
+  background: rgba(255, 255, 255, 0.75);
+}
+@media (prefers-color-scheme: light) {
+  .kiosk-wrapper:not([data-theme="dark"]) .kiosk-header {
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .kiosk-wrapper:not([data-theme="dark"]) .form-control {
+    background: #f5f5f5;
+  }
+  .kiosk-wrapper:not([data-theme="dark"]) .table-custom tbody tr:hover {
+    background: rgba(31, 30, 89, 0.04);
+  }
+  .kiosk-wrapper:not([data-theme="dark"]) .modal-overlay {
+    background: rgba(255, 255, 255, 0.75);
+  }
 }
 
 body {
@@ -139,15 +269,6 @@ button:hover,
   color: #000;
 }
 
-.fab-button {
-  background: var(--accent-cyan);
-  box-shadow: 0 6px 18px rgba(103, 129, 192, 0.45);
-  border-radius: 50%;
-}
-.fab-button:hover {
-  filter: brightness(1.08);
-}
-
 /* ---------------- Inputs ---------------- */
 .form-control {
   background: rgba(255, 255, 255, 0.05);
@@ -172,6 +293,12 @@ button:hover,
   border-radius: var(--radius-lg);
 }
 
+/* 홈 "총 보유 잔액 합계" 카드 - user.html 크레딧 잔액 카드(.user-card-widget)와
+   배경만 동일하게 맞춘다 (패딩/그림자/테두리 등 나머지는 .glass-container 그대로 유지). */
+.hero-stat {
+  background: var(--brand-gradient);
+}
+
 .attention-tile.has-items {
   border-color: var(--accent-senior);
   background: rgba(245, 158, 11, 0.08);
@@ -181,6 +308,13 @@ button:hover,
 }
 
 /* ---------------- Admin tab bar / sidebar (kiosk·user 화면에는 없음, admin.html 전용 마크업) ---------------- */
+/* admin.html 최상단 타이틀바(.app-header)를 없앴으므로, 그 높이(60px)를 빼던 계산을
+   걷어내고 .admin-shell이 뷰포트 전체 높이를 쓰도록 한다. */
+.admin-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .admin-tabbar {
   background: rgba(0, 0, 0, 0.94);
   backdrop-filter: none;
@@ -203,6 +337,7 @@ button:hover,
   .admin-tabbar {
     border-right: none;
     border-top: none;
+    top: 0; /* 위에 더 이상 sticky 타이틀바가 없으므로 뷰포트 맨 위에 붙인다 (기존엔 60px) */
   }
   .admin-tab-btn.active {
     background: rgba(103, 129, 192, 0.16);

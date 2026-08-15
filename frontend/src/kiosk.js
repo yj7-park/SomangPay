@@ -151,6 +151,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   resetCart(); // 기본 결제 상품으로 장바구니 자동 세팅 및 메뉴 UI 갱신
   initWebNFC(); // 권한 상태 확인 후 자동 NFC 활성화 시도
   initKioskPinToggle();
+  initKioskTheme();
 
   // USB Barcode / QR Code Scanner Keyboard Emulation Listener
   window.addEventListener("keydown", (e) => {
@@ -191,11 +192,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
 });
-
-// 메뉴 그리드 열/행 계산에 쓰이는 태블릿 판별 - style.css 브레이크포인트와 동일한 조건
-function isKioskTabletLayout() {
-  return window.matchMedia('(min-width: 768px) and (min-height: 700px)').matches;
-}
 
 // Camera WebCam Realtime QR Decoder (jsQR)
 // 테스트 모드: 실제 getUserMedia 없이 카메라 뷰포트만 띄우고 시뮬레이션 버튼을 보여줌.
@@ -567,34 +563,6 @@ function resetCart() {
   renderKioskProducts();
 }
 
-// 메뉴 개수에 따라 그리드 열/행을 동적으로 나눈다 (태블릿 전용 - 모바일은 기존 auto-fill 유지):
-// 1개 = 1열(가로 꽉 참), 2개 = 1열 2행(각각 가로 꽉 참), 3~4개 = 2열 2행, 5개 이상 = 3열(행은 필요한 만큼)
-function applyKioskMenuGridLayout(container, count) {
-  if (!isKioskTabletLayout()) {
-    container.style.removeProperty("grid-template-columns");
-    container.style.removeProperty("grid-template-rows");
-    return;
-  }
-
-  // 1~4개: 2x2, 5~9개: 3x3(최대). 10개부터는 3열을 유지한 채 행만 늘려서 스크롤로 대응.
-  let columns, rows;
-  if (count <= 4) {
-    columns = 2;
-    rows = 2;
-  } else if (count <= 9) {
-    columns = 3;
-    rows = 3;
-  } else {
-    columns = 3;
-    rows = Math.ceil(count / 3);
-  }
-
-  // style.css의 .menu-grid grid-template-columns가 !important라서, 인라인에서도
-  // !important로 지정해야 우선순위가 이긴다.
-  container.style.setProperty("grid-template-columns", `repeat(${columns}, 1fr)`, "important");
-  container.style.setProperty("grid-template-rows", `repeat(${rows}, 1fr)`, "important");
-}
-
 // 이 단말기에 노출할 메뉴만 걸러낸다 - currentAssignedProducts가 비어있으면(배정 안 함)
 // 하위호환으로 전체 메뉴를 보여준다. 장바구니/기본결제 조회 등 다른 로직은 계속
 // 전체 카탈로그(products)를 기준으로 하고, 여기 고객 화면 렌더링만 걸러진 목록을 쓴다.
@@ -608,15 +576,14 @@ function renderKioskProducts() {
   if (!container) return;
   container.innerHTML = "";
   const visibleProducts = visibleKioskProducts();
-  applyKioskMenuGridLayout(container, visibleProducts.length);
 
   visibleProducts.forEach(p => {
     const qty = cart[p.id] || 0;
     const card = document.createElement("div");
     card.className = `menu-card ${qty > 0 ? 'selected' : ''}`;
     card.innerHTML = `
-      <div>
-        <div class="menu-name">${p.name}</div>
+      <div class="menu-name">${p.name}</div>
+      <div class="menu-price-block">
         <div class="menu-price">일반: ${p.price_general.toLocaleString()}원</div>
         <div class="menu-price-senior">시니어: ${p.price_senior.toLocaleString()}원</div>
       </div>
@@ -634,7 +601,7 @@ function renderKioskProducts() {
 
 function updateQty(productId, delta) {
   const current = cart[productId] || 0;
-  const next = Math.max(0, current + delta);
+  const next = Math.min(99, Math.max(0, current + delta));
   if (next === 0) delete cart[productId];
   else cart[productId] = next;
 
@@ -989,6 +956,63 @@ async function kioskAdminFetch(url, options = {}) {
   return res;
 }
 
+// ---------------- 라이트/다크 테마 ----------------
+// 시스템/라이트/다크 3가지, 기본값은 "시스템"(기기 명암 설정을 따름). 저장값이 없으면(=시스템)
+// .kiosk-wrapper에 data-theme를 아예 안 얹어서, style.css의 시스템 설정 기반 미디어 쿼리
+// (@media (prefers-color-scheme: light))가 그대로 적용되게 둔다. 화면 전환 시 깜빡임(FOUC)을
+// 막기 위해 저장된 값은 <body> 최상단 .kiosk-wrapper 바로 안의 인라인 <script>가 렌더 전에
+// 먼저 반영해두므로, 여기 initKioskTheme()은 설정 화면의 버튼 활성 표시만 맞춘다.
+const KIOSK_THEME_KEY = "kiosk_theme_pref";
+
+function setKioskTheme(pref) {
+  const wrapper = document.querySelector(".kiosk-wrapper");
+  if (!wrapper) return;
+  if (pref === "system") {
+    localStorage.removeItem(KIOSK_THEME_KEY);
+    wrapper.removeAttribute("data-theme");
+  } else {
+    localStorage.setItem(KIOSK_THEME_KEY, pref);
+    wrapper.setAttribute("data-theme", pref);
+  }
+  updateKioskThemeButtonsUI(pref);
+  updateKioskThemeColorMeta();
+  appendDebugLog(`[화면 테마] ${pref} 로 전환`, "INFO");
+}
+
+function initKioskTheme() {
+  updateKioskThemeButtonsUI(localStorage.getItem(KIOSK_THEME_KEY) || "system");
+  updateKioskThemeColorMeta();
+  // "시스템" 상태일 때 OS 명암 설정이 바뀌면(예: 저녁에 기기가 자동으로 다크 전환) CSS는
+  // 미디어 쿼리로 알아서 다시 그려지지만, <meta name="theme-color">는 JS로 직접 갱신해야 한다.
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", updateKioskThemeColorMeta);
+  }
+}
+
+// 브라우저 주소창/상태 표시줄 색(PWA 크롬)을 현재 테마에 맞춘다 - 전용 락다운 빌드는 몰입
+// 모드라 안 보이지만, 일반 브라우저에서 열었을 때는 눈에 띄는 부분이라 같이 맞춰준다.
+function updateKioskThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const pref = localStorage.getItem(KIOSK_THEME_KEY) || "system";
+  const isLight = pref === "light" || (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+  meta.setAttribute("content", isLight ? "#eef1f7" : "#000000");
+}
+
+function updateKioskThemeButtonsUI(activePref) {
+  const buttons = {
+    system: document.getElementById("k-theme-system-btn"),
+    light: document.getElementById("k-theme-light-btn"),
+    dark: document.getElementById("k-theme-dark-btn"),
+  };
+  Object.entries(buttons).forEach(([pref, btn]) => {
+    if (!btn) return;
+    const active = pref === activePref;
+    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
+    btn.style.color = active ? "#001318" : "var(--text-main)";
+  });
+}
+
 // ---------------- 화면 고정(Screen Pinning) 토글 버튼 ----------------
 // 전용 키오스크 락다운 빌드에서만 의미가 있다 - AndroidInterface가 없는 일반 브라우저나
 // 락다운이 꺼진 admin/user 빌드에서는 버튼 자체를 숨겨둔다(initWebNFC()와 동일한 판단 방식).
@@ -1115,8 +1139,8 @@ function updateKioskOrientationButtonsUI(activeMode) {
   [[portraitBtn, "portrait"], [landscapeBtn, "landscape"]].forEach(([btn, mode]) => {
     if (!btn) return;
     const active = mode === activeMode;
-    btn.style.background = active ? "var(--accent-cyan)" : "rgba(255,255,255,0.1)";
-    btn.style.color = active ? "#001318" : "#fff";
+    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
+    btn.style.color = active ? "#001318" : "var(--text-main)";
   });
 }
 

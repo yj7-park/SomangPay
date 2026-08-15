@@ -3,7 +3,46 @@
    Ensures absolute zero visual clipping or truncation on all device viewports
    ========================================================================== */
 
-/* Noto Sans KR을 로컬에서 서빙 (외부 CDN 의존 제거 - 키오스크 네트워크 불안정/차단 대비) */
+/* Pretendard을 로컬에서 서빙(WOFF2, 외부 CDN 의존 제거 - 키오스크 네트워크 불안정/차단
+   대비) - 기본 서체를 이걸로 바꾼다. Noto Sans KR은 만약을 위해 폴백으로 남겨둔다. */
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/Pretendard-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/Pretendard-Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/Pretendard-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/Pretendard-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('./fonts/Pretendard-Black.woff2') format('woff2');
+}
+
+/* Noto Sans KR을 로컬에서 서빙 (외부 CDN 의존 제거 - 키오스크 네트워크 불안정/차단 대비) -
+   Pretendard 폴백용으로 유지. */
 @font-face {
   font-family: 'Noto Sans KR';
   font-style: normal;
@@ -32,7 +71,6 @@
   font-display: swap;
   src: url('./fonts/NotoSansKR-900.ttf') format('truetype');
 }
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
 
 :root {
   --bg-dark: #070a12;
@@ -50,12 +88,22 @@
   --accent-emerald: #10b981; /* --accent-success의 별칭 - admin.js/admin.html이 이 이름으로도 참조함 */
   --accent-success: #10b981;
   --accent-danger: #ef4444;
+  --accent-rose: #f43f5e; /* kiosk.html의 로그 "비우기" 버튼이 참조하는데 정의가 빠져있었음(라이트 테마 작업 중 발견) */
 
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-dim: #64748b;
 
-  --font-family: 'Noto Sans KR', 'Outfit', system-ui, -apple-system, sans-serif;
+  /* 카드 위에 얹는 은은한 패널(설정 하위 섹션, 비활성 탭 배경 등) / 오목하게 들어간 패널
+     (입력창·표시창 배경, 표 컨테이너 등) - 지금까지 이 두 가지를 rgba(255,255,255,0.05~0.1)
+     / rgba(0,0,0,0.25~0.5)로 화면마다 제각각 하드코딩해왔는데, 라이트 테마에서는 그 값들이
+     그대로 못 쓰인다(흰 배경 위에 흰 반투명은 안 보이고, 검은 반투명은 톤이 다르다) - 변수로
+     묶어서 테마별로 한 곳에서 바꿀 수 있게 한다. */
+  --surface-1: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(0, 0, 0, 0.35);
+  --modal-bg: #0f172a;
+
+  --font-family: 'Pretendard', 'Noto Sans KR', system-ui, -apple-system, sans-serif;
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -64,6 +112,13 @@
   --shadow-subtle: 0 8px 32px rgba(0, 0, 0, 0.4);
   --backdrop-blur: blur(16px);
 }
+
+/* 라이트/다크 테마(시스템/라이트/다크, .kiosk-wrapper[data-theme] 스위칭 - 설정 탭 > 화면
+   테마, kiosk.html/kiosk.js 참고)의 실제 색 값은 여기가 아니라 src/instagram-theme.css에
+   있다 - 이 사이트의 브랜드 컬러(로고 남색/블루/스카이 톤)와 인스타그램풍 스킨이 전부 그
+   파일 하나에 몰려있어서, 라이트 모드도 같은 브랜드 톤으로 맞추려면 색 정의를 한 곳(그
+   파일)에만 두는 게 어긋날 일이 없다. 이 파일(style.css)의 :root는 그 파일이 아예 로드
+   안 됐을 때를 위한 다크 기본값(순수 청록 계열)만 갖고 있다. */
 
 /* Global Reset & Protection against Overflow */
 *, *::before, *::after {
@@ -85,6 +140,10 @@ html, body {
   background-color: var(--bg-dark);
   color: var(--text-main);
   font-family: var(--font-family);
+  /* 본문 기본 굵기는 Medium(500)만 - 제목/섹션타이틀처럼 강조가 필요한 곳은 각 클래스에서
+     개별적으로 700~900을 쓴다. 본문까지 전부 Bold면 오히려 제목과 구분이 안 돼 위계가
+     무너진다(참고 이미지: 큰 제목은 굵게, 본문 불릿 텍스트는 가볍게). */
+  font-weight: 500;
   line-height: 1.4;
   overflow-x: hidden !important; /* Block horizontal scrollbars */
   word-break: keep-all !important; /* Keep Korean words intact */
@@ -130,7 +189,6 @@ html, body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-family: 'Outfit', var(--font-family);
   font-size: clamp(1rem, 2.5vw, 1.35rem);
   font-weight: 800;
   background: linear-gradient(135deg, #38bdf8, #818cf8);
@@ -254,7 +312,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   padding: 0.65rem 0.85rem;
   font-size: clamp(0.85rem, 1.2vw, 0.92rem);
   color: var(--text-main);
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--surface-2);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
   outline: none;
@@ -448,24 +506,41 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   display: block;
 }
 
-.fab-button {
-  position: fixed;
-  right: 1.2rem;
-  bottom: 5.2rem;
-  z-index: 91;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-  color: #fff;
-  font-size: 1.6rem;
+/* 탭별 본문 제목 - 최상단 타이틀바를 없앤 뒤로 각 탭의 본문(admin-main) 맨 위에 직접 넣는다.
+   home/search/inbox는 :not() 셀렉터로 이 요소도 이미 flex-shrink:0 처리되어(위 fixed-height
+   뷰 규칙 참고) 스크롤 영역 계산에 자동으로 반영된다 - 별도 대응 불필요. */
+.admin-page-title {
+  font-size: 1.3rem;
   font-weight: 800;
-  border: none;
-  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.45);
-  cursor: pointer;
+  color: var(--text-main);
+  margin: 0.1rem 0 1rem;
+}
+
+/* 사용자 관리 탭처럼 제목 옆에 글씨만 있는 액션 버튼(+)이 필요한 경우 - 예전 하단 우측
+   FAB(＋ 새 회원 등록) 버튼을 대신한다. */
+.admin-page-title-row {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.admin-page-title-row .admin-page-title {
+  margin: 0.1rem 0 0;
+}
+.admin-page-title-action {
+  background: none;
+  border: none;
+  padding: 0.2rem 0.3rem;
+  min-height: auto;
+  color: var(--accent-cyan);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.admin-page-title-action:hover {
+  opacity: 0.75;
 }
 
 /* admin.js의 showToast()가 #admin-toast를 만들어 .show 클래스로 토글하는데, 지금까지 이
@@ -537,19 +612,24 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   .admin-main {
     padding: 1.5rem 1.5rem 1.5rem 0;
   }
-  .fab-button {
-    right: 1.5rem;
-    bottom: 1.5rem;
-  }
   #admin-toast {
     bottom: 1.5rem; /* 데스크톱은 하단 탭바가 왼쪽 사이드바로 바뀌므로 여유를 둘 필요 없음 */
   }
 }
 
 /* Dashboard stat tiles */
+/* 홈 최상단 카드 - 잔액 보유 회원수(작게, 좌측 상단)와 총 보유 잔액 합계(크게, 우측)를
+   한 카드 안에 위아래로 나눠 담는다. min-height로 카드를 세로로 넉넉하게 늘린다. */
 .hero-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 180px;
   padding: 1.4rem 1.6rem;
   margin-bottom: 1rem;
+}
+.hero-stat-bottom {
+  text-align: right;
 }
 .hero-stat .stat-label {
   font-size: 0.85rem;
@@ -562,38 +642,17 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   color: var(--text-main);
   margin-top: 0.2rem;
 }
+.hero-stat .stat-value-sm {
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 0.2rem;
+}
 
-.stat-row-primary {
-  display: flex;
-  gap: 0.6rem;
-  margin-bottom: 1rem;
-}
-.stat-row-primary .hero-stat,
-.stat-row-primary .stat-tile {
-  margin-bottom: 0;
-  min-width: 0;
-}
-.stat-row-primary .hero-stat {
-  flex: 3 1 0%;
-}
-.stat-row-primary .stat-tile {
-  flex: 1 1 0%;
-  /* 옆의 hero-stat이 훨씬 커서 같은 행 높이로 늘어나므로(align-items 기본값 stretch),
-     내용(라벨+값)을 위쪽에 붙이지 않고 세로로 가운데 오도록 맞춘다. */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: right;
-}
 @media screen and (max-width: 480px) {
-  .stat-row-primary {
-    gap: 0.5rem;
-  }
-  .stat-row-primary .hero-stat {
+  .hero-stat {
     padding: 1rem 1rem;
-  }
-  .stat-row-primary .stat-tile {
-    padding: 1rem 0.6rem;
+    min-height: 150px;
   }
 }
 
@@ -619,7 +678,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   margin-top: 0.2rem;
 }
 
-/* 총 회원수(위 stat-row-primary)를 제외한 나머지 통계 셀은 라벨/값 모두 우측 정렬. */
+/* 통계 그리드 셀은 라벨/값 모두 우측 정렬. */
 .stat-grid .stat-tile {
   text-align: right;
 }
@@ -736,20 +795,25 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   background: var(--accent-danger);
 }
 
-/* 홈 탭 - 통계 카드들은 고정, "최근 처리 내역"만 남은 공간을 차지하며 그 안에서 스크롤된다
-   (충전함 탭과 동일한 패턴). --home-view-h는 admin.js의 updateFixedViewLayoutMetrics()가
-   실제 렌더된 헤더/탭바 높이를 재서 채워준다. */
-#admin-view-home.active {
+/* 충전함(Inbox) - 본문 제목 아래로 "최근 처리 내역" 피드(구 홈 탭 피드, 계좌 입금/충전
+   신청을 시간순으로 합친 목록)만 남은 공간을 차지하며 그 안에서 스크롤된다.
+   --inbox-view-h는 admin.js의 updateFixedViewLayoutMetrics()가 실제 렌더된 헤더/탭바
+   높이를 재서 채워준다(모바일 하단 고정 탭바 vs 데스크톱 사이드바 전환 때문에 고정 px로는
+   정확히 계산할 수 없어 런타임에 측정). 기존 계좌 입금/충전 신청 표(.inbox-half)는 지금
+   admin.html에서 주석 처리되어 있어 실제로는 렌더되지 않지만, 나중에 되살릴 수 있게
+   아래 스타일은 그대로 남겨둔다. */
+#admin-view-inbox.active {
   display: flex;
   flex-direction: column;
-  height: var(--home-view-h, 70vh);
+  gap: 1rem;
+  height: var(--inbox-view-h, 70vh);
   overflow: hidden;
 }
-#admin-view-home.active > *:not(.activity-feed-scroll) {
+#admin-view-inbox.active > *:not(.activity-feed-scroll) {
   flex-shrink: 0;
 }
 
-/* Home "최근 처리 내역" 실시간 피드 - 남은 공간 안에서만 스크롤되고, 스크롤이
+/* "최근 처리 내역" 실시간 피드 - 남은 공간 안에서만 스크롤되고, 스크롤이
    하단에 가까워지면 admin.js가 다음 페이지를 이어붙인다(무한 스크롤). */
 .activity-feed-scroll {
   flex: 1 1 0;
@@ -763,18 +827,6 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   flex-direction: column;
   gap: 0.6rem;
   margin-bottom: 1rem;
-}
-
-/* 충전함(Inbox) - 헤더/하단 탭바를 제외한 영역을 계좌 입금/충전 신청 목록이 반씩 나눠 쓰고,
-   각자 안에서만 스크롤된다. --inbox-view-h는 admin.js의 updateInboxLayoutMetrics()가
-   실제 렌더된 헤더/탭바 높이를 재서 채워준다(모바일 하단 고정 탭바 vs 데스크톱 사이드바
-   전환 때문에 고정 px로는 정확히 계산할 수 없어 런타임에 측정). */
-#admin-view-inbox.active {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: var(--inbox-view-h, 70vh);
-  overflow: hidden;
 }
 
 .inbox-half {
@@ -844,6 +896,20 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   font-size: 1rem;
   white-space: nowrap;
   text-align: right;
+}
+/* 대기 상태 줄의 관리 버튼(삭제 / 승인·반려) - 금액 바로 아래에 쌓아서 보여준다 */
+.activity-row .activity-amount-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.activity-row .activity-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .activity-status {
   display: inline-block;
@@ -967,11 +1033,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 
 .table-custom tbody tr {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-glass);
 }
 
 .table-custom tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-1);
 }
 
 /* Zero-Clipping Modal Dialog System */
@@ -995,7 +1061,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 
 .modal-content, .modal-box-large {
-  background: #0f172a;
+  background: var(--modal-bg);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   padding: clamp(1rem, 2.5vw, 1.5rem);
@@ -1026,7 +1092,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   flex-shrink: 0;
   padding-top: 0.75rem;
   margin-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-glass);
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
@@ -1084,6 +1150,10 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
     font-size: 0.95rem !important;
     margin-bottom: 0.4rem !important;
   }
+  /* 결제 금액 타이틀은 초기화 버튼과 한 줄 정렬돼야 하므로 예외적으로 margin-bottom 0 유지 */
+  .kiosk-checkout-section .section-title {
+    margin-bottom: 0 !important;
+  }
 }
 
 /* Payment Success Screen Edge Green Glow Animation */
@@ -1136,7 +1206,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 /* Redesigned Section Title Wording Style */
 .section-title {
   font-size: 1.15rem !important;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--accent-cyan);
   margin-bottom: 0.75rem;
   border-left: 3px solid var(--accent-cyan);
@@ -1158,6 +1228,14 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   border-radius: var(--radius-md);
   padding: 0.85rem;
   border: 1px solid var(--border-glass);
+}
+
+/* "선택된 메뉴" 아래 담긴 항목 목록(kiosk.js updateCheckoutSummary가 .cart-item으로 생성) -
+   색 지정이 없어 상속에 맡겨져 있었는데 실제로는 잘 안 보인다는 피드백이 있어 위 "선택된
+   메뉴" 레이블과 동일한 색으로 명시. */
+.cart-item {
+  color: var(--text-muted);
+  padding: 0.2rem 0;
 }
 
 .checkout-scan-box {
@@ -1232,6 +1310,105 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   -webkit-transform: scaleX(-1);
 }
 
+/* 관리자 "키오스크 관리" 탭 - 제목 옆 선택기(누르면 목록이 펼쳐지는 드롭다운 트리거) */
+.kiosk-selector-btn {
+  flex: 1;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+.kiosk-selector-arrow-icon {
+  display: inline-flex;
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+.kiosk-selector-list {
+  display: none;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+.kiosk-selector-item {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+}
+.kiosk-selector-item-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+.kiosk-selector-item-uuid {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+.kiosk-selector-item.active {
+  border-color: var(--accent-cyan);
+  background: rgba(103, 129, 192, 0.1);
+}
+
+/* 키오스크에 배정할 메뉴 그리드 - 실제 키오스크 화면(.menu-card)과 같은 모양으로 2열,
+   카드를 누르면 배정 활성/비활성이 토글된다(체크박스 대신 버튼 느낌). */
+.kiosk-menu-assign-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.kiosk-menu-assign-grid .menu-card {
+  cursor: pointer;
+  min-height: auto !important;
+  opacity: 0.5;
+  filter: grayscale(0.4);
+  position: relative;
+  transition: opacity 0.15s ease, filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.kiosk-menu-assign-grid .menu-card.assigned {
+  opacity: 1;
+  filter: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1.5px var(--accent-cyan);
+}
+.kiosk-menu-assign-grid .menu-card .menu-toggle-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-cyan);
+  color: #fff;
+  font-size: 0.65rem;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.kiosk-menu-assign-grid .menu-card.assigned .menu-toggle-badge {
+  opacity: 1;
+  transform: scale(1);
+}
+
 /* Kiosk Menu Card Aspect Ratio & Compact Button Fix */
 .menu-grid {
   display: grid !important;
@@ -1255,9 +1432,9 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 
 .menu-card .menu-name {
   font-size: 0.95rem !important;
-  font-weight: 700;
+  font-weight: 800;
   margin-bottom: 0.3rem;
-  color: #fff;
+  color: var(--text-menu-name, var(--text-main));
 }
 
 .menu-card .menu-price {
@@ -1271,11 +1448,76 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   font-weight: 500;
 }
 
+/* 실제 키오스크 고객 화면(#kiosk-menu-grid)만 - 2열 카드 그리드 대신 메뉴 하나가 가로
+   한 줄을 통째로 차지하도록 바꾸고(단일 열), "메뉴 이름 - 금액 - 개수" 3단 가로 배치로
+   바꾼다(이름 아래에 가격을 붙이지 않고 가격을 별도 칸으로 오른쪽 정렬). 글씨도 전체적으로
+   키운다. admin.js의 단말기별 메뉴 배정 화면(.kiosk-menu-assign-grid)은 여전히 2열 카드
+   그리드+세로 스택을 그대로 쓰므로, 그쪽 .menu-card까지 같이 바뀌지 않도록 .menu-grid로
+   범위를 좁혀 덮어쓴다.
+   (Kiosk Menu Card Aspect Ratio & Compact Button Fix 블록의 기본값을 그대로 상속받고
+   여기서 필요한 것만 다시 덮어쓴다.) */
+.menu-grid {
+  grid-template-columns: 1fr !important;
+  /* CSS 그리드는 기본값(align-content: normal, 실질적으로 stretch)이 행 높이를 컨테이너의
+     남는 세로 공간에 맞춰 늘린다 - 메뉴가 몇 개 없을 때 카드가 쓸데없이 커 보이는 원인이라,
+     항목 수와 무관하게 카드 높이가 항상 고정값(아래 .menu-card height)을 유지하도록 위쪽부터
+     제 크기로 쌓고 나머지는 그냥 빈 공간으로 남긴다. */
+  align-content: start !important;
+}
+.menu-grid .menu-card {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 1.2rem;
+  /* min/max가 아니라 고정 height - 메뉴 개수가 적어서 그리드에 남는 공간이 있어도(위
+     align-content: start와 함께) 카드가 늘어나지 않고, 많아서 스크롤이 생겨도 줄어들지
+     않는다. */
+  height: 88px !important;
+}
+.menu-grid .menu-card .menu-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 1.4rem !important;
+  margin-bottom: 0 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-grid .menu-card .menu-price-block {
+  flex-shrink: 0;
+  text-align: right;
+}
+.menu-grid .menu-card .menu-price,
+.menu-grid .menu-card .menu-price-senior {
+  font-size: 0.95rem !important;
+}
+.menu-grid .menu-card .touch-qty-box {
+  margin-top: 0 !important;
+  flex-shrink: 0;
+}
+.menu-grid .touch-qty-btn {
+  width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  font-size: 1.3rem !important;
+}
+.menu-grid .touch-qty-val {
+  font-size: 1.15rem !important;
+  font-weight: 800;
+  padding: 0 0.6rem;
+  color: var(--text-muted);
+  /* 최대 99(updateQty의 상한)까지는 자릿수가 늘어나도(1자리→2자리) 폭이 안 바뀌도록
+     "99" 기준으로 고정 - ch 단위는 폰트별 "0" 글리프 폭 기준이라 Pretendard Black(800)
+     굵기의 실제 두 자리 숫자 폭보다 작게 잡혀서(2ch, 2.6ch 둘 다 부족했음, 실측 결과
+     2자리일 때 41px 필요) 폰트에 안 흔들리는 rem 고정값으로 교체. */
+  min-width: 2.8rem;
+  text-align: center;
+}
+
 .touch-qty-box {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  background: rgba(0, 0, 0, 0.4) !important;
+  background: var(--surface-2) !important;
   border-radius: var(--radius-sm) !important;
   padding: 0.2rem !important;
   margin-top: 0.6rem !important;
@@ -1321,9 +1563,36 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
     margin-bottom: 1.25rem !important;
   }
 
-  /* 메뉴 그리드 영역 자체가 타이틀 아래 남는 세로 공간을 전부 차지하도록 늘림.
-     실제 열/행 개수(grid-template-columns/rows)는 renderKioskProducts()가 상품 개수에 따라
-     JS에서 인라인 !important로 직접 지정한다 (applyKioskMenuGridLayout, kiosk.js). */
+  /* 결제 금액 타이틀만 예외 - 옆에 초기화 버튼과 한 줄로 정렬돼야 해서(kiosk.html의
+     inline margin:0 + align-items:center) 위 공통 규칙의 margin-bottom을 다시 0으로
+     되돌린다. 안 그러면 !important끼리 부딪혀 이 규칙(더 뒤에 선언됨)이 이기면서
+     inline margin:0가 무력화되고 타이틀만 아래로 처져 보인다. */
+  .kiosk-checkout-section .section-title {
+    margin-bottom: 0 !important;
+  }
+
+  /* 타이틀 아랫줄(메뉴 목록 시작 / "선택된 메뉴" 시작)의 위치를 서로 맞춤 - 원래 메뉴 목록
+     쪽이 더 아래(margin-bottom 0.6rem)에서 시작하고 "선택된 메뉴" 쪽은 더 위(카드 패딩
+     0.7rem만)에서 시작해 어긋나 있었다. 둘 사이 간격의 중간 지점에서 만나도록 메뉴 쪽은
+     줄이고 결제 쪽은 늘림(각각 ~6px, 이 브레이크포인트의 루트 폰트 17px 기준 0.36rem). */
+  #kiosk-menu-content-wrap > div:first-child {
+    margin-bottom: 0.24rem !important;
+  }
+  #kiosk-checkout-amount-grid {
+    margin-top: 0.73rem;
+  }
+
+  /* 초기화 버튼 높이를 결제 금액 타이틀의 줄박스 높이(font-size 1.75rem * line-height 1.2)와
+     맞춰 위/아래 선이 둘 다 일치하게 함 - 기존엔 버튼 자체 패딩으로 높이가 결정돼 타이틀보다
+     더 컸다. */
+  #kiosk-checkout-amount-block button {
+    height: 2.1rem !important;
+    min-height: 2.1rem !important;
+  }
+
+  /* 메뉴 그리드 영역 자체가 타이틀 아래 남는 세로 공간을 전부 차지하도록 늘림 - 단일 열이라
+     행 수는 항상 메뉴 개수만큼이고(grid-auto-rows 기본값 auto), 다 못 담으면 이 블록
+     .kiosk-menu-section의 overflow-y:auto(768px 미디어 쿼리)로 스크롤된다. */
   #kiosk-menu-content-wrap {
     display: flex !important;
     flex-direction: column !important;
@@ -1335,37 +1604,53 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
     flex: 1;
   }
 
-  /* 카드가 그리드 셀 전체(가로/세로)를 꽉 채우도록 - 기존 height:auto/max-height 캡을 해제 */
+  /* 카드가 그리드 셀 전체(가로/세로)를 꽉 채우도록 - 기존 height:auto/max-height 캡을 해제
+     (admin.js의 단말기별 메뉴 배정 화면(.kiosk-menu-assign-grid)에서 쓰는 2열 카드 그리드용). */
   .menu-card {
     height: 100% !important;
     max-height: none !important;
     padding: 1.4rem !important;
   }
 
-  .menu-card .menu-name {
-    font-size: 1.5rem !important;
-    margin-bottom: 0.6rem !important;
+  /* 실제 키오스크 고객 화면만 - 위 height:100%(그리드 셀 전체를 채움)를 고정값으로 덮어써서,
+     메뉴가 몇 개 없어 그리드에 남는 공간이 있어도(.menu-grid의 align-content: start와 함께)
+     카드가 늘어나지 않게 한다. .menu-grid .menu-card(0,2,0)가 바로 위 bare .menu-card(0,1,0)
+     보다 특정성이 높아 이긴다. */
+  .menu-grid .menu-card {
+    height: 108px !important;
   }
 
-  .menu-card .menu-price,
-  .menu-card .menu-price-senior {
-    font-size: 1.2rem !important;
+  /* .menu-grid .menu-card ...(specificity 0,3,0)로 잡는 이유: 위쪽 "실제 키오스크 고객
+     화면만" 블록의 기본(모바일) 폰트 크기 규칙과 동일한 형태의 선택자라 특정성이 같고, 이
+     미디어 쿼리가 더 뒤에 선언돼 있어(그리고 매치될 때만) 태블릿에서 더 크게 이긴다 -
+     특정성이 낮은 bare .menu-card 선택자를 썼다면 반대로 모바일 쪽 규칙에 져서 태블릿에서도
+     작은 글씨가 나온다. */
+  .menu-grid .menu-card .menu-name {
+    font-size: 1.8rem !important;
+    margin-bottom: 0 !important;
+  }
+
+  .menu-grid .menu-card .menu-price,
+  .menu-grid .menu-card .menu-price-senior {
+    font-size: 1.1rem !important;
   }
 
   .touch-qty-box {
     padding: 0.4rem !important;
   }
 
-  .touch-qty-btn {
+  .menu-grid .touch-qty-btn {
     width: 68px !important;
     height: 68px !important;
     min-height: 68px !important;
     font-size: 2.1rem !important;
   }
 
-  .touch-qty-val {
+  .menu-grid .touch-qty-val {
     font-size: 1.7rem !important;
     font-weight: 800;
+    min-width: 3.8rem;
+    text-align: center;
   }
 
   /* 결제 금액 / 최근 결제 내역 2분할 — 카메라는 화면에 표시되지 않으므로 두 블록이 균등 배분.
@@ -1375,6 +1660,12 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
     justify-content: flex-start !important;
     padding: 1.75rem !important;
     gap: 1.25rem !important;
+  }
+
+  /* 메뉴 선택 섹션의 가로 여백도 결제 금액 섹션(위)과 동일하게 - 안 맞추면 두 섹션의
+     제목/목록이 태블릿에서 좌우로 서로 다른 폭만큼 들어가 보인다. */
+  .kiosk-menu-section {
+    padding: 1.75rem !important;
   }
 
   .kiosk-checkout-section > #kiosk-checkout-amount-block,

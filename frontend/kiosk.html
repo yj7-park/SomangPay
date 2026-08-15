@@ -9,8 +9,8 @@
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260808_0002">
-  <link rel="stylesheet" href="src/instagram-theme.css">
+  <link rel="stylesheet" href="src/style.css?v=20260815_0016">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0016">
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -25,12 +25,24 @@
 <body style="overflow: hidden;">
 
   <div class="kiosk-wrapper">
+    <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC - 다크로 잠깐 그려졌다가
+         라이트로 바뀌는 현상)을 막는다. 실제 토글 로직/버튼 UI는 kiosk.js의
+         setKioskTheme()/initKioskTheme() 참고 - 저장값이 없으면(기본값 "시스템") 아무 속성도
+         안 얹어서 style.css의 시스템 설정 기반 미디어 쿼리가 그대로 적용된다. -->
+    <script>
+      (function () {
+        var pref = localStorage.getItem("kiosk_theme_pref");
+        if (pref === "light" || pref === "dark") {
+          document.currentScript.parentElement.setAttribute("data-theme", pref);
+        }
+      })();
+    </script>
     <!-- Top Header -->
     <header class="kiosk-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; width: 100%; max-width: 100%; box-sizing: border-box;">
       <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
         <span style="font-size: clamp(1.4rem, 2.5vw, 2rem);">💳</span>
         <div style="min-width: 0;">
-          <h1 id="kiosk-device-title-display" style="font-size: clamp(1rem, 2.2vw, 1.5rem); font-weight: 900; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 0.5rem;">
+          <h1 id="kiosk-device-title-display" style="font-size: clamp(1rem, 2.2vw, 1.5rem); font-weight: 900; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 0.5rem;">
             <span id="kiosk-device-title-text">소망페이 무인 결제 단말기</span>
             <span id="kiosk-test-mode-badge" style="display: none; font-size: 0.7em; font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #fbbf24); padding: 0.15em 0.6em; border-radius: 999px; white-space: nowrap;">🧪 테스트 모드</span>
           </h1>
@@ -38,19 +50,19 @@
         </div>
       </div>
       <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; max-width: 100%;">
-        <span id="nfc-activate-btn" style="background: rgba(148,163,184,0.15); border: 1.5px solid #94a3b8; color: #94a3b8; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
+        <span id="nfc-activate-btn" style="background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
         </span>
-        <span id="qr-status-indicator" style="background: rgba(148,163,184,0.15); border: 1.5px solid #94a3b8; color: #94a3b8; padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
+        <span id="qr-status-indicator" style="background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="qr-status-text">QR 스캔 비활성</span>
         </span>
         <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
         <!-- 전용 키오스크 락다운 빌드에서만 보인다(initKioskPinToggle) - 화면 고정 중이면 🔒(눌러서
              해제), 꺼져 있으면 🔓(눌러서 고정)로 상태를 그대로 아이콘에 반영한다. -->
-        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: #fff; padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="화면 고정">
+        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="화면 고정">
           🔒
         </button>
-        <button onclick="openKioskAdminPinModal()" style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); color: #fff; padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정">
+        <button onclick="openKioskAdminPinModal()" style="background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정">
           ⚙️
         </button>
       </div>
@@ -59,7 +71,7 @@
     <!-- Main Content Area -->
     <main class="kiosk-body">
       <!-- Left: Large Touch Menu Grid & Camera Viewport Overlay -->
-      <section class="glass-container kiosk-menu-section" style="position: relative; overflow: hidden; padding: 0.85rem;">
+      <section class="glass-container kiosk-menu-section" style="position: relative; overflow: hidden; padding: 1rem;">
         <!-- Default Menu Content Wrap -->
         <div id="kiosk-menu-content-wrap" style="display: block; height: 100%;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
@@ -92,16 +104,16 @@
       <!-- Right: Checkout & Compact Controls -->
       <section class="glass-container kiosk-checkout-section" style="display: flex; flex-direction: column; justify-content: space-between;">
         <div id="kiosk-checkout-amount-block">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <h2 class="section-title" style="margin-bottom: 0;">결제 금액</h2>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+            <h2 class="section-title" style="margin: 0;">결제 금액</h2>
             <button type="button" onclick="resetCart()" title="메뉴 선택 초기화"
-              style="display: flex; align-items: center; gap: 0.3rem; background: rgba(6,182,212,0.12); color: var(--accent-cyan); border: 1px solid rgba(6,182,212,0.35); border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; line-height: 1;">
+              style="display: flex; align-items: center; justify-content: center; gap: 0.3rem; height: 1.38rem; min-height: 1.38rem; background: rgba(103,129,192,0.12); color: var(--accent-cyan); border: 1px solid rgba(103,129,192,0.35); border-radius: 999px; padding: 0 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; line-height: 1;">
               ↺ 초기화
             </button>
           </div>
 
           <!-- Stacked Panel: Selected Cart Items on top (flexible), Total Price on bottom (fixed height) -->
-          <div id="kiosk-checkout-amount-grid" style="display: flex; flex-direction: column; gap: 0.6rem; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.7rem; border: 1px solid var(--border-glass);">
+          <div id="kiosk-checkout-amount-grid" style="display: flex; flex-direction: column; gap: 0.6rem; background: var(--surface-2); border-radius: 12px; padding: 0.7rem; border: 1px solid var(--border-glass);">
             <!-- Top Sub-panel: Selected Cart Items List -->
             <div style="display: flex; flex-direction: column; justify-content: center; flex: 1 1 auto; min-height: 0;">
               <div style="font-size: 1rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: bold;">선택된 메뉴</div>
@@ -111,9 +123,9 @@
             </div>
 
             <!-- Bottom Sub-panel: Total Price Display (fixed height, never stretches with the list above) -->
-            <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; background: rgba(15,23,42,0.7); padding: 0.75rem; border-radius: 10px; border: 1px solid rgba(6,182,212,0.3); flex: 0 0 auto;">
+            <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; background: var(--surface-2); padding: 0.75rem; border-radius: 10px; border: 1px solid rgba(6,182,212,0.3); flex: 0 0 auto;">
               <div style="color: var(--text-muted); font-size: 1rem; font-weight: 500;">결제 금액</div>
-              <div id="kiosk-total-price" class="total-price-text" style="font-size: clamp(1.4rem, 2.3vw, 1.85rem); font-weight: 900; color: #67e8f9;">0원</div>
+              <div id="kiosk-total-price" class="total-price-text" style="font-size: clamp(1.4rem, 2.3vw, 1.85rem); font-weight: 900; color: var(--accent-cyan);">0원</div>
             </div>
           </div>
         </div>
@@ -125,7 +137,7 @@
 
         <!-- Bottom: Recent Payments History Feed -->
         <div id="kiosk-checkout-recent-block" style="margin-top: 0.5rem;">
-          <div id="recent-payments-container" style="background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid var(--border-glass); padding: 0.45rem 0.55rem;">
+          <div id="recent-payments-container" style="background: var(--surface-2); border-radius: 10px; border: 1px solid var(--border-glass); padding: 0.45rem 0.55rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
               <span class="recent-payments-title" style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: bold;">📋 최근 결제 내역</span>
               <span class="recent-payments-subtitle" style="font-size: 0.68rem; color: var(--text-muted);">실시간 갱신</span>
@@ -137,15 +149,15 @@
         </div>
 
         <!-- Card Issue Panel -->
-        <div id="admin-tab-card" style="display: none; background: rgba(0,0,0,0.3); padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border-glass); margin-top: 0.5rem;">
+        <div id="admin-tab-card" style="display: none; background: var(--surface-2); padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border-glass); margin-top: 0.5rem;">
           <h4 style="font-size: 0.85rem; color: var(--accent-amber); margin-bottom: 0.4rem; font-weight: bold;">신규 카드 대리 발급</h4>
           <div class="form-group" style="margin-bottom: 0.4rem;">
             <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.1rem;">발급 대상 회원</label>
-            <select id="kiosk-card-user-select" class="form-control" style="background: rgba(0,0,0,0.5); color: #fff; min-height: 32px; padding: 0.3rem 0.5rem;"></select>
+            <select id="kiosk-card-user-select" class="form-control" style="min-height: 32px; padding: 0.3rem 0.5rem;"></select>
           </div>
           <div class="form-group" style="margin-bottom: 0.5rem;">
             <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.1rem;">인식된 카드 식별자</label>
-            <input type="text" id="kiosk-scanned-card-uid" class="form-control" placeholder="태그 또는 스캔 시 입력" style="background: rgba(0,0,0,0.5); color: var(--accent-cyan); font-family: monospace; min-height: 32px; padding: 0.3rem 0.5rem;">
+            <input type="text" id="kiosk-scanned-card-uid" class="form-control" placeholder="태그 또는 스캔 시 입력" style="color: var(--accent-cyan); font-family: monospace; min-height: 32px; padding: 0.3rem 0.5rem;">
           </div>
           <button class="btn-action btn-primary" style="width: 100%; font-weight: bold; background: var(--accent-amber); color: #000; min-height: 34px; font-size: 0.8rem;" onclick="issueKioskCardToUser()">💳 카드 발급 완료</button>
         </div>
@@ -162,12 +174,12 @@
 
   <!-- Custom Repeat Payment Confirm Popup (replaces window.confirm blocked in Android WebView) -->
   <div id="repeat-pay-modal" class="modal-overlay" style="display: none; z-index: 9999;">
-    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: #f59e0b; padding: 3rem 4rem;">
+    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: var(--accent-amber); padding: 3rem 4rem;">
       <div style="font-size: 5rem; margin-bottom: 0.8rem;">⚠️</div>
-      <h2 style="font-size: 2.2rem; color: #f59e0b; margin-bottom: 0.8rem;">추가 결제 하시겠습니까?</h2>
+      <h2 style="font-size: 2.2rem; color: var(--accent-amber); margin-bottom: 0.8rem;">추가 결제 하시겠습니까?</h2>
       <p id="repeat-pay-msg" style="font-size: 1.4rem; color: var(--text-muted); margin: 1rem 0 2rem;">방금 결제하셨습니다.</p>
       <div style="display: flex; gap: 1rem; justify-content: center;">
-        <button class="btn-action" style="flex: 1; background: rgba(255,255,255,0.1); font-size: 1.4rem; min-height: 68px;" onclick="closeRepeatPayModal(false)">✕ 취소</button>
+        <button class="btn-action" style="flex: 1; background: var(--surface-1); font-size: 1.4rem; min-height: 68px;" onclick="closeRepeatPayModal(false)">✕ 취소</button>
         <button class="btn-action btn-primary" style="flex: 1; background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 1.4rem; font-weight: 800; min-height: 68px;" onclick="closeRepeatPayModal(true)">✓ 추가 결제</button>
       </div>
     </div>
@@ -175,9 +187,9 @@
 
   <!-- Custom No-Menu-Selected Notice Popup (replaces window.alert blocked in Android WebView) -->
   <div id="no-menu-modal" class="modal-overlay" style="display: none; z-index: 9999;">
-    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: #f59e0b; padding: 3rem 4rem;">
+    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: var(--accent-amber); padding: 3rem 4rem;">
       <div style="font-size: 5rem; margin-bottom: 0.8rem;">🍽️</div>
-      <h2 style="font-size: 2.2rem; color: #f59e0b; margin-bottom: 0.8rem;">메뉴를 선택해주세요</h2>
+      <h2 style="font-size: 2.2rem; color: var(--accent-amber); margin-bottom: 0.8rem;">메뉴를 선택해주세요</h2>
       <p style="font-size: 1.4rem; color: var(--text-muted); margin: 1rem 0 2rem;">결제하실 메뉴의 수량을 먼저 선택해주세요.</p>
       <div style="display: flex; gap: 1rem; justify-content: center;">
         <button class="btn-action btn-primary" style="flex: 1; background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 1.4rem; font-weight: 800; min-height: 68px;" onclick="closeNoMenuModal()">✓ 확인</button>
@@ -189,13 +201,13 @@
   <div id="kiosk-pin-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 400px; border-color: var(--primary); padding: 1.8rem;">
       <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔒</div>
-      <h2 style="font-size: 1.5rem; color: #fff; margin-bottom: 0.5rem;">단말기 관리자 인증</h2>
+      <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 0.5rem;">단말기 관리자 인증</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">단말기 설정을 변경하려면 PIN을 입력하세요.</p>
       <div class="form-group" style="margin-bottom: 0;">
-        <input type="password" id="kiosk-pin-input" class="form-control" placeholder="PIN 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.4rem; min-height: 52px; background: rgba(0,0,0,0.4);" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
+        <input type="password" id="kiosk-pin-input" class="form-control" placeholder="PIN 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.4rem; min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
       </div>
       <div style="display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1.5rem;">
-        <button class="btn-action" style="background: rgba(255,255,255,0.1); flex: 1; min-height: 44px;" onclick="closeKioskAdminPinModal()">취소</button>
+        <button class="btn-action" style="background: var(--surface-1); flex: 1; min-height: 44px;" onclick="closeKioskAdminPinModal()">취소</button>
         <button class="btn-action btn-primary" style="flex: 1; min-height: 44px;" onclick="verifyKioskAdminPin()">인증하기</button>
       </div>
     </div>
@@ -206,7 +218,7 @@
     <div class="modal-box-large" style="max-width: 750px; text-align: left; padding: 1.2rem; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; overflow: hidden;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-shrink: 0;">
         <h2 style="font-size: 1.3rem; color: var(--accent-cyan);">⚙️ 설정</h2>
-        <button class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; background: rgba(255,255,255,0.1); color: #fff; min-height: 34px;" onclick="closeKioskAdminModal()">✕ 닫기</button>
+        <button class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; background: var(--surface-1); color: var(--text-main); min-height: 34px;" onclick="closeKioskAdminModal()">✕ 닫기</button>
       </div>
 
       <!-- Scrollable Inner Content Area -->
@@ -214,12 +226,12 @@
         <!-- Settings Sub-Tabs -->
         <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
           <button id="kiosk-tab-btn-menu" class="btn-action btn-primary" style="flex: 1; padding: 0.6rem;" onclick="switchKioskAdminTab('menu')">메뉴 설정</button>
-          <button id="kiosk-tab-btn-debug" class="btn-action" style="flex: 1; padding: 0.6rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="switchKioskAdminTab('debug')">로그 확인</button>
+          <button id="kiosk-tab-btn-debug" class="btn-action" style="flex: 1; padding: 0.6rem; background: var(--surface-1); color: var(--text-main);" onclick="switchKioskAdminTab('debug')">로그 확인</button>
         </div>
 
       <!-- Tab 1: Menu Management & Device Settings -->
       <div id="kiosk-admin-menu-sec">
-        <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+        <div style="background: var(--surface-1); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem;">
             <h4 id="kiosk-settings-title" style="color: var(--accent-cyan); margin-bottom: 0;">기본 결제 설정</h4>
             <span id="k-device-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
@@ -231,7 +243,7 @@
             </div>
             <div>
               <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.2rem;">기본 자동 결제 메뉴</label>
-              <select id="k-default-product-select" class="form-control" style="margin-bottom: 0; background: rgba(0,0,0,0.5); color: #fff;" onchange="saveKioskDeviceSettings()">
+              <select id="k-default-product-select" class="form-control" style="margin-bottom: 0;" onchange="saveKioskDeviceSettings()">
                 <option value="">-- 기본 결제 없음 (메뉴 선택 필수) --</option>
               </select>
             </div>
@@ -239,24 +251,36 @@
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
             <input type="checkbox" id="k-allow-camera-concurrent-input" onchange="saveKioskDeviceSettings()" style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="k-allow-camera-concurrent-input" style="font-size: 0.85rem; color: #fff; cursor: pointer;">QR 스캐너 켜기</label>
+            <label for="k-allow-camera-concurrent-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">QR 스캐너 켜기</label>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
             <input type="checkbox" id="k-test-mode-input" onchange="toggleKioskTestMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="k-test-mode-input" style="font-size: 0.85rem; color: #fff; cursor: pointer;">테스트 모드</label>
+            <label for="k-test-mode-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">테스트 모드</label>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
-            <span style="font-size: 0.85rem; color: #fff;">화면 방향</span>
+            <span style="font-size: 0.85rem; color: var(--text-main);">화면 방향</span>
             <div style="display: flex; gap: 0.4rem; margin-left: auto;">
-              <button id="k-orientation-portrait-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="setKioskOrientation('portrait')">📱 세로</button>
-              <button id="k-orientation-landscape-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="setKioskOrientation('landscape')">💻 가로</button>
+              <button id="k-orientation-portrait-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskOrientation('portrait')">📱 세로</button>
+              <button id="k-orientation-landscape-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskOrientation('landscape')">💻 가로</button>
+            </div>
+          </div>
+
+          <!-- 화면 테마 - 시스템(기기 설정을 따름, 기본값)/라이트/다크. initKioskTheme/
+               setKioskTheme(kiosk.js)가 localStorage에 저장하고 .kiosk-wrapper의
+               data-theme 속성으로 반영한다(style.css 참고). -->
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+            <span style="font-size: 0.85rem; color: var(--text-main);">화면 테마</span>
+            <div style="display: flex; gap: 0.4rem; margin-left: auto;">
+              <button id="k-theme-system-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskTheme('system')">🔁 시스템</button>
+              <button id="k-theme-light-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskTheme('light')">☀️ 라이트</button>
+              <button id="k-theme-dark-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskTheme('dark')">🌙 다크</button>
             </div>
           </div>
         </div>
 
-        <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+        <div style="background: var(--surface-1); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <h4 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">노출 메뉴</h4>
           <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">체크한 메뉴만 이 단말기의 고객 화면에 표시됩니다. 전부 해제하면(기본값) 전체 메뉴가 표시됩니다.</p>
           <div id="k-assigned-products-checklist" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
@@ -273,10 +297,10 @@
         <h4 style="margin-bottom: 0.6rem; font-size: 1.05rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.4rem;">
           <span>📋</span> 메뉴 목록
         </h4>
-        <div style="max-height: 250px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(0,0,0,0.25);">
+        <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-glass); border-radius: 8px; background: var(--surface-2);">
           <table class="table-custom" style="font-size: 0.9rem; width: 100%; border-collapse: collapse; margin-bottom: 0;">
             <thead>
-              <tr style="background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.1);">
+              <tr style="background: var(--surface-1); border-bottom: 1px solid var(--border-glass);">
                 <th style="width: 40%; text-align: left; padding: 0.75rem 1rem; color: var(--text-muted); font-weight: 600;">메뉴명</th>
                 <th style="width: 20%; text-align: center; padding: 0.75rem 0.5rem; color: var(--text-muted); font-weight: 600;">일반가</th>
                 <th style="width: 20%; text-align: center; padding: 0.75rem 0.5rem; color: var(--text-muted); font-weight: 600;">시니어가</th>
@@ -296,6 +320,8 @@
           <h4 style="color: var(--accent-amber);">로그 확인</h4>
           <button class="btn-action" style="width: auto; padding: 0.3rem 0.8rem; font-size: 0.8rem; background: rgba(244,63,94,0.2); color: var(--accent-rose); border: 1px solid var(--accent-rose);" onclick="clearDebugLog()">비우기</button>
         </div>
+        <!-- 터미널/로그 콘솔 느낌을 유지하려고 화면 테마와 무관하게 항상 어둡게 고정해뒀다
+             (다른 코드/로그 콘솔 UI들의 일반적인 관례). -->
         <div id="debug-log-console" style="background: #090d16; border: 1px solid var(--border-glass); border-radius: 14px; padding: 1rem; height: 260px; overflow-y: auto; font-family: monospace; font-size: 0.88rem; line-height: 1.5; color: #38bdf8;">
           [SYSTEM] 디버그 모니터링 콘솔 준비 완료.<br>
         </div>
