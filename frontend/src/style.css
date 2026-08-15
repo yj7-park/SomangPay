@@ -150,6 +150,27 @@ html, body {
   word-wrap: break-word !important;
 }
 
+/* 위 html,body의 color: var(--text-main)는 body 시점의(=문서 루트, 다크 기본값) --text-main
+   으로 한 번 계산돼서 자식 요소에 "이미 계산된 색"으로 상속된다 - 라이트 테마 스코프
+   (.kiosk-wrapper[data-theme="light"] 등)가 --text-main을 262626으로 재정의해도, 그 스코프
+   안의 개별 요소가 직접 color: var(--text-main)을 쓰지 않는 한(= 그냥 상속만 받는 대부분의
+   <div>/<p>) 상속받은 값은 그대로 다크(#fafafa 등)라 라이트 배경 위에서 텍스트가 거의
+   안 보이는 버그가 생긴다. 각 페이지의 최상위 래퍼에서 color를 다시 명시적으로 선언해
+   그 스코프 안에서 var(--text-main)이 새로 계산되게 한다.
+   background도 마찬가지 이유 - body { background: var(--bg-dark) }(instagram-theme.css)도
+   body 시점의 값으로 고정돼서, 래퍼가 라이트로 바뀌어도 그 아래(body) 배경은 계속 다크로
+   남아 카드 사이 여백/탭바 뒤로 다크가 비친다. .kiosk-wrapper는 원래도 자기 background를
+   따로 갖고 있어(아래 .kiosk-wrapper 규칙) 문제 없었지만 admin-shell/mobile-wrapper는
+   없었다 - 여기서 공통으로 채워준다. */
+.kiosk-wrapper,
+.admin-shell,
+.mobile-wrapper {
+  color: var(--text-main);
+  background: var(--bg-dark);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* 키오스크 화면 잠금 - 길게 눌러 텍스트 선택/컨텍스트 메뉴 호출 차단.
    입력 필드는 정상적인 커서 배치/편집이 필요하므로 예외로 둔다. */
 .kiosk-wrapper, .kiosk-wrapper * {

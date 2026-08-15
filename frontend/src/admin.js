@@ -178,6 +178,7 @@ function formatPhoneInput(input) {
 document.addEventListener("DOMContentLoaded", () => {
   hydrateIconPlaceholders();
   updateFixedViewLayoutMetrics(); // PIN 인증 전에도 --header-h/뷰 높이를 미리 맞춰 둔다
+  initAdminTheme();
 
   // APK 다운로드 링크는 웹 브라우저에서만 의미가 있다 - 이미 설치된 네이티브 앱
   // 안(AndroidInterface 있음)에서는 굳이 보여줄 필요가 없어 숨긴다.
@@ -194,10 +195,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // admin_token/admin_auth는 (sessionStorage가 아니라) localStorage에 저장한다 - 입금 문자/알림
   // 자동감지는 관리자가 화면을 보고 있지 않아도 계속 동작해야 하는데, sessionStorage는 앱
   // 프로세스가 죽었다가(백그라운드에서 OS가 회수, 최근 앱에서 스와이프 등) 다시 뜨면 비워져서
-  // 매번 PIN을 다시 입력하기 전까지 감지가 멈춰버렸다. localStorage로 두면 토큰 자체의 만료
-  // 시간(백엔드 ADMIN_TOKEN_TTL_SECONDS, 현재 12시간) 안에서는 앱이 재시작돼도 인증 상태가
-  // 유지되어 감지가 끊기지 않는다 - 그 이후엔 정상적으로 다시 PIN을 요구한다(위 adminFetch의
-  // 401 처리 참고).
+  // 매번 PIN을 다시 입력하기 전까지 감지가 멈춰버렸다. 토큰 자체도 백엔드
+  // ADMIN_TOKEN_TTL_SECONDS가 사실상 무기한(10년)이라, 한 번 로그인하면 관리자가 직접
+  // 로그아웃하지 않는 한 앱이 재시작돼도 인증 상태가 계속 유지된다(그래도 서버가 401을 주는
+  // 경우 - 시크릿 키 교체 등 - 는 여전히 정상적으로 다시 PIN을 요구한다. 위 adminFetch의 401
+  // 처리 참고).
   const savedToken = localStorage.getItem("admin_token");
   if (savedToken && localStorage.getItem("admin_auth") === "true") {
     adminToken = savedToken;
@@ -209,6 +211,53 @@ document.addEventListener("DOMContentLoaded", () => {
     showModal("admin-pin-modal");
   }
 });
+
+// ============ 화면 테마(시스템/라이트/다크) - kiosk.js와 동일한 패턴 ============
+const ADMIN_THEME_KEY = "admin_theme_pref";
+
+function setAdminTheme(pref) {
+  const wrapper = document.querySelector(".admin-shell");
+  if (!wrapper) return;
+  if (pref === "system") {
+    localStorage.removeItem(ADMIN_THEME_KEY);
+    wrapper.removeAttribute("data-theme");
+  } else {
+    localStorage.setItem(ADMIN_THEME_KEY, pref);
+    wrapper.setAttribute("data-theme", pref);
+  }
+  updateAdminThemeButtonsUI(pref);
+  updateAdminThemeColorMeta();
+}
+
+function initAdminTheme() {
+  updateAdminThemeButtonsUI(localStorage.getItem(ADMIN_THEME_KEY) || "system");
+  updateAdminThemeColorMeta();
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", updateAdminThemeColorMeta);
+  }
+}
+
+function updateAdminThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const pref = localStorage.getItem(ADMIN_THEME_KEY) || "system";
+  const isLight = pref === "light" || (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+  meta.setAttribute("content", isLight ? "#eef1f7" : "#000000");
+}
+
+function updateAdminThemeButtonsUI(activePref) {
+  const buttons = {
+    system: document.getElementById("a-theme-system-btn"),
+    light: document.getElementById("a-theme-light-btn"),
+    dark: document.getElementById("a-theme-dark-btn"),
+  };
+  Object.entries(buttons).forEach(([pref, btn]) => {
+    if (!btn) return;
+    const active = pref === activePref;
+    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
+    btn.style.color = active ? "#001318" : "var(--text-main)";
+  });
+}
 
 // 네이티브 앱 안(DepositAutoDetector)이 웹뷰 없이도 입금을 직접 등록할 수 있도록 로그인 토큰을
 // SharedPreferences로도 미러링한다 - 로그인 직후와, 저장돼 있던 토큰으로 자동 로그인됐을 때
@@ -412,8 +461,8 @@ function switchAdminScanMode(mode) {
   if (mode === "NFC") {
     nfcBtn.className = "btn-action btn-primary";
     qrBtn.className = "btn-action";
-    qrBtn.style.background = "rgba(255,255,255,0.1)";
-    qrBtn.style.color = "#fff";
+    qrBtn.style.background = "var(--surface-1)";
+    qrBtn.style.color = "var(--text-main)";
     nfcView.style.display = "block";
     qrView.style.display = "none";
     stopAdminCameraScanner();
@@ -421,8 +470,8 @@ function switchAdminScanMode(mode) {
   } else {
     qrBtn.className = "btn-action btn-primary";
     nfcBtn.className = "btn-action";
-    nfcBtn.style.background = "rgba(255,255,255,0.1)";
-    nfcBtn.style.color = "#fff";
+    nfcBtn.style.background = "var(--surface-1)";
+    nfcBtn.style.color = "var(--text-main)";
     qrView.style.display = "block";
     nfcView.style.display = "none";
 
@@ -742,8 +791,8 @@ function stopAdminCameraScanner() {
   if (flipBtn) flipBtn.style.display = "none"; // 카메라 끌면 전환 버튼 숨김
   if (toggleBtn) {
     toggleBtn.innerText = "카메라 켜기";
-    toggleBtn.style.background = "rgba(6,182,212,0.2)";
-    toggleBtn.style.color = "#67e8f9";
+    toggleBtn.style.background = "rgba(103,129,192,0.2)";
+    toggleBtn.style.color = "var(--accent-cyan)";
   }
 
   // 카메라 드라이버 완전 해제 후 지연을 두고 외부 리더 재활성화 (kiosk.js와 동일 패턴)
@@ -1353,7 +1402,7 @@ async function renderDetailHistory() {
   }
 
   box.innerHTML = combined.slice(0, 30).map(h => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0; border-bottom: 1px solid var(--border-glass);">
       <div>
         <span class="badge-tag ${h.type === '충전' ? 'badge-general' : 'badge-senior'}" style="font-size:0.68rem;">${h.type}</span>
         <span style="margin-left: 0.4rem; color: var(--text-muted); font-size: 0.78rem;">${new Date(h.created_at).toLocaleString()}</span>
@@ -1832,7 +1881,7 @@ function renderSmsLog() {
           <span class="activity-status ${meta.cls}">${meta.label}</span>
         </div>
         ${entry.detail ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.35rem;">${escapeHtml(entry.detail)}</div>` : ""}
-        <div style="font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; font-family: monospace; color: var(--text-main); background: rgba(0,0,0,0.3); padding: 0.5rem 0.6rem; border-radius: 8px;">${escapeHtml(entry.body || "")}</div>
+        <div style="font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; font-family: monospace; color: var(--text-main); background: var(--surface-2); padding: 0.5rem 0.6rem; border-radius: 8px;">${escapeHtml(entry.body || "")}</div>
       </div>
     `;
   }).join("");
@@ -2243,7 +2292,7 @@ function renderKioskDetail() {
     <div class="glass-container" style="padding: 1.5rem;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
         <span style="font-size: 0.85rem; color: var(--text-muted);">메뉴별 매출</span>
-        <button type="button" class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; font-size: 0.8rem; background: rgba(255,255,255,0.08); color: #fff;" onclick="openKioskSalesPeriodModal()">
+        <button type="button" class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="openKioskSalesPeriodModal()">
           <span id="kiosk-sales-period-label">${KIOSK_SALES_PERIOD_LABEL[kioskSalesPeriod]}</span>
           <span data-icon="chevron-down" style="font-size: 0.65em;"></span>
         </button>

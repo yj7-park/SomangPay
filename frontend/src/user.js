@@ -9,7 +9,55 @@ document.addEventListener("DOMContentLoaded", () => {
     userToken = savedToken;
     restoreSession();
   }
+  initUserTheme();
 });
+
+// ============ 화면 테마(시스템/라이트/다크) - kiosk.js와 동일한 패턴 ============
+const USER_THEME_KEY = "user_theme_pref";
+
+function setUserTheme(pref) {
+  const wrapper = document.querySelector(".mobile-wrapper");
+  if (!wrapper) return;
+  if (pref === "system") {
+    localStorage.removeItem(USER_THEME_KEY);
+    wrapper.removeAttribute("data-theme");
+  } else {
+    localStorage.setItem(USER_THEME_KEY, pref);
+    wrapper.setAttribute("data-theme", pref);
+  }
+  updateUserThemeButtonsUI(pref);
+  updateUserThemeColorMeta();
+}
+
+function initUserTheme() {
+  updateUserThemeButtonsUI(localStorage.getItem(USER_THEME_KEY) || "system");
+  updateUserThemeColorMeta();
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", updateUserThemeColorMeta);
+  }
+}
+
+function updateUserThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const pref = localStorage.getItem(USER_THEME_KEY) || "system";
+  const isLight = pref === "light" || (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+  meta.setAttribute("content", isLight ? "#eef1f7" : "#000000");
+}
+
+function updateUserThemeButtonsUI(activePref) {
+  const buttons = {
+    system: document.getElementById("u-theme-system-btn"),
+    light: document.getElementById("u-theme-light-btn"),
+    dark: document.getElementById("u-theme-dark-btn"),
+  };
+  Object.entries(buttons).forEach(([pref, btn]) => {
+    if (!btn) return;
+    const active = pref === activePref;
+    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
+    btn.style.color = active ? "#001318" : "var(--text-main)";
+  });
+}
 
 // 로그인 토큰이 남아있으면 서버에 다시 확인해 최신 정보로 자동 로그인한다.
 // (localStorage에 저장돼 있어 로그아웃 전까지 브라우저 재시작에도 유지된다)

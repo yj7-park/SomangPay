@@ -905,8 +905,8 @@ function renderRecentPaymentsUI() {
   }
   list.innerHTML = recentPaymentsList.map((p, i) => {
     const isSenior = p.userType === "시니어";
-    const badgeColor = isSenior ? "#f59e0b" : "#06b6d4";
-    const badgeBg = isSenior ? "rgba(245,158,11,0.15)" : "rgba(6,182,212,0.15)";
+    const badgeColor = isSenior ? "#f59e0b" : "#6781c0";
+    const badgeBg = isSenior ? "rgba(245,158,11,0.15)" : "rgba(103,129,192,0.15)";
     return `<div class="recent-payment-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0.4rem; background: ${i === 0 ? 'rgba(16,185,129,0.12)' : 'var(--surface-1)'}; border-radius: 6px; border-left: 3px solid ${i === 0 ? '#10b981' : 'var(--border-glass)'}; font-size: 0.74rem;">
       <div style="display: flex; align-items: center; gap: 0.3rem;">
         <span class="recent-payment-time" style="color: var(--text-muted); font-family: monospace; font-size: 0.68rem;">${p.time}</span>

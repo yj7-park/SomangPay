@@ -7,13 +7,23 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/style.css?v=20260815_0017">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0017">
+  <link rel="stylesheet" href="src/style.css?v=20260815_0022">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0022">
   <script src="jsQR.min.js"></script>
 </head>
 <body>
 
   <div class="admin-shell">
+    <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
+         동일한 패턴(setAdminTheme()/initAdminTheme(), admin.js 참고). -->
+    <script>
+      (function () {
+        var pref = localStorage.getItem("admin_theme_pref");
+        if (pref === "light" || pref === "dark") {
+          document.currentScript.parentElement.setAttribute("data-theme", pref);
+        }
+      })();
+    </script>
     <!-- 트위터 스타일 탭 내비게이션: 데스크톱은 왼쪽 사이드바, 모바일은 하단 아이콘 탭바 -->
     <nav class="admin-tabbar">
       <button class="admin-tab-btn active" data-view="home" onclick="switchAdminView('home')">
@@ -96,7 +106,7 @@
         </div>
         <div class="glass-container" style="padding: 1rem; margin-bottom: 1rem;">
           <input type="text" id="member-search-input" class="form-control" placeholder="이름 또는 연락처로 검색" style="margin-bottom: 0.8rem;" oninput="renderMemberFeed()">
-          <button class="btn-action" style="background: rgba(6,182,212,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);" onclick="openScannerModal('SEARCH')">
+          <button class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);" onclick="openScannerModal('SEARCH')">
             NFC/QR 태그로 회원 찾기
           </button>
         </div>
@@ -196,9 +206,18 @@
               <a href="admin.html" class="nav-item active">관리자</a>
             </nav>
           </div>
+
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">화면 테마</span>
+            <div style="display: flex; gap: 0.4rem; margin-left: auto;">
+              <button id="a-theme-system-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="setAdminTheme('system')">🔁 시스템</button>
+              <button id="a-theme-light-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="setAdminTheme('light')">☀️ 라이트</button>
+              <button id="a-theme-dark-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="setAdminTheme('dark')">🌙 다크</button>
+            </div>
+          </div>
         </div>
 
-        <div class="glass-container" style="padding: 1.5rem; border-color: var(--accent-cyan); margin-bottom: 1.5rem; background: rgba(6,182,212,0.06);">
+        <div class="glass-container" style="padding: 1.5rem; border-color: var(--accent-cyan); margin-bottom: 1.5rem; background: rgba(103,129,192,0.06);">
           <h2 style="color: var(--accent-cyan); font-size: 1.15rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
             <span data-icon="bank"></span>계좌이체 입금 확인 등록
           </h2>
@@ -246,13 +265,13 @@
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.2rem;">
             <button class="btn-action btn-primary" style="width: auto; padding: 0.5rem 1rem;" onclick="saveSmsDetectSettings(this)">설정 저장</button>
-            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="resetSmsDetectSettings()">초기화</button>
+            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; background: var(--surface-1); color: var(--text-main);" onclick="resetSmsDetectSettings()">초기화</button>
           </div>
 
           <div style="padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
             <h4 style="font-size: 0.92rem; margin-bottom: 0.4rem; color: var(--text-muted);">알림 접근 권한 (RCS/푸시 알림 감지용)</h4>
             <p id="notif-access-status" style="font-size: 0.82rem; margin-bottom: 0.6rem;">확인 중...</p>
-            <button id="notif-access-open-btn" class="btn-action" style="width: auto; padding: 0.4rem 0.9rem; font-size: 0.85rem; background: rgba(103,129,192,0.2); color: #adc0e2; display: none;" onclick="openNotificationAccessSettingsFromWeb()">권한 설정 열기</button>
+            <button id="notif-access-open-btn" class="btn-action" style="width: auto; padding: 0.4rem 0.9rem; font-size: 0.85rem; background: rgba(103,129,192,0.2); color: var(--accent-cyan); display: none;" onclick="openNotificationAccessSettingsFromWeb()">권한 설정 열기</button>
           </div>
 
           <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
@@ -268,7 +287,7 @@
 08/13 12:12 301-****-7807-01 박용준 잔액2,165,746원</textarea>
               </div>
             </div>
-            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; margin-top: 0.6rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="triggerSimulatedSms(this)">수신 시뮬레이션 실행</button>
+            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; margin-top: 0.6rem; background: var(--surface-1); color: var(--text-main);" onclick="triggerSimulatedSms(this)">수신 시뮬레이션 실행</button>
           </div>
 
           <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
@@ -288,7 +307,7 @@
 08/13 12:12 301-****-7807-01 박용준 잔액2,165,746원</textarea>
               </div>
             </div>
-            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; margin-top: 0.6rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="triggerSimulatedNotification(this)">수신 시뮬레이션 실행</button>
+            <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; margin-top: 0.6rem; background: var(--surface-1); color: var(--text-main);" onclick="triggerSimulatedNotification(this)">수신 시뮬레이션 실행</button>
           </div>
 
           <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
@@ -349,10 +368,10 @@
             </div>
           </div>
           <div style="margin-top: 0.7rem; font-size: 0.85rem; color: var(--text-muted);">
-            연락처 (로그인 ID): <strong id="detail-member-phone" style="color: #fff;">-</strong>
+            연락처 (로그인 ID): <strong id="detail-member-phone" style="color: var(--text-main);">-</strong>
           </div>
           <div style="margin-top: 0.3rem; font-size: 0.85rem; color: var(--text-muted);">
-            생년월일: <strong id="detail-member-birth-date" style="color: #fff;">-</strong>
+            생년월일: <strong id="detail-member-birth-date" style="color: var(--text-main);">-</strong>
           </div>
         </div>
 
@@ -418,7 +437,7 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="closeProxyRegisterModal()">취소</button>
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeProxyRegisterModal()">취소</button>
         <button class="btn-action btn-primary" onclick="submitProxyRegister(this)">회원 가입</button>
       </div>
     </div>
@@ -434,10 +453,10 @@
 
       <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
         <button id="admin-mode-nfc-btn" class="btn-action btn-primary" style="flex: 1; padding: 0.6rem;" onclick="switchAdminScanMode('NFC')"><span data-icon="nfc"></span> NFC 태깅</button>
-        <button id="admin-mode-qr-btn" class="btn-action" style="flex: 1; padding: 0.6rem; background: rgba(255,255,255,0.1); color: #fff;" onclick="switchAdminScanMode('QR')"><span data-icon="camera"></span> 카메라 QR</button>
+        <button id="admin-mode-qr-btn" class="btn-action" style="flex: 1; padding: 0.6rem; background: var(--surface-1); color: var(--text-main);" onclick="switchAdminScanMode('QR')"><span data-icon="camera"></span> 카메라 QR</button>
       </div>
 
-      <div style="background: rgba(0,0,0,0.4); padding: 0.85rem; border-radius: 12px; border: 1px dashed var(--accent-cyan); margin-bottom: 1rem;">
+      <div style="background: var(--surface-2); padding: 0.85rem; border-radius: 12px; border: 1px dashed var(--accent-cyan); margin-bottom: 1rem;">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap;">
           <div style="font-size: 0.8rem; color: var(--text-muted);">감지된 식별자 코드 (자동 인식)</div>
           <label id="admin-auto-detect-row" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--text-muted); cursor: pointer; user-select: none;">
@@ -446,12 +465,12 @@
           </label>
         </div>
         <div style="display: flex; align-items: center; gap: 0.6rem;">
-          <input type="text" id="admin-card-uid-input" class="form-control" placeholder="태깅 또는 스캔 시 자동 입력됩니다." readonly style="flex: 1; margin: 0; background: rgba(6,182,212,0.1); color: var(--accent-cyan); font-family: monospace; font-weight: bold;">
+          <input type="text" id="admin-card-uid-input" class="form-control" placeholder="태깅 또는 스캔 시 자동 입력됩니다." readonly style="flex: 1; margin: 0; background: rgba(103,129,192,0.1); color: var(--accent-cyan); font-family: monospace; font-weight: bold;">
           <span id="admin-detect-check" data-icon="check" style="font-size: 1.4rem; display: none; line-height: 1; color: var(--accent-emerald);" title="인식 성공"></span>
         </div>
       </div>
 
-      <div id="admin-scanner-viewport" style="background: rgba(0,0,0,0.6); border: 2px dashed var(--accent-cyan); border-radius: 16px; padding: 1rem; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 1rem;">
+      <div id="admin-scanner-viewport" style="background: var(--surface-2); border: 2px dashed var(--accent-cyan); border-radius: 16px; padding: 1rem; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 1rem;">
 
         <!-- Mode 1: NFC Scanner View -->
         <div id="admin-nfc-scan-view">
@@ -476,10 +495,10 @@
           <!-- 일반 브라우저: 기존 getUserMedia 인라인 실시간 미리보기 -->
           <div id="admin-qr-web-panel" style="width: 100%;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span style="font-size: 0.82rem; color: #67e8f9; font-weight: bold;">카메라 실시간 QR 스캐너</span>
+              <span style="font-size: 0.82rem; color: var(--accent-cyan); font-weight: bold;">카메라 실시간 QR 스캐너</span>
               <div style="display: flex; gap: 0.4rem; align-items: center;">
                 <button id="admin-camera-flip-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(139,92,246,0.2); color: #c4b5fd; border: 1px solid #8b5cf6; display: none;" onclick="flipAdminCamera()" title="전면/후면 카메라 전환"><span data-icon="refresh"></span> 전환</button>
-                <button id="admin-camera-toggle-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(6,182,212,0.2); color: #67e8f9;" onclick="toggleAdminCameraScanner()">카메라 켜기</button>
+                <button id="admin-camera-toggle-btn" class="btn-action" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(103,129,192,0.2); color: var(--accent-cyan);" onclick="toggleAdminCameraScanner()">카메라 켜기</button>
               </div>
             </div>
             <div id="admin-camera-video-box" style="position: relative; width: 100%; max-width: 260px; height: 150px; margin: 0 auto; overflow: hidden; border-radius: 10px; background: #000; display: none;">
@@ -493,7 +512,7 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="closeScannerModal()">취소</button>
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeScannerModal()">취소</button>
         <button id="scanner-confirm-btn" class="btn-action btn-primary" onclick="handleScannerConfirm()">확인</button>
       </div>
     </div>
@@ -502,7 +521,7 @@
   <!-- Edit User Info Modal -->
   <div id="admin-user-edit-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 440px;">
-      <h2 style="font-size: 1.4rem; color: #fff; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="edit"></span> 회원 정보 수정</h2>
+      <h2 style="font-size: 1.4rem; color: var(--text-main); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="edit"></span> 회원 정보 수정</h2>
       <p id="admin-user-edit-name" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;"></p>
 
       <div class="modal-body">
@@ -532,7 +551,7 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="closeEditUserModal()">취소</button>
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeEditUserModal()">취소</button>
         <button id="edit-user-submit-btn" class="btn-action btn-primary" onclick="submitUserInfoEdit(this)">저장</button>
       </div>
     </div>
@@ -542,12 +561,12 @@
   <div id="admin-pin-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 400px; border-color: var(--primary);">
       <div style="font-size: 3rem; margin-bottom: 0.5rem; color: var(--accent-cyan);" data-icon="lock"></div>
-      <h2 style="font-size: 1.6rem; color: #fff; margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
+      <h2 style="font-size: 1.6rem; color: var(--text-main); margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">대시보드 접근을 위해 관리자 PIN 번호를 입력하세요.</p>
 
       <!-- 앱 안에서만 보임(showAdminPinDetectNoticeIfNative, admin.js) - 로그인이 실시간 입금
            자동감지 활성화의 전제조건이라는 걸 처음 설치했을 때부터 명확히 안내한다. -->
-      <div id="admin-pin-detect-notice" style="display: none; text-align: left; background: rgba(6,182,212,0.08); border: 1px solid var(--accent-cyan); border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 1.2rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+      <div id="admin-pin-detect-notice" style="display: none; text-align: left; background: rgba(103,129,192,0.08); border: 1px solid var(--accent-cyan); border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 1.2rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
         <strong style="color: var(--accent-cyan);">💡 실시간 입금 자동감지를 위해 로그인이 필요합니다.</strong><br>
         한 번 로그인하면 이후 앱을 껐다 켜도 계속 자동감지가 동작합니다. 로그인 후 설정 탭에서 "알림 접근 권한"도 함께 켜주세요.
       </div>
@@ -565,12 +584,12 @@
     <div class="modal-box-large" style="max-width: 320px;">
       <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">기간 선택</h2>
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <button type="button" class="btn-action" style="width: 100%; background: rgba(255,255,255,0.08); color: #fff;" onclick="selectKioskSalesPeriod('today')">오늘</button>
-        <button type="button" class="btn-action" style="width: 100%; background: rgba(255,255,255,0.08); color: #fff;" onclick="selectKioskSalesPeriod('this_month')">이번달</button>
-        <button type="button" class="btn-action" style="width: 100%; background: rgba(255,255,255,0.08); color: #fff;" onclick="selectKioskSalesPeriod('all_time')">전체</button>
+        <button type="button" class="btn-action" style="width: 100%; background: var(--surface-1); color: var(--text-main);" onclick="selectKioskSalesPeriod('today')">오늘</button>
+        <button type="button" class="btn-action" style="width: 100%; background: var(--surface-1); color: var(--text-main);" onclick="selectKioskSalesPeriod('this_month')">이번달</button>
+        <button type="button" class="btn-action" style="width: 100%; background: var(--surface-1); color: var(--text-main);" onclick="selectKioskSalesPeriod('all_time')">전체</button>
       </div>
       <div class="modal-footer" style="margin-top: 1.2rem;">
-        <button type="button" class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff; width: 100%;" onclick="hideModal('kiosk-sales-period-modal')">취소</button>
+        <button type="button" class="btn-action" style="background: var(--surface-1); color: var(--text-main); width: 100%;" onclick="hideModal('kiosk-sales-period-modal')">취소</button>
       </div>
     </div>
   </div>
@@ -578,7 +597,7 @@
   <!-- Generic Alert Modal (alert() 대체) -->
   <div id="generic-alert-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 400px;">
-      <h2 id="generic-alert-title" style="font-size: 1.3rem; color: #fff; margin-bottom: 0.8rem;">알림</h2>
+      <h2 id="generic-alert-title" style="font-size: 1.3rem; color: var(--text-main); margin-bottom: 0.8rem;">알림</h2>
       <p id="generic-alert-message" style="font-size: 0.95rem; color: var(--text-muted); white-space: pre-line; margin-bottom: 1.5rem;"></p>
       <div class="modal-footer">
         <button class="btn-action btn-primary" onclick="_resolveAlertModal()">확인</button>
@@ -589,10 +608,10 @@
   <!-- Generic Confirm Modal (confirm() 대체) -->
   <div id="generic-confirm-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 400px;">
-      <h2 id="generic-confirm-title" style="font-size: 1.3rem; color: #fff; margin-bottom: 0.8rem;">확인</h2>
+      <h2 id="generic-confirm-title" style="font-size: 1.3rem; color: var(--text-main); margin-bottom: 0.8rem;">확인</h2>
       <p id="generic-confirm-message" style="font-size: 0.95rem; color: var(--text-muted); white-space: pre-line; margin-bottom: 1.5rem;"></p>
       <div class="modal-footer">
-        <button class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;" onclick="_resolveConfirmModal(false)">취소</button>
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="_resolveConfirmModal(false)">취소</button>
         <button class="btn-action btn-primary" onclick="_resolveConfirmModal(true)">확인</button>
       </div>
     </div>
@@ -600,6 +619,6 @@
 
   <script src="src/update-widget.js"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
-  <script src="src/admin.js"></script>
+  <script src="src/admin.js?v=20260815_0022"></script>
 </body>
 </html>
