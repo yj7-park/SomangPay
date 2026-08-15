@@ -9,8 +9,8 @@
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260815_0016">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0016">
+  <link rel="stylesheet" href="src/style.css?v=20260815_0017">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0017">
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -207,7 +207,7 @@
         <input type="password" id="kiosk-pin-input" class="form-control" placeholder="PIN 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.4rem; min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
       </div>
       <div style="display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1.5rem;">
-        <button class="btn-action" style="background: var(--surface-1); flex: 1; min-height: 44px;" onclick="closeKioskAdminPinModal()">취소</button>
+        <button class="btn-action" style="background: var(--surface-1); flex: 1; min-height: 44px;" onclick="closeKioskPinModal()">취소</button>
         <button class="btn-action btn-primary" style="flex: 1; min-height: 44px;" onclick="verifyKioskAdminPin()">인증하기</button>
       </div>
     </div>
@@ -331,6 +331,6 @@
 
   <script src="src/update-widget.js?v=20260811_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
-  <script src="src/kiosk.js?v=20260808_0001"></script>
+  <script src="src/kiosk.js?v=20260815_0017"></script>
 </body>
 </html>

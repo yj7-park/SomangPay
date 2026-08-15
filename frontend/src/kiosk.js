@@ -907,13 +907,13 @@ function renderRecentPaymentsUI() {
     const isSenior = p.userType === "시니어";
     const badgeColor = isSenior ? "#f59e0b" : "#06b6d4";
     const badgeBg = isSenior ? "rgba(245,158,11,0.15)" : "rgba(6,182,212,0.15)";
-    return `<div class="recent-payment-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0.4rem; background: ${i === 0 ? 'rgba(16,185,129,0.12)' : 'rgba(15,23,42,0.5)'}; border-radius: 6px; border-left: 3px solid ${i === 0 ? '#10b981' : 'rgba(255,255,255,0.1)'}; font-size: 0.74rem;">
+    return `<div class="recent-payment-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0.4rem; background: ${i === 0 ? 'rgba(16,185,129,0.12)' : 'var(--surface-1)'}; border-radius: 6px; border-left: 3px solid ${i === 0 ? '#10b981' : 'var(--border-glass)'}; font-size: 0.74rem;">
       <div style="display: flex; align-items: center; gap: 0.3rem;">
         <span class="recent-payment-time" style="color: var(--text-muted); font-family: monospace; font-size: 0.68rem;">${p.time}</span>
-        <strong class="recent-payment-name" style="color: #f1f5f9;">${p.userName}</strong>
+        <strong class="recent-payment-name" style="color: var(--text-main);">${p.userName}</strong>
         <span class="recent-payment-badge" style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}; border-radius: 4px; padding: 0 0.25rem; font-size: 0.65rem; font-weight: bold;">${p.userType}</span>
       </div>
-      <div class="recent-payment-amount" style="color: #10b981; font-weight: 700; font-size: 0.78rem;">${p.amount.toLocaleString()}원</div>
+      <div class="recent-payment-amount" style="color: var(--accent-emerald); font-weight: 700; font-size: 0.78rem;">${p.amount.toLocaleString()}원</div>
     </div>`;
   }).join("");
 }
