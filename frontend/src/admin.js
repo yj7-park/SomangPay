@@ -1826,11 +1826,16 @@ const SMS_LOG_OUTCOME_META = {
   success: { label: "감지 성공", cls: "status-done" },
   auth_skip: { label: "인증 전 무시", cls: "status-pending" },
   sender_filtered: { label: "발신자 불일치", cls: "status-pending" },
+  // 발신번호/알림 패키지·제목 필터에 안 맞아 무시된 건도 이제 로그에 남는다(DepositAutoDetector
+  // 참고) - "원래 되던 수신이 안 된다"를 원본 내용 없이는 진단할 수 없었던 문제 대응.
+  filtered: { label: "필터 불일치", cls: "status-pending" },
   duplicate: { label: "중복 감지", cls: "status-pending" },
   no_regex: { label: "정규식 미설정", cls: "status-rejected" },
   regex_error: { label: "정규식 오류", cls: "status-rejected" },
   parse_fail: { label: "파싱 실패", cls: "status-rejected" },
   invalid_value: { label: "추출값 이상", cls: "status-rejected" },
+  register_fail: { label: "등록 실패", cls: "status-rejected" },
+  network_error: { label: "네트워크 오류", cls: "status-rejected" },
 };
 const SMS_LOG_SOURCE_LABEL = { SMS: "문자", PUSH: "알림" };
 

@@ -90,23 +90,42 @@ final class DepositAutoDetector {
 
     // SmsReceiver.onReceive()가 백그라운드 스레드에서 호출한다 - 네트워크 호출을 포함하므로
     // 메인 스레드에서 직접 부르면 안 된다.
+    //
+    // 필터에 안 걸려도 이제 로그는 남긴다("filtered") - 예전엔 조용히 무시해서, 발신번호
+    // 필터가 실제 문자 포맷과 안 맞아 통째로 놓치고 있어도 로그에 아무 흔적이 안 남아
+    // 진단이 안 됐다("원래 잘 되던 수신이 안 된다"는 문제를 원본 문자 내용 없이는 원인을
+    // 알 수 없었음). 실제 등록은 안 하고 로그만 남기니 오등록 위험은 없다.
     static void processSms(Context context, String sender, String body) {
         String filterSender = prefs(context).getString(PREF_SMS_SENDER, SMS_SENDER_DEFAULT).trim();
         if (!isBlank(filterSender) && (sender == null || !sender.contains(filterSender))) {
-            return; // 감지 대상이 아니면 로그도 안 남기고 무시 (admin.js와 동일한 방침)
+            log(context, "SMS", sender, null, body, "filtered",
+                    "감지 대상 발신번호(\"" + filterSender + "\")와 달라 무시됨 - 실제 발신: " + sender);
+            return;
         }
         process(context, "SMS", sender, null, body);
     }
 
-    // BankNotificationListener.onNotificationPosted()가 백그라운드 스레드에서 호출한다.
+    // BankNotificationListener.onNotificationPosted()가 백그라운드 스레드에서 호출한다. 알림
+    // 접근 권한상 기기에 뜨는 모든 알림(카카오톡/날씨 등)이 다 들어오므로, 필터에 안 걸린
+    // 것도 전부 로그에 남기면 그만큼 로그가 늘어난다 - 원인 진단이 끝나면 다시 조용히
+    // 무시하도록 되돌려도 된다.
     static void processPush(Context context, String packageName, String title, String text) {
         SharedPreferences p = prefs(context);
         String filterPackage = p.getString(PREF_PUSH_PACKAGE, PUSH_PACKAGE_DEFAULT).trim();
-        if (!isBlank(filterPackage) && !filterPackage.equals(packageName)) return;
         String filterTitle = p.getString(PREF_PUSH_TITLE, PUSH_TITLE_DEFAULT).trim();
-        if (!isBlank(filterTitle) && !filterTitle.equals(title)) return;
-
         String body = isBlank(title) ? text : title + "\n" + text;
+
+        if (!isBlank(filterPackage) && !filterPackage.equals(packageName)) {
+            log(context, "PUSH", packageName, packageName, body, "filtered",
+                    "감지 대상 앱(\"" + filterPackage + "\")과 달라 무시됨 - 실제 패키지: " + packageName);
+            return;
+        }
+        if (!isBlank(filterTitle) && !filterTitle.equals(title)) {
+            log(context, "PUSH", packageName, packageName, body, "filtered",
+                    "감지 대상 알림 제목(\"" + filterTitle + "\")과 달라 무시됨 - 실제 제목: " + title);
+            return;
+        }
+
         process(context, "PUSH", packageName, packageName, body);
     }
 
