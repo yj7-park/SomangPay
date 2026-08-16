@@ -29,27 +29,60 @@ public class BankNotificationListener extends NotificationListenerService {
         if (getPackageName().equals(packageName)) return; // 우리 앱 자체 알림(업데이트 등)은 제외
 
         Notification notification = sbn.getNotification();
-        if (notification == null || notification.extras == null) return;
+        if (notification == null || notification.extras == null) {
+            // 여기서도 조용히 버리지 않고 로그를 남긴다 - "알림은 왔는데 extras가 아예 없더라"도
+            // 진단에 필요한 정보다.
+            Log.w(TAG, "알림 감지했지만 extras 없음: pkg=" + packageName);
+            final android.content.Context ctxNoExtras = getApplicationContext();
+            new Thread(() -> {
+                try {
+                    DepositAutoDetector.processPush(ctxNoExtras, packageName, "", "");
+                } catch (Exception e) {
+                    Log.e(TAG, "입금 자동감지 처리 실패", e);
+                }
+            }).start();
+            return;
+        }
 
         Bundle extras = notification.extras;
         CharSequence title = extras.getCharSequence(Notification.EXTRA_TITLE);
-        // 확장(BigText) 알림은 원문이 EXTRA_BIG_TEXT에, 접힌 알림은 EXTRA_TEXT에 들어있다 -
-        // 은행 알림은 여러 줄이라 BigText 쪽에 전체 내용이 있는 경우가 많아 우선 사용한다.
+        // 은행 알림 본문이 들어올 수 있는 필드가 스타일에 따라 다르다 - 확장(BigText) 알림은
+        // EXTRA_BIG_TEXT, 목록형(InboxStyle, 여러 줄을 한 줄씩 따로 쌓는 스타일) 알림은
+        // EXTRA_TEXT_LINES(줄 배열)에 실제 내용이 있고 EXTRA_TEXT/EXTRA_BIG_TEXT는 비어있거나
+        // "새 메시지 3개"처럼 요약문만 있을 수 있다 - EXTRA_TEXT_LINES를 놓치면 "알림은 오는데
+        // 내용이 안 잡힌다"는 문제가 생긴다. 우선순위: BigText > TextLines(줄바꿈으로 합침) > Text.
         CharSequence bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT);
-        CharSequence text = bigText != null ? bigText : extras.getCharSequence(Notification.EXTRA_TEXT);
-        if (text == null || text.length() == 0) return;
+        CharSequence[] textLines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
+        CharSequence text = extras.getCharSequence(Notification.EXTRA_TEXT);
+
+        String bodyStr;
+        if (bigText != null && bigText.length() > 0) {
+            bodyStr = bigText.toString();
+        } else if (textLines != null && textLines.length > 0) {
+            StringBuilder sb = new StringBuilder();
+            for (CharSequence line : textLines) {
+                if (sb.length() > 0) sb.append("\n");
+                sb.append(line == null ? "" : line.toString());
+            }
+            bodyStr = sb.toString();
+        } else {
+            bodyStr = text == null ? "" : text.toString();
+        }
 
         final String titleStr = title == null ? "" : title.toString();
-        final String textStr = text.toString();
         final String pkg = packageName;
 
-        Log.d(TAG, "알림 감지: pkg=" + pkg + ", title=" + titleStr);
+        // "민감한 내용이라 저장 안 함" 같은 예외 없이 - 본문이 비어있어도(추출 필드가 전부
+        // null이었어도) 그대로 넘긴다. 필터/파싱 단계에서 자연스럽게 "filtered"나 "parse_fail"로
+        // 로그에 남으므로, 여기서 미리 걸러내지 않는 게 "알림이 왔었다"는 사실 자체를 보존한다.
+        Log.d(TAG, "알림 감지: pkg=" + pkg + ", title=" + titleStr + ", bodyLen=" + bodyStr.length());
 
         // 네트워크 호출이 있어 메인 스레드에서 바로 처리할 수 없다.
         final android.content.Context appContext = getApplicationContext();
+        final String bodyForThread = bodyStr;
         new Thread(() -> {
             try {
-                DepositAutoDetector.processPush(appContext, pkg, titleStr, textStr);
+                DepositAutoDetector.processPush(appContext, pkg, titleStr, bodyForThread);
             } catch (Exception e) {
                 Log.e(TAG, "입금 자동감지 처리 실패", e);
             }
