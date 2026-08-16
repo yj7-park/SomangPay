@@ -454,7 +454,7 @@ async function saveKioskDeviceSettings() {
   const concurrentValue = concurrentCheckbox ? concurrentCheckbox.checked : allowCameraReaderConcurrent;
   const assignedChecklist = document.getElementById("k-assigned-products-checklist");
   const assignedProducts = assignedChecklist
-    ? Array.from(assignedChecklist.querySelectorAll("input:checked")).map(cb => parseInt(cb.value))
+    ? Array.from(assignedChecklist.querySelectorAll(".menu-card.assigned")).map(card => parseInt(card.dataset.productId))
     : currentAssignedProducts;
 
   try {
@@ -1202,8 +1202,10 @@ function renderKioskAdminProducts() {
   });
 }
 
-// 이 단말기에 노출할 메뉴 체크리스트 (전체 카탈로그 기준 - 메뉴 자체는 어느 단말기에서든
-// 추가/수정/삭제 가능하고, 여기서는 "이 단말기에 보여줄지"만 정한다)
+// 이 단말기에 노출할 메뉴 그리드 (전체 카탈로그 기준 - 메뉴 자체는 어느 단말기에서든
+// 추가/수정/삭제 가능하고, 여기서는 "이 단말기에 보여줄지"만 정한다) - admin.js의 단말기별
+// 메뉴 배정 화면(.kiosk-menu-assign-grid, renderKioskDetail)과 동일한 카드형 UI/동작으로
+// 통일했다: 카드를 누르면 즉시 assigned 상태가 뒤집히고(체크박스 없이) 바로 저장된다.
 function renderKioskAssignedChecklist() {
   const container = document.getElementById("k-assigned-products-checklist");
   if (!container) return;
@@ -1214,12 +1216,24 @@ function renderKioskAssignedChecklist() {
     return;
   }
 
-  products.forEach(p => {
-    const label = document.createElement("label");
-    label.style.cssText = "display:flex; align-items:center; gap:0.3rem; font-size:0.85rem; background:rgba(255,255,255,0.06); padding:0.35rem 0.6rem; border-radius:8px; cursor:pointer;";
-    label.innerHTML = `<input type="checkbox" value="${p.id}" ${currentAssignedProducts.includes(p.id) ? 'checked' : ''} onchange="saveKioskDeviceSettings()"> ${p.name}`;
-    container.appendChild(label);
-  });
+  container.innerHTML = products.map(p => `
+    <div class="menu-card ${currentAssignedProducts.includes(p.id) ? 'assigned' : ''}" data-product-id="${p.id}" onclick="toggleKioskAssignedProduct(${p.id})">
+      <span class="menu-toggle-badge"></span>
+      <div>
+        <div class="menu-name">${p.name}</div>
+        <div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
+        <div class="menu-price-senior">시니어 ${p.price_senior.toLocaleString()}원</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+// 카드 클릭 시 즉시 시각적으로 토글하고(admin.js toggleKioskProduct와 동일한 즉각 피드백
+// 느낌) 바로 저장 - 별도 체크박스/저장 버튼 없이 한 번의 클릭으로 끝난다.
+function toggleKioskAssignedProduct(productId) {
+  const card = document.querySelector(`#k-assigned-products-checklist .menu-card[data-product-id="${productId}"]`);
+  if (card) card.classList.toggle("assigned");
+  saveKioskDeviceSettings();
 }
 
 function kioskStartEditProduct(id) {
