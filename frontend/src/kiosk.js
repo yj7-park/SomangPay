@@ -1188,7 +1188,7 @@ function renderKioskAdminProducts() {
     tr.style.borderBottom = "1px solid rgba(255,255,255,0.06)";
     tr.style.transition = "background 0.2s ease";
     tr.innerHTML = `
-      <td style="padding: 0.85rem 1rem; text-align: left; font-weight: 700; color: #fff;">${p.name}</td>
+      <td style="padding: 0.85rem 1rem; text-align: left; font-weight: 700; color: var(--text-main);">${p.name}</td>
       <td style="padding: 0.85rem 0.5rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">${p.price_general.toLocaleString()}원</td>
       <td style="padding: 0.85rem 0.5rem; text-align: center; color: var(--accent-amber); font-weight: 800; font-size: 0.95rem;">${p.price_senior.toLocaleString()}원</td>
       <td style="padding: 0.85rem 1rem; text-align: center;">
@@ -1218,7 +1218,7 @@ function renderKioskAssignedChecklist() {
 
   container.innerHTML = products.map(p => `
     <div class="menu-card ${currentAssignedProducts.includes(p.id) ? 'assigned' : ''}" data-product-id="${p.id}" onclick="toggleKioskAssignedProduct(${p.id})">
-      <span class="menu-toggle-badge"></span>
+      <span class="menu-toggle-badge"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 6 6L20 6"/></svg></span>
       <div>
         <div class="menu-name">${p.name}</div>
         <div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
