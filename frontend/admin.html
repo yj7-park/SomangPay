@@ -250,7 +250,7 @@
             </div>
             <div style="grid-column: span 2;">
               <label class="form-label">파싱 정규식 (name / amount 캡처 그룹, 문자+알림 공용)</label>
-              <input type="text" id="sms-detect-regex" class="form-control" value="입금\s*(?<amount>[\d,]+)원[\s\S]*?(?<date>\d{2}/\d{2})\s+(?<time>\d{2}:\d{2})[\s\S]*?(?<name>[가-힣]{2,10})\s*잔액(?<balance>[\d,]+)원(?:[\s\S]*?(?<account>\d[\d*]{1,6}[-*][\d*-]{3,}))?" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
+              <input type="text" id="sms-detect-regex" class="form-control" value="입금\s*(?<amount>[\d,]+)원[\s\S]*?(?<date>\d{2}/\d{2})\s+(?<time>\d{2}:\d{2})\s+(?<account>301-\*+-7807-01)\s+(?<name>[가-힣]{2,10})\s*잔액(?<balance>[\d,]+)원" placeholder="예: (?<name>[가-힣]{2,10})님.*?(?<amount>[\d,]+)원" style="margin-bottom: 0;">
             </div>
           </div>
 
@@ -620,6 +620,6 @@
 
   <script src="src/update-widget.js?v=20260816_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
-  <script src="src/admin.js?v=20260816_0002"></script>
+  <script src="src/admin.js?v=20260816_0003"></script>
 </body>
 </html>

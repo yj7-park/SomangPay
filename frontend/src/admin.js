@@ -1662,7 +1662,7 @@ const SMS_DETECT_SENDER_DEFAULT = "1588-2100";
 // name/amount 외에 date/time/balance도 이름의 캡처 그룹으로 함께 뽑는다 - 중복 감지 키
 // (buildDetectionKey)가 이 값들을 쓴다. 커스텀 정규식에 이 그룹들이 없어도 에러 없이 그냥
 // undefined로 빠지니(중복 감지가 이름+금액만으로 헐거워질 뿐) 필수는 아니다.
-const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<date>\\d{2}/\\d{2})\\s+(?<time>\\d{2}:\\d{2})[\\s\\S]*?(?<name>[가-힣]{2,10})\\s*잔액(?<balance>[\\d,]+)원(?:[\\s\\S]*?(?<account>\\d[\\d*]{1,6}[-*][\\d*-]{3,}))?";
+const SMS_DETECT_REGEX_DEFAULT = "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<date>\\d{2}/\\d{2})\\s+(?<time>\\d{2}:\\d{2})\\s+(?<account>301-\\*+-7807-01)\\s+(?<name>[가-힣]{2,10})\\s*잔액(?<balance>[\\d,]+)원";
 // PUSH 경로(알림 접근 권한)는 기기에 뜨는 모든 알림을 다 보므로, 필터가 없으면 카카오톡/브라우저
 // 등 은행과 무관한 알림까지 전부 로그에 쌓여 정작 입금 알림을 찾기 어려워진다 - 삼성 기본 문자
 // 앱으로 오는 NH농협 알림 기준 기본값을 둔다. 두 값 다 비워두면 필터 없이 전체 허용.
