@@ -1,5 +1,5 @@
 {
-  "kiosk": { "versionCode": 20, "versionName": "1.0.0-20", "apkUrl": "/SomangPayKiosk.apk" },
-  "admin": { "versionCode": 20, "versionName": "1.0.0-20", "apkUrl": "/SomangPayAdmin.apk" },
-  "user": { "versionCode": 20, "versionName": "1.0.0-20", "apkUrl": "/SomangPayUser.apk" }
+  "kiosk": { "versionCode": 21, "versionName": "1.0.0-21", "apkUrl": "/SomangPayKiosk.apk" },
+  "admin": { "versionCode": 21, "versionName": "1.0.0-21", "apkUrl": "/SomangPayAdmin.apk" },
+  "user": { "versionCode": 21, "versionName": "1.0.0-21", "apkUrl": "/SomangPayUser.apk" }
 }
