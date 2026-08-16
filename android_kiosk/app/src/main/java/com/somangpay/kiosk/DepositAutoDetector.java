@@ -27,11 +27,16 @@ import java.util.regex.Pattern;
 // (기본값은 admin.js의 SMS_DETECT_*_DEFAULT와 동일하게 맞춰뒀다 - 처음 설치해서 아직 설정을
 // 한 번도 저장 안 한 상태에서도 NH농협 포맷 기준으로 바로 동작하게 하기 위함.)
 //
-// 처리 순서(필터 -> 인증 -> 정규식 -> 값 검증 -> 중복 확인 -> 등록)는 admin.js의
-// processDepositDetection/onSmsReceived/onNotificationReceived와 동일하게 맞췄다 - 특히
-// "인증 여부를 정규식/중복 확인보다 먼저 본다"는 순서가 중요한데, 반대로 하면 토큰이 없을 때도
-// 중복 감지 키가 "이미 처리된 것"으로 기록돼버려서 나중에 토큰이 생겨도 같은 입금을 영영
-// 등록하지 못하게 되는 버그가 생긴다.
+// 처리 순서(필터 -> 정규식 -> 값 검증 -> 중복 확인(peek) -> 등록 시도 -> 결과에 따라 중복 확인
+// 커밋)는 "이 기기에 로그인이 안 돼 있다는 이유만으로 진짜 입금을 무시하지 말자"는 요청 반영.
+// 기존엔 인증(토큰 존재 여부)을 정규식 파싱보다 먼저 확인해서, 토큰이 없으면 파싱조차 안 하고
+// 그냥 버렸다 - 하지만 정규식(REGEX_DEFAULT)이 마스킹된 계좌번호(?<account>)까지 캡처해서
+// 매칭됐다면 이미 "우리 계좌로 들어온 입금"이라는 게 메시지 내용만으로 확인된 것이라, 이
+// 기기의 로그인 여부와는 무관하게 등록을 시도하는 게 맞다. 그래서 지금은 토큰이 비어있어도
+// 일단 백엔드에 등록을 시도하고(비어있으면 "Bearer " 헤더도 안 붙임), 서버가 401(인증 없음/
+// 만료)로 거절할 때만 중복 확인 키 커밋을 건너뛴다 - 그래야 나중에 이 기기든 다른 관리자
+// 기기든 유효한 토큰이 생겼을 때 같은 입금을 다시 시도할 여지가 남는다(반대로 커밋해버리면
+// 토큰이 생겨도 그 입금은 "이미 처리된 것"으로 영영 등록 못 하게 된다).
 final class DepositAutoDetector {
     private static final String TAG = "SomangDepositDetect";
 
@@ -47,8 +52,11 @@ final class DepositAutoDetector {
     private static final String SMS_SENDER_DEFAULT = "1588-2100";
     private static final String PUSH_PACKAGE_DEFAULT = "com.samsung.android.messaging";
     private static final String PUSH_TITLE_DEFAULT = "NH농협";
+    // 잔액 뒤에 붙는 마스킹된 계좌번호(?<account>, 예: "355-**-123456-01")는 선택 그룹(?:...)? -
+    // 은행/문자 포맷에 따라 없을 수도 있어서 없어도 기존처럼 그대로 매칭된다. 있으면 로그에
+    // 남겨 "우리 계좌가 맞다"는 근거를 남긴다(아래 process()의 인증 우회 판단 근거).
     private static final String REGEX_DEFAULT =
-            "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<date>\\d{2}/\\d{2})\\s+(?<time>\\d{2}:\\d{2})[\\s\\S]*?(?<name>[가-힣]{2,10})\\s*잔액(?<balance>[\\d,]+)원";
+            "입금\\s*(?<amount>[\\d,]+)원[\\s\\S]*?(?<date>\\d{2}/\\d{2})\\s+(?<time>\\d{2}:\\d{2})[\\s\\S]*?(?<name>[가-힣]{2,10})\\s*잔액(?<balance>[\\d,]+)원(?:[\\s\\S]*?(?<account>\\d[\\d*]{1,6}[-*][\\d*-]{3,}))?";
 
     private static final int MAX_SEEN_KEYS = 200;
     private static final int MAX_LOG_QUEUE = 50;
@@ -101,11 +109,10 @@ final class DepositAutoDetector {
     // 소스에 따라 어느 한쪽만 실제 값이고 나머지는 null이라 로그 JSON 만들 때 이 값 하나로 처리한다.
     private static void process(Context context, String source, String originLabel, String packageName, String body) {
         SharedPreferences p = prefs(context);
+        // 토큰이 비어있어도 여기서 바로 포기하지 않는다 - 정규식이 매칭되면(특히 계좌번호까지
+        // 잡히면) 등록을 일단 시도한다. registerBankTransaction()이 blank 토큰을 그대로 들고
+        // 시도해서 서버가 401을 주면 그때 인증 관련 로그를 남긴다.
         String token = p.getString(PREF_ADMIN_TOKEN, null);
-        if (isBlank(token)) {
-            log(context, source, originLabel, packageName, body, "auth_skip", "관리자 인증 전이라 무시됨");
-            return;
-        }
 
         String regexStr = p.getString(PREF_REGEX, REGEX_DEFAULT).trim();
         if (isBlank(regexStr)) regexStr = REGEX_DEFAULT;
@@ -141,6 +148,7 @@ final class DepositAutoDetector {
             return;
         }
 
+        String account = safe(group(m, "account"));
         String dedupKey = name + "|" + amountRaw.trim() + "|" + safe(group(m, "date")) + "|"
                 + safe(group(m, "time")) + "|" + safe(group(m, "balance"));
         if (isDuplicate(context, dedupKey)) {
@@ -149,7 +157,7 @@ final class DepositAutoDetector {
             return;
         }
 
-        registerBankTransaction(context, source, originLabel, packageName, body, name, amount, token);
+        registerBankTransaction(context, source, originLabel, packageName, body, name, amount, account, token, dedupKey);
     }
 
     private static String group(Matcher m, String name) {
@@ -160,6 +168,9 @@ final class DepositAutoDetector {
         }
     }
 
+    // 커밋 없이 조회만 한다 - 실제 등록(registerBankTransaction) 결과가 인증 실패가 아닐 때만
+    // commitSeen()으로 확정한다. 여기서 바로 커밋해버리면, 등록 시도가 인증 문제로 실패한
+    // 입금이 "이미 처리된 것"으로 기록돼 나중에 토큰이 생겨도 다시 시도할 수 없게 된다.
     private static synchronized boolean isDuplicate(Context context, String key) {
         SharedPreferences p = prefs(context);
         try {
@@ -167,22 +178,32 @@ final class DepositAutoDetector {
             for (int i = 0; i < arr.length(); i++) {
                 if (key.equals(arr.getString(i))) return true;
             }
-            arr.put(key);
-            while (arr.length() > MAX_SEEN_KEYS) arr.remove(0);
-            p.edit().putString(PREF_SEEN_KEYS, arr.toString()).apply();
             return false;
         } catch (JSONException e) {
-            Log.e(TAG, "중복 감지 키 저장 실패", e);
+            Log.e(TAG, "중복 감지 키 확인 실패", e);
             return false;
         }
     }
 
+    private static synchronized void commitSeen(Context context, String key) {
+        SharedPreferences p = prefs(context);
+        try {
+            JSONArray arr = new JSONArray(p.getString(PREF_SEEN_KEYS, "[]"));
+            arr.put(key);
+            while (arr.length() > MAX_SEEN_KEYS) arr.remove(0);
+            p.edit().putString(PREF_SEEN_KEYS, arr.toString()).apply();
+        } catch (JSONException e) {
+            Log.e(TAG, "중복 감지 키 저장 실패", e);
+        }
+    }
+
     private static void registerBankTransaction(Context context, String source, String originLabel,
-                                                 String packageName, String body, String name, long amount, String token) {
+                                                 String packageName, String body, String name, long amount,
+                                                 String account, String token, String dedupKey) {
         String apiBase = apiBaseUrl();
         if (apiBase == null) {
             log(context, source, originLabel, packageName, body, "network_error", "관리자 앱의 접속 주소를 확인할 수 없음");
-            return;
+            return; // 네트워크 설정 문제 - dedup 커밋 안 함(재시도 가능하게)
         }
 
         HttpURLConnection conn = null;
@@ -191,7 +212,11 @@ final class DepositAutoDetector {
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + token);
+            // 토큰이 비어있어도(로그인 전) 그냥 시도한다 - Authorization 헤더 자체를 생략하면
+            // 서버가 명확한 401("관리자 인증이 필요합니다")을 준다.
+            if (!isBlank(token)) {
+                conn.setRequestProperty("Authorization", "Bearer " + token);
+            }
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
             conn.setDoOutput(true);
@@ -207,21 +232,29 @@ final class DepositAutoDetector {
 
             int code = conn.getResponseCode();
             if (code == 401) {
+                String accountNote = isBlank(account) ? "" : " (계좌번호 " + account + " 확인됨 - 내용은 확실하지만 인증이 없어 등록 못 함)";
                 log(context, source, originLabel, packageName, body, "auth_skip",
-                        "관리자 세션이 만료됨 - 앱을 열어 다시 로그인해 주세요");
-                return;
+                        (isBlank(token)
+                            ? "이 기기에 저장된 관리자 인증 토큰이 없어 등록하지 못함"
+                            : "관리자 세션이 만료됨 - 앱을 열어 다시 로그인해 주세요")
+                        + accountNote);
+                return; // 인증 문제 - dedup 커밋 안 함(토큰이 생기면 같은 건을 다시 시도할 수 있게)
             }
             if (code < 200 || code >= 300) {
                 log(context, source, originLabel, packageName, body, "register_fail",
                         "백엔드 등록 실패 (HTTP " + code + ")");
+                commitSeen(context, dedupKey);
                 return;
             }
 
+            commitSeen(context, dedupKey);
             log(context, source, originLabel, packageName, body, "success",
-                    name + " / " + amount + "원으로 등록 완료 (앱이 꺼져 있는 동안 자동 처리됨)");
+                    name + " / " + amount + "원으로 등록 완료 (앱이 꺼져 있는 동안 자동 처리됨)"
+                        + (isBlank(account) ? "" : " (계좌번호 " + account + " 확인됨)"));
         } catch (Exception e) {
             Log.e(TAG, "입금 등록 API 호출 실패", e);
             log(context, source, originLabel, packageName, body, "network_error", "네트워크 오류: " + e.getMessage());
+            // 네트워크 예외 - dedup 커밋 안 함(재시도 가능하게)
         } finally {
             if (conn != null) conn.disconnect();
         }
