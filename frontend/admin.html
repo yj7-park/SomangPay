@@ -7,23 +7,24 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/style.css?v=20260815_0022">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0022">
+  <link rel="stylesheet" href="src/style.css?v=20260816_0001">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260816_0001">
   <script src="jsQR.min.js"></script>
 </head>
 <body>
+  <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
+       동일한 패턴(setAdminTheme()/initAdminTheme(), admin.js 참고). body에 거는 이유는
+       instagram-theme.css 참고(모달이 .admin-shell 밖에 있어서 래퍼 스코프로는 안 닿음). -->
+  <script>
+    (function () {
+      var pref = localStorage.getItem("admin_theme_pref");
+      if (pref === "light" || pref === "dark") {
+        document.body.setAttribute("data-theme", pref);
+      }
+    })();
+  </script>
 
   <div class="admin-shell">
-    <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
-         동일한 패턴(setAdminTheme()/initAdminTheme(), admin.js 참고). -->
-    <script>
-      (function () {
-        var pref = localStorage.getItem("admin_theme_pref");
-        if (pref === "light" || pref === "dark") {
-          document.currentScript.parentElement.setAttribute("data-theme", pref);
-        }
-      })();
-    </script>
     <!-- 트위터 스타일 탭 내비게이션: 데스크톱은 왼쪽 사이드바, 모바일은 하단 아이콘 탭바 -->
     <nav class="admin-tabbar">
       <button class="admin-tab-btn active" data-view="home" onclick="switchAdminView('home')">
@@ -617,8 +618,8 @@
     </div>
   </div>
 
-  <script src="src/update-widget.js"></script>
+  <script src="src/update-widget.js?v=20260816_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
-  <script src="src/admin.js?v=20260815_0022"></script>
+  <script src="src/admin.js?v=20260816_0001"></script>
 </body>
 </html>

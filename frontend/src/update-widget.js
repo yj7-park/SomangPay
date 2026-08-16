@@ -17,8 +17,8 @@
   function injectMarkup(root) {
     root.innerHTML =
       '<button type="button" id="update-badge-btn" title="버전 정보 / 업데이트" ' +
-      'style="position: relative; display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(255,255,255,0.08); ' +
-      'border: 1px solid var(--border-glass); color: #fff; padding: 0.35rem 0.7rem; border-radius: 20px; font-weight: bold; ' +
+      'style="position: relative; display: inline-flex; align-items: center; gap: 0.3rem; background: var(--surface-1); ' +
+      'border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.35rem 0.7rem; border-radius: 20px; font-weight: bold; ' +
       'font-size: 0.78rem; cursor: pointer; min-height: 28px;">' +
       '  <span id="update-badge-version-text">v-</span>' +
       '  <span id="update-badge-dot" style="display: none; width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; ' +
@@ -26,26 +26,26 @@
       '</button>' +
       '<div id="update-settings-modal" class="modal-overlay" style="display: none; z-index: 9999;">' +
       '  <div class="modal-box-large" style="max-width: 440px;">' +
-      '    <h2 style="font-size: 1.2rem; color: #fff; margin-bottom: 0.6rem;">⚙️ 앱 버전 / 업데이트</h2>' +
+      '    <h2 style="font-size: 1.2rem; color: var(--text-main); margin-bottom: 0.6rem;">⚙️ 앱 버전 / 업데이트</h2>' +
       '    <div class="modal-body">' +
       '      <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.9rem;">' +
-      '        현재 버전: <strong id="update-modal-current-version" style="color:#fff;">-</strong>' +
+      '        현재 버전: <strong id="update-modal-current-version" style="color: var(--text-main);">-</strong>' +
       '      </div>' +
       '      <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0; border-top: 1px solid var(--border-glass); border-bottom: 1px solid var(--border-glass); margin-bottom: 0.9rem;">' +
       '        <input type="checkbox" id="update-auto-toggle" style="width: 18px; height: 18px; cursor: pointer;">' +
-      '        <label for="update-auto-toggle" style="font-size: 0.88rem; color: #fff; cursor: pointer;">새 버전을 자동으로 감지되면 바로 다운로드/설치</label>' +
+      '        <label for="update-auto-toggle" style="font-size: 0.88rem; color: var(--text-main); cursor: pointer;">새 버전을 자동으로 감지되면 바로 다운로드/설치</label>' +
       '      </div>' +
       '      <div id="update-status-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem; min-height: 1.2em;">아직 확인하지 않았습니다.</div>' +
       '      <div id="update-progress-wrap" style="display: none; margin-bottom: 0.9rem;">' +
-      '        <div style="background: rgba(0,0,0,0.35); border-radius: 999px; height: 10px; overflow: hidden;">' +
+      '        <div style="background: var(--surface-2); border-radius: 999px; height: 10px; overflow: hidden;">' +
       '          <div id="update-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(135deg, #06b6d4, #10b981); transition: width 0.2s;"></div>' +
       '        </div>' +
       '      </div>' +
       '    </div>' +
       '    <div class="modal-footer">' +
-      '      <button type="button" id="update-check-now-btn" class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;">🔄 지금 확인</button>' +
+      '      <button type="button" id="update-check-now-btn" class="btn-action" style="background: var(--surface-1); color: var(--text-main);">🔄 지금 확인</button>' +
       '      <button type="button" id="update-install-now-btn" class="btn-action btn-primary" style="display: none;">⬇️ 지금 업데이트</button>' +
-      '      <button type="button" id="update-modal-close-btn" class="btn-action" style="background: rgba(255,255,255,0.1); color: #fff;">닫기</button>' +
+      '      <button type="button" id="update-modal-close-btn" class="btn-action" style="background: var(--surface-1); color: var(--text-main);">닫기</button>' +
       '    </div>' +
       '  </div>' +
       '</div>' +

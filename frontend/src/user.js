@@ -16,14 +16,14 @@ document.addEventListener("DOMContentLoaded", () => {
 const USER_THEME_KEY = "user_theme_pref";
 
 function setUserTheme(pref) {
-  const wrapper = document.querySelector(".mobile-wrapper");
-  if (!wrapper) return;
+  // body에 건다 - 모달들이 .mobile-wrapper의 자식이 아니라 body 바로 아래 형제로 마크업돼
+  // 있어서, 래퍼에만 스코프를 걸면 모달 내부가 테마를 안 탄다.
   if (pref === "system") {
     localStorage.removeItem(USER_THEME_KEY);
-    wrapper.removeAttribute("data-theme");
+    document.body.removeAttribute("data-theme");
   } else {
     localStorage.setItem(USER_THEME_KEY, pref);
-    wrapper.setAttribute("data-theme", pref);
+    document.body.setAttribute("data-theme", pref);
   }
   updateUserThemeButtonsUI(pref);
   updateUserThemeColorMeta();

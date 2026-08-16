@@ -9,27 +9,28 @@
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260815_0022">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0022">
+  <link rel="stylesheet" href="src/style.css?v=20260816_0001">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260816_0001">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
+       동일한 패턴(setUserTheme()/initUserTheme(), user.js 참고). 저장값이 없으면(기본값
+       "시스템") 아무 속성도 안 얹어서 instagram-theme.css의 시스템 설정 기반 미디어
+       쿼리가 그대로 적용된다. body에 거는 이유는 instagram-theme.css 참고(모달이
+       .mobile-wrapper 밖에 있어서 래퍼 스코프로는 안 닿음). -->
+  <script>
+    (function () {
+      var pref = localStorage.getItem("user_theme_pref");
+      if (pref === "light" || pref === "dark") {
+        document.body.setAttribute("data-theme", pref);
+      }
+    })();
+  </script>
 
   <div class="mobile-wrapper">
-    <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
-         동일한 패턴(setUserTheme()/initUserTheme(), user.js 참고). 저장값이 없으면(기본값
-         "시스템") 아무 속성도 안 얹어서 instagram-theme.css의 시스템 설정 기반 미디어
-         쿼리가 그대로 적용된다. -->
-    <script>
-      (function () {
-        var pref = localStorage.getItem("user_theme_pref");
-        if (pref === "light" || pref === "dark") {
-          document.currentScript.parentElement.setAttribute("data-theme", pref);
-        }
-      })();
-    </script>
     <!-- Top Header -->
     <header class="app-header">
       <div class="brand-logo">
@@ -177,9 +178,9 @@
     </div>
   </div>
 
-  <script src="src/update-widget.js"></script>
+  <script src="src/update-widget.js?v=20260816_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/user.html,/src/user.js"></script>
   <script src="src/qrcode-generator.js"></script>
-  <script src="src/user.js?v=20260815_0022"></script>
+  <script src="src/user.js?v=20260816_0001"></script>
 </body>
 </html>

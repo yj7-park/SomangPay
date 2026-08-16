@@ -958,21 +958,21 @@ async function kioskAdminFetch(url, options = {}) {
 
 // ---------------- 라이트/다크 테마 ----------------
 // 시스템/라이트/다크 3가지, 기본값은 "시스템"(기기 명암 설정을 따름). 저장값이 없으면(=시스템)
-// .kiosk-wrapper에 data-theme를 아예 안 얹어서, style.css의 시스템 설정 기반 미디어 쿼리
+// body에 data-theme를 아예 안 얹어서, style.css의 시스템 설정 기반 미디어 쿼리
 // (@media (prefers-color-scheme: light))가 그대로 적용되게 둔다. 화면 전환 시 깜빡임(FOUC)을
-// 막기 위해 저장된 값은 <body> 최상단 .kiosk-wrapper 바로 안의 인라인 <script>가 렌더 전에
+// 막기 위해 저장된 값은 <body> 여는 태그 바로 뒤 인라인 <script>가 렌더 전에
 // 먼저 반영해두므로, 여기 initKioskTheme()은 설정 화면의 버튼 활성 표시만 맞춘다.
 const KIOSK_THEME_KEY = "kiosk_theme_pref";
 
 function setKioskTheme(pref) {
-  const wrapper = document.querySelector(".kiosk-wrapper");
-  if (!wrapper) return;
+  // body에 건다 - 설정 모달 등 .modal-overlay는 .kiosk-wrapper의 자식이 아니라 body 바로
+  // 아래 형제라서(fixed 오버레이), 래퍼에만 스코프를 걸면 모달 내부가 테마를 안 탄다.
   if (pref === "system") {
     localStorage.removeItem(KIOSK_THEME_KEY);
-    wrapper.removeAttribute("data-theme");
+    document.body.removeAttribute("data-theme");
   } else {
     localStorage.setItem(KIOSK_THEME_KEY, pref);
-    wrapper.setAttribute("data-theme", pref);
+    document.body.setAttribute("data-theme", pref);
   }
   updateKioskThemeButtonsUI(pref);
   updateKioskThemeColorMeta();

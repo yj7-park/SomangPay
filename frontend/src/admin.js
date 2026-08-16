@@ -216,14 +216,14 @@ document.addEventListener("DOMContentLoaded", () => {
 const ADMIN_THEME_KEY = "admin_theme_pref";
 
 function setAdminTheme(pref) {
-  const wrapper = document.querySelector(".admin-shell");
-  if (!wrapper) return;
+  // body에 건다 - 모달들이 .admin-shell의 자식이 아니라 body 바로 아래 형제로 마크업돼
+  // 있어서, 래퍼에만 스코프를 걸면 모달 내부가 테마를 안 탄다.
   if (pref === "system") {
     localStorage.removeItem(ADMIN_THEME_KEY);
-    wrapper.removeAttribute("data-theme");
+    document.body.removeAttribute("data-theme");
   } else {
     localStorage.setItem(ADMIN_THEME_KEY, pref);
-    wrapper.setAttribute("data-theme", pref);
+    document.body.setAttribute("data-theme", pref);
   }
   updateAdminThemeButtonsUI(pref);
   updateAdminThemeColorMeta();

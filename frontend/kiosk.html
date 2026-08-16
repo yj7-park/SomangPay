@@ -9,8 +9,8 @@
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260815_0022">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260815_0022">
+  <link rel="stylesheet" href="src/style.css?v=20260816_0001">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260816_0001">
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -23,20 +23,21 @@
   </script>
 </head>
 <body style="overflow: hidden;">
+  <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC - 다크로 잠깐 그려졌다가
+       라이트로 바뀌는 현상)을 막는다. 실제 토글 로직/버튼 UI는 kiosk.js의
+       setKioskTheme()/initKioskTheme() 참고 - 저장값이 없으면(기본값 "시스템") 아무 속성도
+       안 얹어서 style.css의 시스템 설정 기반 미디어 쿼리가 그대로 적용된다. body에 거는 이유는
+       instagram-theme.css 참고(모달이 .kiosk-wrapper 밖에 있어서 래퍼 스코프로는 안 닿음). -->
+  <script>
+    (function () {
+      var pref = localStorage.getItem("kiosk_theme_pref");
+      if (pref === "light" || pref === "dark") {
+        document.body.setAttribute("data-theme", pref);
+      }
+    })();
+  </script>
 
   <div class="kiosk-wrapper">
-    <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC - 다크로 잠깐 그려졌다가
-         라이트로 바뀌는 현상)을 막는다. 실제 토글 로직/버튼 UI는 kiosk.js의
-         setKioskTheme()/initKioskTheme() 참고 - 저장값이 없으면(기본값 "시스템") 아무 속성도
-         안 얹어서 style.css의 시스템 설정 기반 미디어 쿼리가 그대로 적용된다. -->
-    <script>
-      (function () {
-        var pref = localStorage.getItem("kiosk_theme_pref");
-        if (pref === "light" || pref === "dark") {
-          document.currentScript.parentElement.setAttribute("data-theme", pref);
-        }
-      })();
-    </script>
     <!-- Top Header -->
     <header class="kiosk-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; width: 100%; max-width: 100%; box-sizing: border-box;">
       <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
@@ -329,8 +330,8 @@
     </div>
   </div>
 
-  <script src="src/update-widget.js?v=20260811_0001"></script>
+  <script src="src/update-widget.js?v=20260816_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
-  <script src="src/kiosk.js?v=20260815_0022"></script>
+  <script src="src/kiosk.js?v=20260816_0001"></script>
 </body>
 </html>
