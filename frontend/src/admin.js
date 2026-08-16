@@ -1103,11 +1103,15 @@ function buildMergedActivityEvents() {
 
   bankTransactions.forEach(t => {
     if (usedBankTxnIds.has(t.id)) return;
+    // "SIM_" 접두사(processDepositDetection 참고)는 수신 시뮬레이션 버튼으로 등록된 테스트
+    // 건이다 - 실제 입금과 겉모습이 똑같으면 관리자가 실제 수신으로 착각할 수 있어(실제로
+    // 겪은 문제) 목록에서부터 표시를 다르게 한다.
+    const isSimulated = (t.external_txn_id || "").startsWith("SIM_");
     events.push({
       kind: "single",
       time: t.created_at,
       icon: icon("bank"),
-      title: `계좌 입금 - ${t.depositor_name}`,
+      title: isSimulated ? `🧪 [테스트] 계좌 입금 - ${t.depositor_name}` : `계좌 입금 - ${t.depositor_name}`,
       amount: t.amount,
       status: t.status === "MATCHED" ? "완료" : "대기",
       statusClass: t.status === "MATCHED" ? "status-done" : "status-pending",
@@ -1931,7 +1935,13 @@ function processDepositDetection(source, body, originMeta) {
   }
 
   logSmsEvent(Object.assign({}, logBase, { outcome: "success", detail: `${depositorName} / ${amount.toLocaleString()}원으로 등록 시도` }));
-  registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: source, silent: true });
+  // 이 함수(processDepositDetection)는 이제 시뮬레이션 버튼(triggerSimulatedSms/
+  // triggerSimulatedNotification)에서만 호출된다(위 window.onSmsReceived 주석 참고) - 실제
+  // 수신은 전부 네이티브(DepositAutoDetector)가 처리해 PUSH_NATIVE_/SMS_NATIVE_로 등록된다.
+  // 그래서 여기서 만드는 건은 항상 테스트 건이라 "SIM_" 접두사로 명확히 표시한다 - 안 그러면
+  // 충전함 목록에서 실제 수신 건과 구분이 안 돼서, 테스트로 클릭한 걸 실제 입금으로 착각하기
+  // 쉽다(renderInboxActivityFeed의 "🧪 테스트" 표시가 이 접두사를 보고 판단한다).
+  registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: "SIM_" + source, silent: true });
 }
 
 // 문자 수신 시뮬레이션(SIM 없는 테스트, triggerSimulatedSms) 전용 진입점 - 실제 기기에서 온
