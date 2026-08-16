@@ -1100,6 +1100,24 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
    라벨이 줄바꿈되고 불필요한 스크롤이 생김 - 더 넓게 확보 (ID 특이도로 위 규칙을 이김) */
 #kiosk-admin-modal.modal-overlay .modal-box-large {
   width: min(94vw, 900px) !important;
+  /* 탭(메뉴 설정/로그 확인) 콘텐츠 높이가 서로 달라도 모달 크기가 탭 전환마다
+     바뀌지 않도록 max-height뿐 아니라 height 자체를 고정한다. */
+  height: 86vh !important;
+  height: 86dvh !important;
+}
+
+/* 관리자 설정 모달의 메뉴 설정/로그 확인 탭 버튼 - 선택 여부는 JS가 .btn-primary
+   클래스만 토글해서 표시하고(인라인 style은 건드리지 않는다), 비선택 상태의 배경/글자색은
+   여기서 고정해둔다. 예전엔 JS가 비활성 탭에 style.background를 직접 덮어썼는데, 탭을
+   다시 활성화할 때 그 인라인 값을 지우지 않아 .btn-primary보다 우선 적용되면서 흰 글자가
+   거의 흰 배경 위에 남아 안 보이는 버그가 있었다. */
+.kiosk-settings-tab-btn {
+  background: var(--surface-1);
+  color: var(--text-main);
+}
+.kiosk-settings-tab-btn.btn-primary {
+  background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  color: #fff;
 }
 
 .modal-body {

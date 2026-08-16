@@ -947,7 +947,6 @@ async function kioskAdminFetch(url, options = {}) {
   const res = await fetch(url, Object.assign({}, options, { headers }));
   if (res.status === 401) {
     kioskAdminToken = null;
-    sessionStorage.removeItem("kiosk_admin_auth");
     sessionStorage.removeItem("kiosk_admin_token");
     alert("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
     kioskHideModal("kiosk-admin-modal");
@@ -1054,10 +1053,10 @@ function openKioskAdminPinModal() {
   // 설정 화면으로 들어가는 동안엔 상시 켜기 카메라를 잠시 꺼둔다 (모달 닫을 때 다시 켜짐)
   if (isCameraScanning) stopCameraScanner();
 
-  if (sessionStorage.getItem("kiosk_admin_auth") === "true" && kioskAdminToken) {
-    openKioskAdminModal();
-    return;
-  }
+  // 설정 화면은 매번 PIN을 다시 입력해야 한다 - 이전엔 sessionStorage에 인증 여부를
+  // 저장해뒀다가 같은 세션이면 PIN 없이 바로 열어줬는데, 키오스크 단말기 특성상
+  // 브라우저 세션이 며칠씩 유지되는 경우가 많아 사실상 최초 1회 인증 이후로는
+  // 아무나 설정에 들어갈 수 있는 문제가 있었다.
   kioskShowModal("kiosk-pin-modal");
   const input = document.getElementById("kiosk-pin-input");
   if (input) { input.value = ""; input.focus(); }
@@ -1083,7 +1082,6 @@ async function verifyKioskAdminPin() {
 
     if (res.ok && data.token) {
       kioskAdminToken = data.token;
-      sessionStorage.setItem("kiosk_admin_auth", "true");
       sessionStorage.setItem("kiosk_admin_token", kioskAdminToken);
       closeKioskPinModal();
       openKioskAdminModal();
@@ -1163,19 +1161,11 @@ function switchKioskAdminTab(tabName) {
   const btnMenu = document.getElementById("kiosk-tab-btn-menu");
   const btnDebug = document.getElementById("kiosk-tab-btn-debug");
 
-  if (tabName === 'menu') {
-    menuSec.style.display = "block";
-    debugSec.style.display = "none";
-    btnMenu.className = "btn-action btn-primary";
-    btnDebug.className = "btn-action";
-    btnDebug.style.background = "rgba(255,255,255,0.1)";
-  } else {
-    menuSec.style.display = "none";
-    debugSec.style.display = "block";
-    btnDebug.className = "btn-action btn-primary";
-    btnMenu.className = "btn-action";
-    btnMenu.style.background = "rgba(255,255,255,0.1)";
-  }
+  const isMenu = tabName === 'menu';
+  menuSec.style.display = isMenu ? "block" : "none";
+  debugSec.style.display = isMenu ? "none" : "block";
+  btnMenu.classList.toggle("btn-primary", isMenu);
+  btnDebug.classList.toggle("btn-primary", !isMenu);
 }
 
 function renderKioskAdminProducts() {
