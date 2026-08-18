@@ -80,17 +80,17 @@
         </div>
 
         <div class="attention-row">
-          <div class="glass-container attention-tile" id="attention-pending-deposit" onclick="switchAdminView('inbox')">
+          <div class="glass-container attention-tile" id="attention-pending-deposit" onclick="switchAdminView('inbox', 'PENDING')">
             <span class="attention-icon" data-icon="bank"></span>
             <div>
               <div class="stat-label">대기 중인 계좌 입금</div>
               <div class="stat-value" id="stat-pending-deposit">0건</div>
             </div>
           </div>
-          <div class="glass-container attention-tile" id="attention-error-deposit" onclick="switchAdminView('inbox')">
+          <div class="glass-container attention-tile" id="attention-error-deposit" onclick="switchAdminView('inbox', 'ERROR')">
             <span class="attention-icon" data-icon="receipt"></span>
             <div>
-              <div class="stat-label">매칭 오류 입금</div>
+              <div class="stat-label">매칭 오류 계좌 입금</div>
               <div class="stat-value" id="stat-error-deposit">0건</div>
             </div>
           </div>
@@ -628,6 +628,6 @@
 
   <script src="src/update-widget.js?v=20260818_0002"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
-  <script src="src/admin.js?v=20260818_0007"></script>
+  <script src="src/admin.js?v=20260819_0001"></script>
 </body>
 </html>

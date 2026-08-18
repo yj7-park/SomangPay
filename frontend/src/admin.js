@@ -343,7 +343,7 @@ async function handleAdminRefreshEvent(scopes) {
 let currentDetailUserId = null;
 let detailReturnView = "search";
 
-function switchAdminView(viewName) {
+function switchAdminView(viewName, inboxFilter) {
   document.querySelectorAll(".admin-view").forEach(el => el.classList.remove("active"));
   const target = document.getElementById(`admin-view-${viewName}`);
   if (target) target.classList.add("active");
@@ -356,8 +356,13 @@ function switchAdminView(viewName) {
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") renderKioskList();
     if (viewName === "inbox") {
+      if (inboxFilter) {
+        inboxDepositFilter = inboxFilter;
+        inboxFilterOpen = false;
+      }
       activityFeedLimit = ACTIVITY_PAGE_SIZE;
       updateFixedViewLayoutMetrics();
+      renderInboxFilterSelector();
       renderInboxActivityFeed();
     }
   }
