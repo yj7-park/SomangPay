@@ -80,18 +80,18 @@
         </div>
 
         <div class="attention-row">
-          <div class="glass-container attention-tile" id="attention-unmatched" onclick="switchAdminView('inbox')">
+          <div class="glass-container attention-tile" id="attention-pending-deposit" onclick="switchAdminView('inbox')">
             <span class="attention-icon" data-icon="bank"></span>
             <div>
               <div class="stat-label">대기 중인 계좌 입금</div>
-              <div class="stat-value" id="stat-unmatched">0건</div>
+              <div class="stat-value" id="stat-pending-deposit">0건</div>
             </div>
           </div>
-          <div class="glass-container attention-tile" id="attention-pending" onclick="switchAdminView('inbox')">
+          <div class="glass-container attention-tile" id="attention-error-deposit" onclick="switchAdminView('inbox')">
             <span class="attention-icon" data-icon="receipt"></span>
             <div>
-              <div class="stat-label">대기 중인 충전 신청</div>
-              <div class="stat-value" id="stat-pending">0건</div>
+              <div class="stat-label">매칭 오류 입금</div>
+              <div class="stat-value" id="stat-error-deposit">0건</div>
             </div>
           </div>
         </div>
@@ -122,53 +122,6 @@
         <div class="activity-feed-scroll" id="inbox-activity-feed-scroll">
           <div class="activity-feed" id="inbox-activity-feed"></div>
         </div>
-
-        <!-- 계좌 입금 목록 / 충전 신청 목록 (구 표 형태) - 위 "최근 처리 내역" 피드로
-             대체되어 일단 주석 처리. 표 자체와 렌더 함수(renderBankTransactionsTable/
-             renderRechargeQueueTable, admin.js)는 그대로 남겨뒀으니 필요해지면 이 주석만
-             풀면 다시 동작한다.
-        <div class="glass-container inbox-half">
-          <div class="inbox-half-header">
-            <h3 style="font-size: 1.05rem; margin: 0;">계좌 입금 목록</h3>
-          </div>
-          <div class="table-wrap" id="admin-bank-transactions-scroll">
-            <table class="table-custom">
-              <thead>
-                <tr>
-                  <th>등록일시</th>
-                  <th>입금자명</th>
-                  <th>금액</th>
-                  <th>상태</th>
-                  <th>관리</th>
-                </tr>
-              </thead>
-              <tbody id="admin-bank-transactions-tbody">
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="glass-container inbox-half">
-          <div class="inbox-half-header">
-            <h3 style="font-size: 1.05rem; margin: 0;">충전 신청 목록</h3>
-          </div>
-          <div class="table-wrap" id="admin-recharge-queue-scroll">
-            <table class="table-custom">
-              <thead>
-                <tr>
-                  <th>신청일시</th>
-                  <th>회원명</th>
-                  <th>신청 금액</th>
-                  <th>상태</th>
-                  <th>관리</th>
-                </tr>
-              </thead>
-              <tbody id="admin-recharge-queue-tbody">
-              </tbody>
-            </table>
-          </div>
-        </div>
-        -->
       </div>
 
       <!-- ================= SETTINGS (설정) ================= -->
@@ -404,6 +357,54 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Deposit Detail Modal (계좌 입금 상세 - 회원 지정 처리 / 기타 처리) -->
+  <div id="deposit-detail-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 460px;">
+      <h2 style="font-size: 1.3rem; color: var(--accent-cyan); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="bank"></span> 계좌 입금 상세</h2>
+
+      <div class="modal-body">
+        <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.88rem; margin-bottom: 1rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom: 0.3rem;"><span style="color: var(--text-muted);">입금자명</span><strong id="dd-depositor-name">-</strong></div>
+          <div style="display:flex; justify-content:space-between; margin-bottom: 0.3rem;"><span style="color: var(--text-muted);">금액</span><strong id="dd-amount" style="color: var(--accent-emerald);">-</strong></div>
+          <div style="display:flex; justify-content:space-between; margin-bottom: 0.3rem;"><span style="color: var(--text-muted);">입금 시각</span><span id="dd-transaction-at">-</span></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color: var(--text-muted);">거래번호</span><span id="dd-txn-id" style="font-size: 0.78rem; color: var(--text-muted);">-</span></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.6rem;">
+          <span style="font-size: 0.85rem; color: var(--text-muted);">상태</span>
+          <span id="dd-status" class="activity-status status-pending">-</span>
+        </div>
+        <div id="dd-resolution-info" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem; display: none;"></div>
+
+        <!-- 대기(PENDING)/오류(ERROR) 상태일 때만 노출 - 회원 지정 처리 / 기타 처리 -->
+        <div id="dd-resolve-section" style="display: none; border-top: 1px solid var(--border-glass); padding-top: 1rem; margin-top: 0.4rem;">
+          <div class="form-group">
+            <label class="form-label">회원을 지정해 충전 처리</label>
+            <input type="text" id="dd-user-search" class="form-control" placeholder="이름 또는 연락처로 검색" oninput="renderDepositUserOptions()">
+          </div>
+          <div id="dd-user-options" style="max-height: 160px; overflow-y: auto; margin-bottom: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem;"></div>
+          <div class="form-group" style="margin-bottom: 0.6rem;">
+            <label class="form-label">메모 (선택)</label>
+            <input type="text" id="dd-resolve-memo" class="form-control" placeholder="예: 전화로 확인 후 대신 처리">
+          </div>
+          <button class="btn-action btn-emerald" style="width: 100%; margin-bottom: 1rem;" onclick="submitDepositResolve(this)">선택한 회원으로 충전 처리(완료)</button>
+
+          <div style="border-top: 1px dashed var(--border-glass); padding-top: 0.8rem;">
+            <div class="form-group" style="margin-bottom: 0.6rem;">
+              <label class="form-label">충전 대상이 아님 - 사유</label>
+              <textarea id="dd-other-reason" class="form-control" rows="2" placeholder="예: 테스트 입금, 타 용도 입금 등"></textarea>
+            </div>
+            <button class="btn-action" style="width: 100%; background: rgba(148,163,184,0.15); color: var(--text-muted);" onclick="submitDepositMarkOther(this)">기타로 처리(충전 안 함)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeDepositDetailModal()">닫기</button>
+      </div>
+    </div>
   </div>
 
   <!-- Proxy Register Modal -->

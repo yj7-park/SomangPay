@@ -83,7 +83,13 @@ class DepositHistory(Base):
 
 class BankTransaction(Base):
     """농협 계좌조회로 가져온(지금은 모킹) 원본 입금 원장. 실제 API 연동 전까지는
-    관리자가 POST /api/admin/bank-transactions로 직접 입력한다."""
+    관리자가 POST /api/admin/bank-transactions로 직접 입력한다(또는 SMS/RCS 자동감지).
+
+    등록 즉시 입금자명으로 등록 회원과 자동 매칭을 시도한다(deposit_matcher.match_new_deposit).
+    상태: PENDING(회원 자동매칭됨, 회원이 앱에서 선택해 충전 대기) / ERROR(입금자명이 등록
+    회원과 매칭 안 됨, 관리자만 조회 가능) / CREDITED(회원 본인이 선택해 충전 완료) /
+    CREDITED_MANUAL(관리자가 회원을 지정해 대신 충전 완료) / OTHER(관리자가 사유를 남기고
+    충전 대상 아님으로 종결, 크레딧 미반영)."""
     __tablename__ = "bank_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -91,26 +97,14 @@ class BankTransaction(Base):
     transaction_at = Column(DateTime, default=datetime.datetime.utcnow)
     amount = Column(Integer, nullable=False)
     depositor_name = Column(String(50), nullable=False) # 통장에 찍히는 입금자명 원문
-    status = Column(String(20), default="UNMATCHED") # UNMATCHED, MATCHED
+    status = Column(String(20), default="PENDING")
     matched_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    matched_recharge_request_id = Column(Integer, ForeignKey("recharge_requests.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-class RechargeRequest(Base):
-    """회원이 입금 후 제출하는 '충전 신청'. 신청 시점에 BankTransaction과 매칭을 시도한다."""
-    __tablename__ = "recharge_requests"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    requested_amount = Column(Integer, nullable=False)
-    status = Column(String(20), default="PENDING") # PENDING, MATCHED, REJECTED
-    matched_bank_transaction_id = Column(Integer, ForeignKey("bank_transactions.id"), nullable=True)
-    admin_id = Column(Integer, ForeignKey("users.id"), nullable=True) # 관리자가 수동 처리한 경우
-    memo = Column(String(200), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    resolved_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True) # CREDITED_MANUAL/OTHER 처리한 관리자
+    resolution_memo = Column(String(200), nullable=True) # OTHER 처리 사유, 또는 관리자 처리 메모
     resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-    user = relationship("User", foreign_keys=[user_id])
+    matched_user = relationship("User", foreign_keys=[matched_user_id])
 
 class KioskDevice(Base):
     __tablename__ = "kiosk_devices"

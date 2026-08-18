@@ -202,62 +202,61 @@ def run_all_usecase_tests():
         replaced_nfc_uid = test_nfc_uid  # 실패 시에도 이후 결제 테스트가 쓸 수 있도록 폴백
 
     # ----------------------------------------------------
-    # UC-04: 계좌이체 충전 신청 <-> 은행거래 원장 양방향 자동 매칭
+    # UC-04: 계좌 입금 자동 매칭(입금자명=회원명) -> 회원이 선택해 충전 완료 / 미매칭은 오류 처리
     # ----------------------------------------------------
     try:
-        # A) 은행거래가 먼저 들어오고, 그 다음 회원이 충전 신청 -> 즉시 매칭
+        # A) 입금자명이 등록 회원과 자동 매칭 -> 회원 앱에 대기로 노출 -> 회원이 선택해 충전 완료
         amount_a = 12000
-        requests.post(f"{BASE_URL}/admin/bank-transactions", headers=admin_headers, json={
+        r4a_create = requests.post(f"{BASE_URL}/admin/bank-transactions", headers=admin_headers, json={
             "external_txn_id": f"TXN_A_{unique_suffix}", "amount": amount_a, "depositor_name": test_name
         })
-        r4a = requests.post(f"{BASE_URL}/recharge-requests", headers={"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"},
-                             json={"amount": amount_a})
-        a_ok = r4a.status_code == 200 and r4a.json().get("status") == "MATCHED"
+        txn_a = r4a_create.json() if r4a_create.status_code == 200 else {}
+        a_pending_ok = r4a_create.status_code == 200 and txn_a.get("status") == "PENDING" and txn_a.get("matched_user_id") == test_user_id
 
-        # B) 회원이 먼저 충전 신청(미매칭) -> 나중에 은행거래가 들어오면 자동 매칭
+        r4a_me = requests.get(f"{BASE_URL}/bank-transactions/me", headers={"Authorization": f"Bearer {user_token}"})
+        a_visible_ok = r4a_me.status_code == 200 and any(t["id"] == txn_a.get("id") and t["status"] == "PENDING" for t in r4a_me.json())
+
+        r4a_claim = requests.post(f"{BASE_URL}/bank-transactions/{txn_a.get('id')}/claim", headers={"Authorization": f"Bearer {user_token}"})
+        a_claim_ok = r4a_claim.status_code == 200 and r4a_claim.json().get("success") is True
+
+        # B) 입금자명이 등록 회원과 안 맞으면 오류(ERROR) 상태로 남고 회원 목록에는 노출되지 않는다
         amount_b = 7000
-        r4b_req = requests.post(f"{BASE_URL}/recharge-requests", headers={"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"},
-                                 json={"amount": amount_b})
-        b_pending_ok = r4b_req.status_code == 200 and r4b_req.json().get("status") == "PENDING"
-        requests.post(f"{BASE_URL}/admin/bank-transactions", headers=admin_headers, json={
-            "external_txn_id": f"TXN_B_{unique_suffix}", "amount": amount_b, "depositor_name": test_name
+        unknown_name = f"미등록{unique_suffix}"
+        r4b_create = requests.post(f"{BASE_URL}/admin/bank-transactions", headers=admin_headers, json={
+            "external_txn_id": f"TXN_B_{unique_suffix}", "amount": amount_b, "depositor_name": unknown_name
         })
-        r4b_check = requests.get(f"{BASE_URL}/recharge-requests/me", headers={"Authorization": f"Bearer {user_token}"})
-        b_matched_ok = any(rr["requested_amount"] == amount_b and rr["status"] == "MATCHED" for rr in r4b_check.json())
+        txn_b = r4b_create.json() if r4b_create.status_code == 200 else {}
+        b_error_ok = r4b_create.status_code == 200 and txn_b.get("status") == "ERROR" and txn_b.get("matched_user_id") is None
 
-        if a_ok and b_pending_ok and b_matched_ok:
-            log_test("UC-04", "충전 신청<->은행거래 양방향 자동 매칭", "PASS", f"(+{amount_a:,}원, +{amount_b:,}원)")
+        r4b_me = requests.get(f"{BASE_URL}/bank-transactions/me", headers={"Authorization": f"Bearer {user_token}"})
+        b_hidden_ok = r4b_me.status_code == 200 and all(t["id"] != txn_b.get("id") for t in r4b_me.json())
+
+        if a_pending_ok and a_visible_ok and a_claim_ok and b_error_ok and b_hidden_ok:
+            log_test("UC-04", "계좌 입금 자동 매칭 -> 회원 선택 충전 / 미매칭은 오류 처리", "PASS", f"(+{amount_a:,}원)")
             passed_count += 1
         else:
-            log_test("UC-04", "충전 신청<->은행거래 양방향 자동 매칭", "FAIL",
-                      f"a_ok={a_ok}, b_pending_ok={b_pending_ok}, b_matched_ok={b_matched_ok}")
+            log_test("UC-04", "계좌 입금 자동 매칭 -> 회원 선택 충전 / 미매칭은 오류 처리", "FAIL",
+                      f"a_pending_ok={a_pending_ok}, a_visible_ok={a_visible_ok}, a_claim_ok={a_claim_ok}, b_error_ok={b_error_ok}, b_hidden_ok={b_hidden_ok}")
     except Exception as e:
-        log_test("UC-04", "충전 신청<->은행거래 양방향 자동 매칭", "FAIL", str(e))
+        log_test("UC-04", "계좌 입금 자동 매칭 -> 회원 선택 충전 / 미매칭은 오류 처리", "FAIL", str(e))
 
     # ----------------------------------------------------
-    # UC-11: 관리자 수동 승인/반려 큐 (매칭되는 은행거래가 없는 경우)
+    # UC-11: 관리자가 매칭 오류(ERROR) 건에 회원을 지정해 대신 충전 처리(완료-예외)
     # ----------------------------------------------------
     try:
-        amount_c = 3000
-        requests.post(f"{BASE_URL}/recharge-requests", headers={"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"},
-                      json={"amount": amount_c})
-        # 신청 응답(RechargeRequestResult)에는 id가 없으므로 관리자 큐에서 조회해 찾는다
-        r11_pending = requests.get(f"{BASE_URL}/admin/recharge-requests?status=PENDING", headers=admin_headers)
-        pending_list = r11_pending.json() if r11_pending.status_code == 200 else []
-        target_req = next((r for r in pending_list if r["user_id"] == test_user_id and r["requested_amount"] == amount_c), None)
-
         approve_ok = False
-        if target_req:
-            r11_approve = requests.post(f"{BASE_URL}/admin/recharge-requests/{target_req['id']}/approve", headers=admin_headers, json={})
-            approve_ok = r11_approve.status_code == 200
+        if txn_b.get("id"):
+            r11_resolve = requests.post(f"{BASE_URL}/admin/bank-transactions/{txn_b['id']}/resolve", headers=admin_headers,
+                                         json={"user_id": test_user_id, "memo": "테스트: 오류건 관리자 수동 처리"})
+            approve_ok = r11_resolve.status_code == 200 and r11_resolve.json().get("status") == "CREDITED_MANUAL"
 
         if approve_ok:
-            log_test("UC-11", "관리자 수동 승인 큐 (미매칭 신청 직접 승인)", "PASS", f"(+{amount_c:,}원)")
+            log_test("UC-11", "관리자가 매칭 오류 건에 회원 지정해 대신 충전 처리", "PASS", f"(+{amount_b:,}원)")
             passed_count += 1
         else:
-            log_test("UC-11", "관리자 수동 승인 큐 (미매칭 신청 직접 승인)", "FAIL", f"target_req={target_req}")
+            log_test("UC-11", "관리자가 매칭 오류 건에 회원 지정해 대신 충전 처리", "FAIL", f"txn_b={txn_b}")
     except Exception as e:
-        log_test("UC-11", "관리자 수동 승인 큐 (미매칭 신청 직접 승인)", "FAIL", str(e))
+        log_test("UC-11", "관리자가 매칭 오류 건에 회원 지정해 대신 충전 처리", "FAIL", str(e))
 
     # ----------------------------------------------------
     # UC-10: 관리자 통계 요약 API
@@ -265,7 +264,7 @@ def run_all_usecase_tests():
     try:
         r10 = requests.get(f"{BASE_URL}/admin/stats/summary", headers=admin_headers)
         data = r10.json() if r10.status_code == 200 else {}
-        expected_keys = {"total_users", "total_balance", "unmatched_deposit_count", "pending_recharge_count", "today", "this_week", "this_month"}
+        expected_keys = {"total_users", "total_balance", "users_with_balance", "pending_deposit_count", "error_deposit_count", "today", "this_week", "this_month"}
         if r10.status_code == 200 and expected_keys.issubset(data.keys()) and data["total_users"] >= 1:
             log_test("UC-10", "관리자 통계 요약 API", "PASS", f"(총 회원수: {data['total_users']})")
             passed_count += 1

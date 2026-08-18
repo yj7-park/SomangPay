@@ -171,6 +171,12 @@ html, body {
   min-height: 100dvh;
 }
 
+/* user.html은 kiosk/admin과 달리 상단 타이틀바가 없어(#14) 첫 카드가 화면 맨 위에 바로
+   붙는다 - 노치/상태바 아래로 안전하게 내려주는 여백을 래퍼가 직접 갖는다. */
+.mobile-wrapper {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
 /* 키오스크 화면 잠금 - 길게 눌러 텍스트 선택/컨텍스트 메뉴 호출 차단.
    입력 필드는 정상적인 커서 배치/편집이 필요하므로 예외로 둔다. */
 .kiosk-wrapper, .kiosk-wrapper * {
@@ -850,48 +856,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   margin-bottom: 1rem;
 }
 
-.inbox-half {
-  flex: 1 1 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 1.25rem 1.5rem;
-}
-
-.inbox-half-header {
-  flex-shrink: 0;
-  margin-bottom: 0.75rem;
-}
-
-.inbox-half .table-wrap {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
 .activity-row {
   display: flex;
   align-items: center;
   gap: 0.8rem;
   padding: 0.9rem 1.1rem;
-}
-
-/* 계좌 입금 - 충전 신청이 서로 매칭된 경우: 한 카드 안에 두 줄로 시간순 표시 */
-.activity-row.activity-row-paired {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-}
-.activity-pair-line {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.7rem 1.1rem;
-}
-.activity-pair-line + .activity-pair-line {
-  border-top: 1px dashed var(--border-glass);
 }
 .activity-row .activity-icon {
   font-size: 1.3rem;
@@ -918,19 +887,12 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   white-space: nowrap;
   text-align: right;
 }
-/* 대기 상태 줄의 관리 버튼(삭제 / 승인·반려) - 금액 바로 아래에 쌓아서 보여준다 */
 .activity-row .activity-amount-col {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.35rem;
   flex-shrink: 0;
-}
-.activity-row .activity-actions {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 .activity-status {
   display: inline-block;
@@ -952,6 +914,10 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .activity-status.status-rejected {
   background: rgba(239, 68, 68, 0.15);
   color: var(--accent-danger);
+}
+.activity-status.status-other {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
 }
 
 /* Member detail view (회원 상세 - 트위터 프로필 페이지 격) */
@@ -1023,6 +989,15 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   margin-bottom: 1.2rem;
   box-shadow: var(--shadow-subtle);
   color: #fff;
+}
+
+/* badge-general/badge-senior의 기본 색(파랑/앰버 계열 텍스트)은 이 카드의 남색~블루
+   그라디언트 배경 위에서는 거의 안 보인다(#14) - 이 카드 위에서만 흰 반투명 필로 덮어써
+   항상 대비를 확보한다. */
+.user-card-widget .badge-tag {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .user-balance-big {

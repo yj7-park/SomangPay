@@ -55,6 +55,18 @@ def init_db():
         # 신규 설계: 회원 이름 유일성(동명이인은 관리자가 구분 이름으로 직접 등록), 전화번호=로그인ID 유일성
         _run_migration_step(db, "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_name ON users(name);", "users unique(name)")
         _run_migration_step(db, "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_phone ON users(phone);", "users unique(phone)")
+
+        # 신규 설계: '충전 신청(RechargeRequest)' 단계 폐기 - 계좌 입금이 등록 회원과 자동
+        # 매칭되면 회원이 직접 선택해 충전을 완료하는 흐름으로 대체. 실제 충전 이력은
+        # deposit_histories에 그대로 남아있어 정보 손실 없음.
+        _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS resolved_by_admin_id INTEGER;", "bank_transactions.resolved_by_admin_id")
+        _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS resolution_memo VARCHAR(200);", "bank_transactions.resolution_memo")
+        _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;", "bank_transactions.resolved_at")
+        _run_migration_step(db, "ALTER TABLE bank_transactions DROP COLUMN IF EXISTS matched_recharge_request_id;", "bank_transactions.matched_recharge_request_id drop")
+        # 과거 상태값 백필(최선 근사) - 이전에는 매칭=즉시크레딧반영이었으므로 MATCHED는 CREDITED로 간주.
+        _run_migration_step(db, "UPDATE bank_transactions SET status='ERROR' WHERE status='UNMATCHED';", "bank_transactions backfill ERROR")
+        _run_migration_step(db, "UPDATE bank_transactions SET status='CREDITED' WHERE status='MATCHED';", "bank_transactions backfill CREDITED")
+        _run_migration_step(db, "DROP TABLE IF EXISTS recharge_requests;", "recharge_requests drop table")
     finally:
         db.close()
 

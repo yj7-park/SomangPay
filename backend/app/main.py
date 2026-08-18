@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from app import models, schemas, security
 from app.database import engine, get_db, init_db
 from app.phone_utils import normalize_phone
-from app.services.recharge_matcher import try_resolve_recharge_request, try_resolve_bank_transaction
+from app.services.deposit_matcher import match_new_deposit
 from app.ws_manager import manager, notify_admins, notify_user
 
 app = FastAPI(
@@ -412,7 +412,6 @@ async def admin_delete_user(
     has_history = (
         db.query(models.PaymentTransaction).filter(models.PaymentTransaction.user_id == user_id).first() is not None
         or db.query(models.DepositHistory).filter(models.DepositHistory.user_id == user_id).first() is not None
-        or db.query(models.RechargeRequest).filter(models.RechargeRequest.user_id == user_id).first() is not None
         or db.query(models.BankTransaction).filter(models.BankTransaction.matched_user_id == user_id).first() is not None
     )
     if has_history:
@@ -798,7 +797,18 @@ def get_payment_transactions(
         result.append(res)
     return result
 
-# ================= 계좌이체 충전 신청 (회원) =================
+# ================= 계좌이체 충전 (회원) =================
+
+def _bank_txn_response(db: Session, txn: "models.BankTransaction") -> schemas.BankTransactionResponse:
+    """BankTransaction을 응답 스키마로 변환하며 매칭 회원명/처리 관리자명을 조인해 채운다."""
+    res = schemas.BankTransactionResponse.from_orm(txn)
+    if txn.matched_user_id:
+        u = db.query(models.User).filter(models.User.id == txn.matched_user_id).first()
+        res.matched_user_name = u.name if u else None
+    if txn.resolved_by_admin_id:
+        a = db.query(models.User).filter(models.User.id == txn.resolved_by_admin_id).first()
+        res.resolved_by_admin_name = a.name if a else None
+    return res
 
 @app.get("/api/settings/charge-guide", response_model=schemas.ChargeGuideResponse)
 def get_charge_guide(user: models.User = Depends(require_user_auth)):
@@ -810,48 +820,49 @@ def get_charge_guide(user: models.User = Depends(require_user_auth)):
         depositor_name=user.name,
     )
 
-@app.post("/api/recharge-requests", response_model=schemas.RechargeRequestResult)
-async def create_recharge_request(
-    req: schemas.RechargeRequestCreate,
+@app.get("/api/bank-transactions/me", response_model=List[schemas.BankTransactionResponse])
+def get_my_bank_transactions(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
+    """본인 이름으로 확인된 입금 내역(대기 중인 것 + 과거 처리된 것 모두 포함)."""
+    txns = db.query(models.BankTransaction).filter(
+        models.BankTransaction.matched_user_id == user.id
+    ).order_by(models.BankTransaction.id.desc()).all()
+    return [_bank_txn_response(db, t) for t in txns]
+
+@app.post("/api/bank-transactions/{txn_id}/claim", response_model=schemas.DepositClaimResult)
+async def claim_bank_transaction(
+    txn_id: int,
     db: Session = Depends(get_db),
     user: models.User = Depends(require_user_auth),
 ):
-    """회원이 계좌이체 입금 후 제출하는 충전 신청. 신청 즉시 은행거래 원장과 매칭을 시도한다."""
-    recharge_req = models.RechargeRequest(user_id=user.id, requested_amount=req.amount)
-    db.add(recharge_req)
+    """회원이 본인 앞으로 매칭된 대기 중인 입금 건을 선택해 직접 충전을 완료한다."""
+    txn = db.query(models.BankTransaction).filter(models.BankTransaction.id == txn_id).first()
+    if not txn or txn.matched_user_id != user.id:
+        raise HTTPException(status_code=404, detail="입금 건을 찾을 수 없습니다.")
+    if txn.status != "PENDING":
+        raise HTTPException(status_code=400, detail="이미 처리되었거나 처리할 수 없는 입금 건입니다.")
+
+    txn.status = "CREDITED"
+    txn.resolved_at = datetime.datetime.utcnow()
+
+    user.credit_balance += txn.amount
+    db.add(models.DepositHistory(
+        user_id=user.id,
+        amount=txn.amount,
+        deposit_type="BANK_TRANSFER",
+        memo="회원 본인 확인 후 충전",
+    ))
     db.commit()
-    db.refresh(recharge_req)
+    db.refresh(user)
 
-    matched = try_resolve_recharge_request(db, recharge_req)
-    if matched:
-        db.refresh(user)
-        await notify_admins(["stats", "deposits", "recharge_queue"])
-        await notify_user(user.id, ["me"])
-        return schemas.RechargeRequestResult(
-            success=True, status="MATCHED",
-            message=f"입금이 확인되어 {req.amount:,}원이 즉시 충전되었습니다.",
-            new_balance=user.credit_balance,
-        )
-
-    await notify_admins(["recharge_queue", "stats"])
-    return schemas.RechargeRequestResult(
-        success=True, status="PENDING",
-        message="아직 입금 내역이 확인되지 않았습니다. 확인되는 대로 자동으로 충전되며, 관리자가 확인 후 처리할 수도 있습니다.",
+    await notify_admins(["deposit_queue", "stats", "deposits", "users"])
+    await notify_user(user.id, ["me"])
+    return schemas.DepositClaimResult(
+        success=True,
+        message=f"{txn.amount:,}원이 충전되었습니다.",
+        new_balance=user.credit_balance,
     )
 
-@app.get("/api/recharge-requests/me", response_model=List[schemas.RechargeRequestResponse])
-def get_my_recharge_requests(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
-    reqs = db.query(models.RechargeRequest).filter(
-        models.RechargeRequest.user_id == user.id
-    ).order_by(models.RechargeRequest.id.desc()).all()
-    result = []
-    for r in reqs:
-        res = schemas.RechargeRequestResponse.from_orm(r)
-        res.user_name = user.name
-        result.append(res)
-    return result
-
-# ================= 관리자 - 은행거래 원장 & 충전 신청 큐 =================
+# ================= 관리자 - 계좌 입금 (충전함) =================
 
 @app.post("/api/admin/bank-transactions", response_model=schemas.BankTransactionResponse)
 async def admin_add_bank_transaction(
@@ -859,8 +870,8 @@ async def admin_add_bank_transaction(
     db: Session = Depends(get_db),
     _admin: models.User = Depends(require_admin_auth),
 ):
-    """은행 계좌조회로 확인된(지금은 관리자가 직접 입력하는 모킹) 입금 건을 등록한다.
-    등록 즉시 대기 중인 충전 신청과 매칭을 시도한다."""
+    """은행 계좌조회로 확인된(지금은 관리자가 직접 입력하거나 SMS/RCS 자동감지로 등록하는)
+    입금 건을 등록한다. 등록 즉시 입금자명으로 등록 회원과 자동 매칭을 시도한다."""
     if db.query(models.BankTransaction).filter(models.BankTransaction.external_txn_id == req.external_txn_id).first():
         raise HTTPException(status_code=400, detail="이미 등록된 거래번호입니다.")
 
@@ -871,18 +882,14 @@ async def admin_add_bank_transaction(
         transaction_at=req.transaction_at or datetime.datetime.utcnow(),
     )
     db.add(txn)
+    match_new_deposit(db, txn)
     db.commit()
     db.refresh(txn)
 
-    matched = try_resolve_bank_transaction(db, txn)
-    db.refresh(txn)
-
-    if matched:
-        await notify_admins(["recharge_queue", "deposits", "stats"])
-        await notify_user(txn.matched_user_id, ["me"])
-    else:
-        await notify_admins(["stats"])
-    return txn
+    await notify_admins(["deposit_queue", "stats"])
+    if txn.status == "PENDING":
+        await notify_user(txn.matched_user_id, ["me", "deposits"])
+    return _bank_txn_response(db, txn)
 
 @app.get("/api/admin/bank-transactions", response_model=List[schemas.BankTransactionResponse])
 def admin_list_bank_transactions(
@@ -893,7 +900,8 @@ def admin_list_bank_transactions(
     query = db.query(models.BankTransaction)
     if status:
         query = query.filter(models.BankTransaction.status == status)
-    return query.order_by(models.BankTransaction.id.desc()).all()
+    txns = query.order_by(models.BankTransaction.id.desc()).all()
+    return [_bank_txn_response(db, t) for t in txns]
 
 @app.delete("/api/admin/bank-transactions/{txn_id}")
 async def admin_delete_bank_transaction(
@@ -901,114 +909,84 @@ async def admin_delete_bank_transaction(
     db: Session = Depends(get_db),
     _admin: models.User = Depends(require_admin_auth),
 ):
-    """미배정(UNMATCHED) 은행거래 삭제 - 테스트/오입력 건을 정리하는 용도.
-    이미 회원과 매칭되어 충전까지 반영된 건은 잔액과 얽혀 있어 삭제를 막는다."""
+    """미처리(PENDING/ERROR) 은행거래 삭제 - 테스트/오입력 건을 정리하는 용도.
+    이미 충전까지 반영되었거나 기타 처리로 종결된 건은 이력과 얽혀 있어 삭제를 막는다."""
     txn = db.query(models.BankTransaction).filter(models.BankTransaction.id == txn_id).first()
     if not txn:
         raise HTTPException(status_code=404, detail="은행거래를 찾을 수 없습니다.")
-    if txn.status != "UNMATCHED":
-        raise HTTPException(status_code=400, detail="이미 매칭된 거래는 삭제할 수 없습니다.")
+    if txn.status not in ("PENDING", "ERROR"):
+        raise HTTPException(status_code=400, detail="이미 처리된 거래는 삭제할 수 없습니다.")
 
     db.delete(txn)
     db.commit()
-    await notify_admins(["stats", "deposits"])
+    await notify_admins(["stats", "deposit_queue"])
     return {"success": True, "message": "은행거래를 삭제했습니다."}
 
-@app.get("/api/admin/recharge-requests", response_model=List[schemas.RechargeRequestResponse])
-def admin_list_recharge_requests(
-    status: Optional[str] = None,
-    db: Session = Depends(get_db),
-    _admin: models.User = Depends(require_admin_auth),
-):
-    query = db.query(models.RechargeRequest)
-    if status:
-        query = query.filter(models.RechargeRequest.status == status)
-    reqs = query.order_by(models.RechargeRequest.id.desc()).all()
-    result = []
-    for r in reqs:
-        res = schemas.RechargeRequestResponse.from_orm(r)
-        u = db.query(models.User).filter(models.User.id == r.user_id).first()
-        res.user_name = u.name if u else "Unknown"
-        result.append(res)
-    return result
-
-@app.post("/api/admin/recharge-requests/{request_id}/approve")
-async def admin_approve_recharge_request(
-    request_id: int,
-    req: schemas.RechargeApproveRequest,
+@app.post("/api/admin/bank-transactions/{txn_id}/resolve", response_model=schemas.BankTransactionResponse)
+async def admin_resolve_bank_transaction(
+    txn_id: int,
+    req: schemas.BankTransactionAdminResolve,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin_auth),
 ):
-    """미해결 충전 신청을 관리자가 승인. 특정 은행거래에 연결하거나(bank_transaction_id 제공
-    시), 없으면 신뢰 기반으로 바로 승인 충전한다."""
-    recharge_req = db.query(models.RechargeRequest).filter(models.RechargeRequest.id == request_id).first()
-    if not recharge_req:
-        raise HTTPException(status_code=404, detail="충전 신청을 찾을 수 없습니다.")
-    if recharge_req.status != "PENDING":
-        raise HTTPException(status_code=400, detail="이미 처리된 신청입니다.")
+    """관리자가 대기(PENDING)/오류(ERROR) 상태 입금 건에 회원을 지정해 대신 충전을 완료
+    처리한다(완료-예외). 자동 매칭된 회원과 다른 회원을 골라 오매칭을 바로잡을 수도 있다."""
+    txn = db.query(models.BankTransaction).filter(models.BankTransaction.id == txn_id).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="은행거래를 찾을 수 없습니다.")
+    if txn.status not in ("PENDING", "ERROR"):
+        raise HTTPException(status_code=400, detail="이미 처리된 거래입니다.")
 
-    user = db.query(models.User).filter(models.User.id == recharge_req.user_id).first()
+    user = db.query(models.User).filter(models.User.id == req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
 
-    if req.bank_transaction_id:
-        txn = db.query(models.BankTransaction).filter(
-            models.BankTransaction.id == req.bank_transaction_id,
-            models.BankTransaction.status == "UNMATCHED",
-        ).first()
-        if not txn:
-            raise HTTPException(status_code=400, detail="유효하지 않거나 이미 매칭된 은행거래입니다.")
-        txn.status = "MATCHED"
-        txn.matched_user_id = user.id
-        txn.matched_recharge_request_id = recharge_req.id
-        memo = f"관리자 수동 승인 (은행거래 #{txn.id} 연결)"
-    else:
-        memo = "관리자 수동 승인 (연결된 은행거래 없음)"
+    txn.matched_user_id = user.id
+    txn.status = "CREDITED_MANUAL"
+    txn.resolved_by_admin_id = admin.id
+    txn.resolution_memo = req.memo
+    txn.resolved_at = datetime.datetime.utcnow()
 
-    recharge_req.status = "MATCHED"
-    recharge_req.matched_bank_transaction_id = req.bank_transaction_id
-    recharge_req.admin_id = admin.id
-    recharge_req.resolved_at = datetime.datetime.utcnow()
-
-    user.credit_balance += recharge_req.requested_amount
+    user.credit_balance += txn.amount
     db.add(models.DepositHistory(
         user_id=user.id,
-        amount=recharge_req.requested_amount,
+        amount=txn.amount,
         deposit_type="BANK_TRANSFER",
-        memo=memo,
+        memo=req.memo or "관리자가 회원을 지정해 대신 충전 처리",
         admin_id=admin.id,
     ))
     db.commit()
+    db.refresh(txn)
     db.refresh(user)
 
-    await notify_admins(["recharge_queue", "stats", "deposits", "users"])
+    await notify_admins(["deposit_queue", "stats", "deposits", "users"])
     await notify_user(user.id, ["me"])
-    return {
-        "success": True,
-        "message": f"{user.name}님의 충전 신청이 승인되어 {recharge_req.requested_amount:,}원이 충전되었습니다.",
-        "new_balance": user.credit_balance,
-    }
+    return _bank_txn_response(db, txn)
 
-@app.post("/api/admin/recharge-requests/{request_id}/reject")
-async def admin_reject_recharge_request(
-    request_id: int,
-    req: schemas.RechargeRejectRequest,
+@app.post("/api/admin/bank-transactions/{txn_id}/mark-other", response_model=schemas.BankTransactionResponse)
+async def admin_mark_bank_transaction_other(
+    txn_id: int,
+    req: schemas.BankTransactionAdminOther,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin_auth),
 ):
-    recharge_req = db.query(models.RechargeRequest).filter(models.RechargeRequest.id == request_id).first()
-    if not recharge_req:
-        raise HTTPException(status_code=404, detail="충전 신청을 찾을 수 없습니다.")
-    if recharge_req.status != "PENDING":
-        raise HTTPException(status_code=400, detail="이미 처리된 신청입니다.")
+    """관리자가 대기(PENDING)/오류(ERROR) 상태 입금 건을 충전 대상이 아닌 것으로 사유와
+    함께 종결한다(크레딧 미반영)."""
+    txn = db.query(models.BankTransaction).filter(models.BankTransaction.id == txn_id).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="은행거래를 찾을 수 없습니다.")
+    if txn.status not in ("PENDING", "ERROR"):
+        raise HTTPException(status_code=400, detail="이미 처리된 거래입니다.")
 
-    recharge_req.status = "REJECTED"
-    recharge_req.admin_id = admin.id
-    recharge_req.memo = req.reason or "관리자 반려"
-    recharge_req.resolved_at = datetime.datetime.utcnow()
+    txn.status = "OTHER"
+    txn.resolved_by_admin_id = admin.id
+    txn.resolution_memo = req.reason
+    txn.resolved_at = datetime.datetime.utcnow()
     db.commit()
-    await notify_admins(["recharge_queue"])
-    return {"success": True, "message": "충전 신청을 반려했습니다."}
+    db.refresh(txn)
+
+    await notify_admins(["deposit_queue", "stats"])
+    return _bank_txn_response(db, txn)
 
 @app.get("/api/histories/deposits", response_model=List[schemas.DepositHistoryResponse])
 def get_deposit_histories(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
@@ -1030,8 +1008,11 @@ def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depen
 
     total_users = db.query(models.User).filter(models.User.role == "USER").count()
     total_balance = db.query(func.coalesce(func.sum(models.User.credit_balance), 0)).filter(models.User.role == "USER").scalar()
-    unmatched_deposit_count = db.query(models.BankTransaction).filter(models.BankTransaction.status == "UNMATCHED").count()
-    pending_recharge_count = db.query(models.RechargeRequest).filter(models.RechargeRequest.status == "PENDING").count()
+    users_with_balance = db.query(models.User).filter(
+        models.User.role == "USER", models.User.credit_balance > 0
+    ).count()
+    pending_deposit_count = db.query(models.BankTransaction).filter(models.BankTransaction.status == "PENDING").count()
+    error_deposit_count = db.query(models.BankTransaction).filter(models.BankTransaction.status == "ERROR").count()
 
     period_starts = _kst_period_starts_utc()
 
@@ -1051,8 +1032,9 @@ def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depen
     return schemas.StatsSummaryResponse(
         total_users=total_users,
         total_balance=total_balance,
-        unmatched_deposit_count=unmatched_deposit_count,
-        pending_recharge_count=pending_recharge_count,
+        users_with_balance=users_with_balance,
+        pending_deposit_count=pending_deposit_count,
+        error_deposit_count=error_deposit_count,
         today=period_stats(period_starts["today"]),
         this_week=period_stats(period_starts["this_week"]),
         this_month=period_stats(period_starts["this_month"]),
@@ -1260,7 +1242,9 @@ async def admin_update_kiosk(
         device.device_name = req.device_name
     if req.assigned_products is not None:
         device.assigned_products = json.dumps(req.assigned_products)
-    if req.default_product_id is not None:
+    # default_product_id는 매번 admin.js가 현재 선택값을 통째로 보내는 필드라("기본 결제
+    # 없음"을 고르면 null로 보냄) is not None으로 걸러내면 null을 못 받아 기존 값을 못 지웠다.
+    if "default_product_id" in req.model_fields_set:
         device.default_product_id = req.default_product_id
     if req.default_quantity is not None:
         device.default_quantity = req.default_quantity
@@ -1269,3 +1253,20 @@ async def admin_update_kiosk(
     db.refresh(device)
     await notify_admins(["stats"])
     return {"success": True, "message": "키오스크 설정을 저장했습니다."}
+
+@app.delete("/api/admin/kiosks/{device_id}")
+async def admin_delete_kiosk(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """등록된 키오스크 단말기를 삭제한다. 과거 결제 이력(payment_transactions)은 device_id 참조만
+    끊어질 뿐 그대로 남는다 - kiosk_devices를 참조하는 FK 제약이 없어 안전하게 지울 수 있다."""
+    device = db.query(models.KioskDevice).filter(models.KioskDevice.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="키오스크를 찾을 수 없습니다.")
+
+    db.delete(device)
+    db.commit()
+    await notify_admins(["stats"])
+    return {"success": True, "message": "키오스크를 삭제했습니다."}

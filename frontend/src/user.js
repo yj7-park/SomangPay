@@ -183,13 +183,13 @@ function onLoginSuccess(user) {
   document.getElementById("user-info-section").style.display = "block";
 
   document.getElementById("display-user-name").innerText = user.name;
-  document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '👵👴 시니어' : '👦 일반';
+  document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
   document.getElementById("display-user-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
   document.getElementById("display-user-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("display-user-phone").value = user.phone || "-";
 
   loadChargeGuide();
-  loadMyRechargeRequests();
+  loadMyDeposits();
   loadUserQrCard();
   connectUserWebSocket();
 }
@@ -249,7 +249,7 @@ function connectUserWebSocket() {
     if (data.type !== "refresh") return;
     if ((data.scopes || []).includes("me")) {
       refreshMyInfo();
-      loadMyRechargeRequests();
+      loadMyDeposits();
     }
   };
 
@@ -281,7 +281,12 @@ async function refreshMyInfo() {
   }
 }
 
-// ============ 계좌이체 충전 안내 & 신청 ============
+// ============ 계좌이체 충전 안내 & 확인된 입금 내역 ============
+
+// 클립보드에 복사할 계좌번호 원본(하이픈 없는 순수 숫자) - 은행 앱들의 클립보드 자동인식
+// 파서가 계좌번호를 숫자로만 정규식 매칭하는 경우가 많아, 복사본은 표시용 문구가 아니라
+// 이 값을 써야 다른 은행 앱에 붙여넣었을 때 인식된다.
+let _chargeGuideAccountDigits = "";
 
 async function loadChargeGuide() {
   try {
@@ -290,59 +295,128 @@ async function loadChargeGuide() {
     const guide = await res.json();
     document.getElementById("charge-guide-account").innerText = `${guide.bank_name} ${guide.account_number} (예금주: ${guide.account_holder})`;
     document.getElementById("charge-guide-depositor-name").innerText = guide.depositor_name;
+    _chargeGuideAccountDigits = String(guide.account_number || "").replace(/\D/g, "");
   } catch (err) {
     console.error("loadChargeGuide error:", err);
   }
 }
 
-async function submitRechargeRequest(btn) {
-  const amount = parseInt(document.getElementById("recharge-request-amount").value);
-  if (!amount || amount <= 0) {
-    await showAlertModal("입금하신 금액을 올바르게 입력해주세요.");
+async function copyAccountNumber(btn) {
+  if (!_chargeGuideAccountDigits) return;
+  try {
+    await navigator.clipboard.writeText(_chargeGuideAccountDigits);
+  } catch (err) {
+    console.error("copyAccountNumber error:", err);
     return;
   }
+  const icon = document.getElementById("charge-guide-account-copy-icon");
+  if (!icon) return;
+  const original = icon.innerHTML;
+  icon.innerHTML = '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 6 6L20 6"/></svg>';
+  icon.style.color = "var(--accent-emerald)";
+  clearTimeout(icon._resetTimer);
+  icon._resetTimer = setTimeout(() => {
+    icon.innerHTML = original;
+    icon.style.color = "var(--text-muted)";
+  }, 1500);
+}
 
-  if (btn.disabled) return;
-  btn.disabled = true;
+// 회원 본인 이름으로 자동 매칭된 입금 내역(대기 중 + 과거 처리분 히스토리 포함).
+// PENDING 건만 탭하면 확인 모달을 거쳐 본인 충전으로 확정할 수 있다.
+const DEPOSIT_STATUS_LABEL = {
+  PENDING: { text: "대기 (눌러서 충전)", cls: "status-pending" },
+  CREDITED: { text: "충전 완료", cls: "status-done" },
+  CREDITED_MANUAL: { text: "충전 완료(관리자 처리)", cls: "status-done" },
+  OTHER: { text: "처리 보류(관리자 문의)", cls: "status-rejected" },
+};
+
+let _myDeposits = [];
+
+async function loadMyDeposits() {
+  const box = document.getElementById("my-deposits-list");
+  if (!box) return;
   try {
-    const res = await authFetch(`${API_BASE}/recharge-requests`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount })
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      await showAlertModal(`충전 신청 실패: ${data.detail || '오류 발생'}`);
-      return;
-    }
-
-    await showAlertModal(data.message, data.status === "MATCHED" ? "🎉 충전 완료" : "신청 접수됨");
-    document.getElementById("recharge-request-amount").value = "";
-    await refreshMyInfo();
-    await loadMyRechargeRequests();
+    const res = await authFetch(`${API_BASE}/bank-transactions/me`);
+    if (!res.ok) return;
+    _myDeposits = await res.json();
+    renderMyDeposits();
   } catch (err) {
-    console.error("submitRechargeRequest error:", err);
-  } finally {
-    btn.disabled = false;
+    console.error("loadMyDeposits error:", err);
   }
 }
 
-async function loadMyRechargeRequests() {
-  const box = document.getElementById("recharge-request-history");
+function depositRowHtml(d) {
+  const label = DEPOSIT_STATUS_LABEL[d.status] || { text: d.status, cls: "status-pending" };
+  const clickable = d.status === "PENDING";
+  return `
+    <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; ${clickable ? "cursor: pointer; border: 1px solid rgba(245, 158, 11, 0.4);" : ""}"
+         ${clickable ? `onclick="openDepositClaimModal(${d.id})"` : ""}>
+      <div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date(d.created_at).toLocaleString()}</div>
+        <span class="activity-status ${label.cls}">${label.text}</span>
+      </div>
+      <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">${d.amount.toLocaleString()}원</div>
+    </div>
+  `;
+}
+
+// 현재 확정을 기다리는 대기 건과, 이미 처리가 끝난 과거 히스토리를 한 목록에 섞어 보여주면
+// 어떤 걸 눌러야 하는지 구분이 안 된다(#14) - 두 그룹으로 나눠 각각 소제목을 붙인다.
+function renderMyDeposits() {
+  const box = document.getElementById("my-deposits-list");
   if (!box) return;
+  if (_myDeposits.length === 0) {
+    box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 확인된 입금 내역이 없습니다.</p>`;
+    return;
+  }
+  const pending = _myDeposits.filter(d => d.status === "PENDING");
+  const history = _myDeposits.filter(d => d.status !== "PENDING");
+
+  let html = "";
+  if (pending.length > 0) {
+    html += `<div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-amber); margin-bottom: -0.15rem;">충전 대기 중</div>`;
+    html += pending.map(depositRowHtml).join("");
+  }
+  if (history.length > 0) {
+    html += `<div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-top: ${pending.length > 0 ? "0.4rem" : "0"}; margin-bottom: -0.15rem;">지난 내역</div>`;
+    html += history.map(depositRowHtml).join("");
+  }
+  box.innerHTML = html;
+}
+
+let _pendingClaimId = null;
+
+function openDepositClaimModal(id) {
+  const deposit = _myDeposits.find(d => d.id === id);
+  if (!deposit) return;
+  _pendingClaimId = id;
+  document.getElementById("deposit-claim-message").innerText = `${deposit.amount.toLocaleString()}원 입금 건을 본인 충전으로 확정하시겠습니까?`;
+  showModal("deposit-claim-modal");
+}
+
+function closeDepositClaimModal() {
+  _pendingClaimId = null;
+  hideModal("deposit-claim-modal");
+}
+
+async function confirmDepositClaim(btn) {
+  if (!_pendingClaimId || btn.disabled) return;
+  btn.disabled = true;
   try {
-    const res = await authFetch(`${API_BASE}/recharge-requests/me`);
-    if (!res.ok) return;
-    const list = await res.json();
-    const pending = list.filter(r => r.status === "PENDING");
-    if (pending.length === 0) {
-      box.innerHTML = "";
+    const res = await authFetch(`${API_BASE}/bank-transactions/${_pendingClaimId}/claim`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    closeDepositClaimModal();
+    if (!res.ok) {
+      await showAlertModal(`충전 실패: ${data.detail || '오류 발생'}`);
       return;
     }
-    box.innerHTML = "⏳ 확인 대기 중인 신청: " + pending.map(r => `${r.requested_amount.toLocaleString()}원`).join(", ");
+    await showAlertModal(data.message, "🎉 충전 완료");
+    await refreshMyInfo();
+    await loadMyDeposits();
   } catch (err) {
-    console.error("loadMyRechargeRequests error:", err);
+    console.error("confirmDepositClaim error:", err);
+  } finally {
+    btn.disabled = false;
   }
 }
 

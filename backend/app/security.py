@@ -19,7 +19,9 @@ if not _secret_env:
     _secret_env = secrets.token_hex(32)
 ADMIN_SECRET_KEY = _secret_env.encode()
 
-ADMIN_TOKEN_TTL_SECONDS = 12 * 60 * 60  # 관리자 세션 유효시간: 12시간
+ADMIN_TOKEN_TTL_SECONDS = 3650 * 24 * 60 * 60  # 관리자 세션: 사실상 무기한(10년) - 한 번 로그인하면
+# (특히 입금 자동감지가 계속 동작해야 하는 관리자 앱에서) 앱이 재시작되거나 시간이 지나도 다시
+# PIN을 요구하지 않고 유지되어야 한다는 요구사항. USER_TOKEN_TTL_SECONDS와 동일한 패턴.
 USER_TOKEN_TTL_SECONDS = 3650 * 24 * 60 * 60  # 회원 세션: 사실상 무기한(10년) - "로그아웃 전까지 같은 기기에서 유지" 요구사항.
 # 매 요청마다 DB에서 user.status == "ACTIVE"를 재확인하므로, 관리자가 회원을 정지시키면
 # 만료 전이라도 토큰이 즉시 무력화된다(별도 revocation 테이블 불필요).

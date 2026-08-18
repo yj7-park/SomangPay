@@ -222,36 +222,12 @@ class DepositHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# ================= 계좌이체 충전 신청 (Recharge Request) =================
+# ================= 계좌이체 충전 (회원이 확인된 입금 건을 선택해서 충전) =================
 
-class RechargeRequestCreate(BaseModel):
-    amount: int = Field(gt=0)
-
-class RechargeRequestResponse(BaseModel):
-    id: int
-    user_id: int
-    user_name: Optional[str] = None
-    requested_amount: int
-    status: str
-    matched_bank_transaction_id: Optional[int] = None
-    memo: Optional[str] = None
-    created_at: UTCDatetime
-    resolved_at: Optional[UTCDatetime] = None
-
-    class Config:
-        from_attributes = True
-
-class RechargeRequestResult(BaseModel):
+class DepositClaimResult(BaseModel):
     success: bool
-    status: str  # MATCHED, PENDING
     message: str
     new_balance: Optional[int] = None
-
-class RechargeApproveRequest(BaseModel):
-    bank_transaction_id: Optional[int] = None
-
-class RechargeRejectRequest(BaseModel):
-    reason: Optional[str] = None
 
 class ChargeGuideResponse(BaseModel):
     bank_name: str
@@ -273,12 +249,26 @@ class BankTransactionResponse(BaseModel):
     transaction_at: UTCDatetime
     amount: int
     depositor_name: str
-    status: str
+    status: str  # PENDING, ERROR, CREDITED, CREDITED_MANUAL, OTHER
     matched_user_id: Optional[int] = None
+    matched_user_name: Optional[str] = None
+    resolution_memo: Optional[str] = None
+    resolved_by_admin_id: Optional[int] = None
+    resolved_by_admin_name: Optional[str] = None
+    resolved_at: Optional[UTCDatetime] = None
     created_at: UTCDatetime
 
     class Config:
         from_attributes = True
+
+class BankTransactionAdminResolve(BaseModel):
+    """관리자가 대기/오류 상태 입금 건에 회원을 지정해 대신 충전 완료 처리."""
+    user_id: int
+    memo: Optional[str] = None
+
+class BankTransactionAdminOther(BaseModel):
+    """관리자가 대기/오류 상태 입금 건을 충전 대상이 아닌 것으로 사유와 함께 종결."""
+    reason: str = Field(min_length=1)
 
 # ================= 통계 요약 =================
 
@@ -290,8 +280,9 @@ class StatsPeriod(BaseModel):
 class StatsSummaryResponse(BaseModel):
     total_users: int
     total_balance: int
-    unmatched_deposit_count: int
-    pending_recharge_count: int
+    users_with_balance: int
+    pending_deposit_count: int
+    error_deposit_count: int
     today: StatsPeriod
     this_week: StatsPeriod
     this_month: StatsPeriod

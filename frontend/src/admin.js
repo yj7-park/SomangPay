@@ -22,6 +22,7 @@ const ICON_SVGS = {
   refresh: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.3L3 16"/><path d="M3 21v-5h5"/></svg>',
   "chevron-down": '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   trash: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
+  x: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
 };
 function icon(name) {
   return ICON_SVGS[name] || "";
@@ -42,14 +43,6 @@ function escapeHtml(str) {
   }[ch]));
 }
 
-// 표에서 "등록일시/신청일시" 칸이 한 줄로 길게 나오면 모바일 폭을 다 잡아먹어 스크롤이
-// 생긴다 - 날짜/시간을 두 줄로 나눠 칸 폭을 줄인다.
-function formatDateTimeTwoLine(dateStr) {
-  const d = new Date(dateStr);
-  return `<div style="white-space: nowrap;">${d.toLocaleDateString()}</div>` +
-    `<div style="white-space: nowrap; color: var(--text-muted); font-size: 0.85em;">${d.toLocaleTimeString()}</div>`;
-}
-
 // 입금자명/회원명이 길면(동명이인 구분용으로 "홍길동B" 이상 붙이는 경우 등) 표 폭을 넓혀버려서
 // 5자까지만 그대로 보여주고, 그보다 길면 4자+"..."로 줄인다. 전체 이름은 title 속성으로 유지해
 // 길게 눌러/마우스 올려서 확인할 수 있다.
@@ -63,30 +56,9 @@ let users = [];
 let products = [];
 let cards = [];
 let depositHistories = [];
-let rechargeQueue = [];
 let bankTransactions = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
-
-// 충전함(Inbox) 두 목록의 무한 스크롤 페이지 크기/현재 표시 개수.
-const INBOX_PAGE_SIZE = 15;
-let bankTxnLimit = INBOX_PAGE_SIZE;
-let rechargeQueueLimit = INBOX_PAGE_SIZE;
-
-// 정해진 높이 영역(.table-wrap 등) 안에서 스크롤이 바닥 80px 이내로 들어오면 다음 페이지를
-// 이어서 그리는 공용 헬퍼 - 홈 대시보드 활동 피드, 충전함의 두 목록이 함께 쓴다.
-function wireInfiniteScroll(scrollElId, { pageSize, getLimit, setLimit, getTotal, onGrow }) {
-  const el = document.getElementById(scrollElId);
-  if (!el || el.dataset.scrollWired) return;
-  el.dataset.scrollWired = "1";
-  el.addEventListener("scroll", () => {
-    if (getLimit() >= getTotal()) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
-      setLimit(getLimit() + pageSize);
-      onGrow();
-    }
-  });
-}
 
 // 요청 진행 중 버튼을 비활성화해 두 번 눌러서 중복 충전/중복 등록되는 걸 막는다.
 async function withButtonLock(btn, fn) {
@@ -312,7 +284,6 @@ function initAdminDashboard() {
   loadAdminProducts();
   loadDepositHistories();
   loadAdminCards();
-  loadRechargeQueue();
   loadBankTransactions();
   loadStatsSummary();
   loadSmsDetectSettings();
@@ -357,7 +328,7 @@ async function handleAdminRefreshEvent(scopes) {
   const tasks = [];
   if (scopes.includes("users")) tasks.push(loadAdminUsers());
   if (scopes.includes("cards")) tasks.push(loadAdminCards());
-  if (scopes.includes("recharge_queue")) tasks.push(loadRechargeQueue());
+  if (scopes.includes("deposit_queue")) tasks.push(loadBankTransactions());
   if (scopes.includes("stats")) { tasks.push(loadStatsSummary()); tasks.push(loadBankTransactions()); tasks.push(loadKiosks()); }
   if (scopes.includes("deposits")) tasks.push(loadDepositHistories());
   await Promise.all(tasks);
@@ -385,12 +356,8 @@ function switchAdminView(viewName) {
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") renderKioskList();
     if (viewName === "inbox") {
-      bankTxnLimit = INBOX_PAGE_SIZE;
-      rechargeQueueLimit = INBOX_PAGE_SIZE;
       activityFeedLimit = ACTIVITY_PAGE_SIZE;
       updateFixedViewLayoutMetrics();
-      renderBankTransactionsTable();
-      renderRechargeQueueTable();
       renderInboxActivityFeed();
     }
   }
@@ -990,13 +957,13 @@ function renderDashboard(stats) {
   document.getElementById("stat-today-payment").innerText = `${stats.today.payment_amount.toLocaleString()}원`;
   document.getElementById("stat-month-deposit").innerText = `${stats.this_month.deposit_amount.toLocaleString()}원`;
   document.getElementById("stat-month-payment").innerText = `${stats.this_month.payment_amount.toLocaleString()}원`;
-  document.getElementById("stat-unmatched").innerText = `${stats.unmatched_deposit_count}건`;
-  document.getElementById("stat-pending").innerText = `${stats.pending_recharge_count}건`;
+  document.getElementById("stat-pending-deposit").innerText = `${stats.pending_deposit_count}건`;
+  document.getElementById("stat-error-deposit").innerText = `${stats.error_deposit_count}건`;
 
-  document.getElementById("attention-unmatched").classList.toggle("has-items", stats.unmatched_deposit_count > 0);
-  document.getElementById("attention-pending").classList.toggle("has-items", stats.pending_recharge_count > 0);
+  document.getElementById("attention-pending-deposit").classList.toggle("has-items", stats.pending_deposit_count > 0);
+  document.getElementById("attention-error-deposit").classList.toggle("has-items", stats.error_deposit_count > 0);
 
-  const badgeCount = stats.unmatched_deposit_count + stats.pending_recharge_count;
+  const badgeCount = stats.pending_deposit_count + stats.error_deposit_count;
   const badge = document.getElementById("inbox-tab-badge");
   if (badge) {
     badge.style.display = badgeCount > 0 ? "flex" : "none";
@@ -1042,128 +1009,63 @@ function renderMemberFeed() {
   filtered.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
 }
 
-// 홈 "최근 처리 내역" - 계좌 입금(bankTransactions)과 충전 신청(rechargeQueue)을
-// 시간순으로 합쳐서 보여주는 실시간 피드. 두 배열 모두 이제 상태 무관 전체 목록을
-// 담고 있으므로(충전함 탭과 동일 데이터 재사용) 별도 API 호출이 필요 없다.
-//
-// 입금과 충전 신청이 서로 매칭된 건(recharge.matched_bank_transaction_id)은 두 개의
-// 별도 카드 대신 한 카드 안에 시간순 2줄로 합쳐서 보여준다. 고정 높이 영역
-// (.activity-feed-scroll) 안에서만 스크롤되고, 스크롤이 바닥에 가까워지면
-// setupActivityFeedInfiniteScroll이 다음 페이지를 이어서 그린다.
+// 홈 "최근 처리 내역" - 계좌 입금(bankTransactions) 전체를 시간순으로 보여주는 실시간
+// 피드. 카드를 누르면 openDepositDetailModal로 상세/처리 모달이 뜬다(카드 자체에는
+// 이름/시각+상태/금액만 보여준다). 고정 높이 영역(.activity-feed-scroll) 안에서만
+// 스크롤되고, 스크롤이 바닥에 가까워지면 setupActivityFeedInfiniteScroll이 다음 페이지를
+// 이어서 그린다.
 const ACTIVITY_PAGE_SIZE = 15;
 let activityFeedLimit = ACTIVITY_PAGE_SIZE;
 let activityFeedMergedCache = [];
 
-function buildMergedActivityEvents() {
-  const usedBankTxnIds = new Set();
-  const events = [];
+const DEPOSIT_STATUS_META = {
+  PENDING: { text: "대기", cls: "status-pending" },
+  ERROR: { text: "오류", cls: "status-rejected" },
+  CREDITED: { text: "완료", cls: "status-done" },
+  CREDITED_MANUAL: { text: "완료(예외)", cls: "status-done" },
+  OTHER: { text: "기타", cls: "status-other" },
+};
 
-  rechargeQueue.forEach(r => {
-    let status = "대기", statusClass = "status-pending";
-    if (r.status === "MATCHED") { status = "완료"; statusClass = "status-done"; }
-    else if (r.status === "REJECTED") { status = "반려"; statusClass = "status-rejected"; }
-
-    const matchedTxn = r.matched_bank_transaction_id
-      ? bankTransactions.find(t => t.id === r.matched_bank_transaction_id)
-      : null;
-
-    if (matchedTxn) {
-      usedBankTxnIds.add(matchedTxn.id);
-      const lines = [
-        {
-          time: matchedTxn.created_at, icon: icon("bank"),
-          title: `계좌 입금 - ${matchedTxn.depositor_name}`, amount: matchedTxn.amount,
-          status: "완료", statusClass: "status-done",
-          type: "bank", id: matchedTxn.id,
-        },
-        {
-          time: r.created_at, icon: icon("receipt"),
-          title: `충전 신청 - ${r.user_name}`, amount: r.requested_amount,
-          status, statusClass,
-          type: "recharge", id: r.id,
-        },
-      ].sort((a, b) => new Date(a.time) - new Date(b.time));
-      events.push({
-        kind: "paired",
-        time: lines[lines.length - 1].time,
-        lines,
-      });
-    } else {
-      events.push({
-        kind: "single",
-        time: r.created_at,
-        icon: icon("receipt"),
-        title: `충전 신청 - ${r.user_name}`,
-        amount: r.requested_amount,
-        status, statusClass,
-        type: "recharge", id: r.id,
-      });
-    }
-  });
-
-  bankTransactions.forEach(t => {
-    if (usedBankTxnIds.has(t.id)) return;
+function buildDepositEvents() {
+  return bankTransactions.map(t => {
     // "SIM_" 접두사(processDepositDetection 참고)는 수신 시뮬레이션 버튼으로 등록된 테스트
     // 건이다 - 실제 입금과 겉모습이 똑같으면 관리자가 실제 수신으로 착각할 수 있어(실제로
     // 겪은 문제) 목록에서부터 표시를 다르게 한다.
     const isSimulated = (t.external_txn_id || "").startsWith("SIM_");
-    events.push({
-      kind: "single",
+    const meta = DEPOSIT_STATUS_META[t.status] || { text: t.status, cls: "status-pending" };
+    const name = t.matched_user_name || t.depositor_name;
+    return {
+      id: t.id,
       time: t.created_at,
       icon: icon("bank"),
-      title: isSimulated ? `🧪 [테스트] 계좌 입금 - ${t.depositor_name}` : `계좌 입금 - ${t.depositor_name}`,
+      title: (isSimulated ? "🧪 " : "") + (t.status === "ERROR" ? `⚠️ ${name}` : name),
       amount: t.amount,
-      status: t.status === "MATCHED" ? "완료" : "대기",
-      statusClass: t.status === "MATCHED" ? "status-done" : "status-pending",
-      type: "bank", id: t.id,
-    });
-  });
-
-  return events.sort((a, b) => new Date(b.time) - new Date(a.time));
+      status: meta.text,
+      statusClass: meta.cls,
+    };
+  }).sort((a, b) => new Date(b.time) - new Date(a.time));
 }
 
-// 대기 상태 줄에만 관리 버튼을 붙인다 - 계좌 입금은 삭제만, 충전 신청은 승인/반려
-// (기존 충전함 표의 관리 버튼과 동일한 함수를 그대로 재사용한다).
-function renderActivityLineActions(line) {
-  if (line.status !== "대기") return "";
-  if (line.type === "bank") {
-    return `<div class="activity-actions">
-      <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${line.id})">삭제</button>
-    </div>`;
-  }
-  if (line.type === "recharge") {
-    return `<div class="activity-actions">
-      <button class="btn-action btn-emerald" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; width: auto;" onclick="approveRechargeRequest(${line.id})">승인</button>
-      <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${line.id})">반려</button>
-    </div>`;
-  }
-  return "";
-}
-
-function renderActivityLine(line) {
+function renderActivityLine(ev) {
   return `
-    <span class="activity-icon">${line.icon}</span>
+    <span class="activity-icon">${ev.icon}</span>
     <div class="activity-info">
-      <div class="activity-title">${line.title}</div>
-      <div class="activity-sub">${new Date(line.time).toLocaleString()}</div>
-      <span class="activity-status ${line.statusClass}">${line.status}</span>
+      <div class="activity-title">${ev.title}</div>
+      <div class="activity-sub">${new Date(ev.time).toLocaleString()}</div>
+      <span class="activity-status ${ev.statusClass}">${ev.status}</span>
     </div>
     <div class="activity-amount-col">
-      <div class="activity-amount">${line.amount.toLocaleString()}원</div>
-      ${renderActivityLineActions(line)}
+      <div class="activity-amount">${ev.amount.toLocaleString()}원</div>
     </div>
   `;
 }
 
 function renderActivityCard(ev) {
   const div = document.createElement("div");
-  if (ev.kind === "paired") {
-    div.className = "glass-container activity-row activity-row-paired";
-    div.innerHTML = ev.lines.map(line => `<div class="activity-pair-line">${renderActivityLine(line)}</div>`).join("");
-  } else {
-    div.className = "glass-container activity-row";
-    div.innerHTML = renderActivityLine(ev);
-  }
+  div.className = "glass-container activity-row";
+  div.style.cursor = "pointer";
+  div.onclick = () => openDepositDetailModal(ev.id);
+  div.innerHTML = renderActivityLine(ev);
   return div;
 }
 
@@ -1171,7 +1073,7 @@ function renderInboxActivityFeed() {
   const feed = document.getElementById("inbox-activity-feed");
   if (!feed) return;
 
-  activityFeedMergedCache = buildMergedActivityEvents();
+  activityFeedMergedCache = buildDepositEvents();
 
   feed.innerHTML = "";
   if (activityFeedMergedCache.length === 0) {
@@ -1417,166 +1319,21 @@ async function renderDetailHistory() {
   `).join("");
 }
 
-// ============ 충전함 (Recharge Inbox) ============
-
-async function loadRechargeQueue() {
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/recharge-requests`);
-    if (!res.ok) return;
-    rechargeQueue = await res.json();
-    renderRechargeQueueTable();
-    renderInboxActivityFeed();
-  } catch (err) {
-    console.error("Failed to load recharge queue:", err);
-  }
-}
-
-const RECHARGE_STATUS_LABEL = { PENDING: "대기", MATCHED: "완료", REJECTED: "반려" };
-const RECHARGE_STATUS_CLASS = { PENDING: "status-pending", MATCHED: "status-done", REJECTED: "status-rejected" };
-
-function renderRechargeQueueTable() {
-  const tbody = document.getElementById("admin-recharge-queue-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  if (rechargeQueue.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">충전 신청 내역이 없습니다.</td></tr>`;
-    return;
-  }
-
-  rechargeQueue.slice(0, rechargeQueueLimit).forEach(r => {
-    const tr = document.createElement("tr");
-    const actions = r.status === "PENDING"
-      ? `<button class="btn-action btn-emerald" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto;" onclick="approveRechargeRequest(${r.id})">입금 확인, 승인</button>
-         <button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="rejectRechargeRequest(${r.id})">반려</button>`
-      : `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
-    tr.innerHTML = `
-      <td>${formatDateTimeTwoLine(r.created_at)}</td>
-      <td><strong>${renderTruncatedName(r.user_name)}</strong></td>
-      <td style="color: var(--accent-emerald); font-weight: bold;">${r.requested_amount.toLocaleString()}원</td>
-      <td><span class="activity-status ${RECHARGE_STATUS_CLASS[r.status] || 'status-pending'}">${RECHARGE_STATUS_LABEL[r.status] || r.status}</span></td>
-      <td style="display: flex; gap: 0.4rem; flex-wrap: wrap;">${actions}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  wireInfiniteScroll("admin-recharge-queue-scroll", {
-    pageSize: INBOX_PAGE_SIZE,
-    getLimit: () => rechargeQueueLimit,
-    setLimit: (v) => { rechargeQueueLimit = v; },
-    getTotal: () => rechargeQueue.length,
-    onGrow: renderRechargeQueueTable,
-  });
-}
-
-async function approveRechargeRequest(requestId) {
-  if (!(await showConfirmModal("입금을 확인하셨습니까? 승인하면 회원에게 즉시 충전됩니다."))) return;
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/recharge-requests/${requestId}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-    if (res.ok) {
-      const data = await res.json();
-      await showAlertModal(data.message);
-      loadAdminUsers();
-      loadDepositHistories();
-      loadRechargeQueue();
-      loadBankTransactions();
-      loadStatsSummary();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      await showAlertModal(`승인 실패: ${data.detail || '오류 발생'}`);
-    }
-  } catch (err) {
-    console.error("approveRechargeRequest error:", err);
-  }
-}
-
-async function rejectRechargeRequest(requestId) {
-  if (!(await showConfirmModal("이 충전 신청을 반려하시겠습니까?"))) return;
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/recharge-requests/${requestId}/reject`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-    if (res.ok) {
-      loadRechargeQueue();
-      loadStatsSummary();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      await showAlertModal(`반려 실패: ${data.detail || '오류 발생'}`);
-    }
-  } catch (err) {
-    console.error("rejectRechargeRequest error:", err);
-  }
-}
-
-// ============ 계좌 입금 목록 (전체 - 대기/완료) ============
-// stats.unmatched_deposit_count는 이 중 status===UNMATCHED 건수와 같다 - 충전함 탭 배지 숫자가
-// 이 표의 대기 건과 recharge-requests 표(신청 대기) 두 개의 합이라 반드시 둘 다 같이 보여줘야 한다.
+// ============ 계좌 입금 목록 (충전함 - 전체) ============
+// stats.pending_deposit_count/error_deposit_count는 이 목록 중 status===PENDING/ERROR
+// 건수와 같다 - 충전함 탭 배지 숫자가 이 둘의 합이다.
 async function loadBankTransactions() {
   try {
     const res = await adminFetch(`${API_BASE}/admin/bank-transactions`);
     if (!res.ok) return;
     bankTransactions = await res.json();
-    renderBankTransactionsTable();
     renderInboxActivityFeed();
-  } catch (err) {
-    console.error("Failed to load bank transactions:", err);
-  }
-}
-
-function renderBankTransactionsTable() {
-  const tbody = document.getElementById("admin-bank-transactions-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  if (bankTransactions.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">계좌 입금 내역이 없습니다.</td></tr>`;
-    return;
-  }
-
-  bankTransactions.slice(0, bankTxnLimit).forEach(t => {
-    const tr = document.createElement("tr");
-    const isUnmatched = t.status === "UNMATCHED";
-    const actions = isUnmatched
-      ? `<button class="btn-action" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; width: auto; background: rgba(239,68,68,0.2); color: #fca5a5;" onclick="deleteUnmatchedDeposit(${t.id})">삭제</button>`
-      : `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
-    tr.innerHTML = `
-      <td>${formatDateTimeTwoLine(t.created_at)}</td>
-      <td><strong>${renderTruncatedName(t.depositor_name)}</strong></td>
-      <td style="color: var(--accent-emerald); font-weight: bold;">${t.amount.toLocaleString()}원</td>
-      <td><span class="activity-status ${isUnmatched ? 'status-pending' : 'status-done'}">${isUnmatched ? '대기' : '완료'}</span></td>
-      <td>${actions}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  wireInfiniteScroll("admin-bank-transactions-scroll", {
-    pageSize: INBOX_PAGE_SIZE,
-    getLimit: () => bankTxnLimit,
-    setLimit: (v) => { bankTxnLimit = v; },
-    getTotal: () => bankTransactions.length,
-    onGrow: renderBankTransactionsTable,
-  });
-}
-
-async function deleteUnmatchedDeposit(txnId) {
-  if (!(await showConfirmModal("이 은행거래를 삭제하시겠습니까? (테스트/오입력 건 정리용 - 나중에 회원이 신청하면 더 이상 자동 매칭되지 않습니다)"))) return;
-  try {
-    const res = await adminFetch(`${API_BASE}/admin/bank-transactions/${txnId}`, { method: "DELETE" });
-    if (res.ok) {
-      loadBankTransactions();
-      loadStatsSummary();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
+    if (_depositDetailTxn) {
+      _depositDetailTxn = bankTransactions.find(t => t.id === _depositDetailTxn.id) || null;
+      if (_depositDetailTxn) renderDepositDetailModal();
     }
   } catch (err) {
-    console.error("deleteUnmatchedDeposit error:", err);
+    console.error("Failed to load bank transactions:", err);
   }
 }
 
@@ -1602,19 +1359,16 @@ async function registerBankTransaction(depositorName, amount, { externalTxnIdPre
       return false;
     }
 
-    const matched = data.status === "MATCHED";
-    loadAdminUsers();
-    loadDepositHistories();
-    loadRechargeQueue();
+    const matched = data.status === "PENDING";
     loadBankTransactions();
     loadStatsSummary();
 
     if (silent) {
       showToast(matched
-        ? `✅ 문자 자동감지: ${depositorName} ${amount.toLocaleString()}원 - 충전 완료`
-        : `🏦 문자 자동감지: ${depositorName} ${amount.toLocaleString()}원 - 입금 등록됨`);
+        ? `🏦 문자 자동감지: ${depositorName} ${amount.toLocaleString()}원 - 회원 매칭됨(충전 대기)`
+        : `⚠️ 문자 자동감지: ${depositorName} ${amount.toLocaleString()}원 - 매칭 오류(등록 회원 이름과 불일치)`);
     } else {
-      const matchedLabel = matched ? "\n\n✅ 대기 중이던 충전 신청과 자동으로 매칭되어 즉시 충전되었습니다!" : "\n\n대기 중인 충전 신청이 없어 입금 원장에만 등록했습니다. 회원이 신청하면 자동으로 매칭됩니다.";
+      const matchedLabel = matched ? "\n\n✅ 등록 회원과 자동으로 매칭되어 회원 앱에 표시됩니다." : "\n\n⚠️ 입금자명이 등록 회원과 일치하지 않아 매칭 오류로 등록했습니다. 충전함에서 회원을 지정해주세요.";
       await showAlertModal(`🎉 입금 확인 등록 완료\n입금자명: ${depositorName}\n금액: ${amount.toLocaleString()}원${matchedLabel}`);
     }
     return true;
@@ -1637,6 +1391,154 @@ async function submitBankTransaction(btn) {
   await withButtonLock(btn, async () => {
     const ok = await registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: "MANUAL" });
     if (ok) document.getElementById("sim-depositor-name").value = "";
+  });
+}
+
+// ============ 계좌 입금 상세 모달 (회원 지정 처리 / 기타 처리) ============
+let _depositDetailTxn = null;
+let _depositDetailSelectedUserId = null;
+
+function openDepositDetailModal(txnId) {
+  const txn = bankTransactions.find(t => t.id === txnId);
+  if (!txn) return;
+  _depositDetailTxn = txn;
+  _depositDetailSelectedUserId = txn.matched_user_id || null;
+  renderDepositDetailModal();
+  showModal("deposit-detail-modal");
+}
+
+function closeDepositDetailModal() {
+  _depositDetailTxn = null;
+  _depositDetailSelectedUserId = null;
+  hideModal("deposit-detail-modal");
+}
+
+function renderDepositDetailModal() {
+  const t = _depositDetailTxn;
+  if (!t) return;
+
+  document.getElementById("dd-depositor-name").innerText = t.depositor_name;
+  document.getElementById("dd-amount").innerText = `${t.amount.toLocaleString()}원`;
+  document.getElementById("dd-transaction-at").innerText = new Date(t.transaction_at).toLocaleString();
+  document.getElementById("dd-txn-id").innerText = t.external_txn_id;
+
+  const meta = DEPOSIT_STATUS_META[t.status] || { text: t.status, cls: "status-pending" };
+  const statusEl = document.getElementById("dd-status");
+  statusEl.innerText = meta.text;
+  statusEl.className = `activity-status ${meta.cls}`;
+
+  const infoBox = document.getElementById("dd-resolution-info");
+  const infoLines = [];
+  if (t.matched_user_name) infoLines.push(`매칭 회원: ${escapeHtml(t.matched_user_name)}`);
+  if (t.resolved_by_admin_name) infoLines.push(`처리자: ${escapeHtml(t.resolved_by_admin_name)}`);
+  if (t.resolved_at) infoLines.push(`처리 시각: ${new Date(t.resolved_at).toLocaleString()}`);
+  if (t.resolution_memo) infoLines.push(`메모: ${escapeHtml(t.resolution_memo)}`);
+  if (infoLines.length > 0) {
+    infoBox.style.display = "block";
+    infoBox.innerHTML = infoLines.join("<br>");
+  } else {
+    infoBox.style.display = "none";
+  }
+
+  const resolveSection = document.getElementById("dd-resolve-section");
+  const resolvable = t.status === "PENDING" || t.status === "ERROR";
+  resolveSection.style.display = resolvable ? "block" : "none";
+  if (resolvable) {
+    document.getElementById("dd-user-search").value = "";
+    document.getElementById("dd-resolve-memo").value = "";
+    document.getElementById("dd-other-reason").value = "";
+    renderDepositUserOptions();
+  }
+}
+
+function renderDepositUserOptions() {
+  const box = document.getElementById("dd-user-options");
+  if (!box) return;
+  const query = (document.getElementById("dd-user-search").value || "").trim().toLowerCase();
+  const matches = users.filter(u => !query || u.name.toLowerCase().includes(query) || (u.phone || "").includes(query)).slice(0, 20);
+
+  if (matches.length === 0) {
+    box.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">일치하는 회원이 없습니다.</p>`;
+    return;
+  }
+
+  box.innerHTML = matches.map(u => {
+    const selected = u.id === _depositDetailSelectedUserId;
+    return `
+      <div onclick="selectDepositUser(${u.id})" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0.7rem; border-radius: 8px; cursor:pointer; background: ${selected ? "rgba(16,185,129,0.15)" : "var(--surface-2)"}; border: 1px solid ${selected ? "var(--accent-emerald)" : "transparent"};">
+        <span>${renderTruncatedName(u.name)} <span style="color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.phone || "")}</span></span>
+        ${selected ? `<span data-icon="check" style="color: var(--accent-emerald);"></span>` : ""}
+      </div>
+    `;
+  }).join("");
+  hydrateIconPlaceholders(box);
+}
+
+function selectDepositUser(userId) {
+  _depositDetailSelectedUserId = userId;
+  renderDepositUserOptions();
+}
+
+async function submitDepositResolve(btn) {
+  if (!_depositDetailTxn) return;
+  if (!_depositDetailSelectedUserId) {
+    await showAlertModal("충전 처리할 회원을 선택해주세요.");
+    return;
+  }
+  const memo = document.getElementById("dd-resolve-memo").value.trim();
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/bank-transactions/${_depositDetailTxn.id}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: _depositDetailSelectedUserId, memo: memo || null })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
+        return;
+      }
+      closeDepositDetailModal();
+      showToast(`✅ ${data.matched_user_name || ''}님에게 ${data.amount.toLocaleString()}원 충전 처리했습니다.`);
+      loadAdminUsers();
+      loadDepositHistories();
+      loadBankTransactions();
+      loadStatsSummary();
+    } catch (err) {
+      console.error("submitDepositResolve error:", err);
+    }
+  });
+}
+
+async function submitDepositMarkOther(btn) {
+  if (!_depositDetailTxn) return;
+  const reason = document.getElementById("dd-other-reason").value.trim();
+  if (!reason) {
+    await showAlertModal("사유를 입력해주세요.");
+    return;
+  }
+  if (!(await showConfirmModal("이 입금 건을 충전 대상이 아닌 것으로 처리하시겠습니까? 크레딧이 반영되지 않습니다."))) return;
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/bank-transactions/${_depositDetailTxn.id}/mark-other`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
+        return;
+      }
+      closeDepositDetailModal();
+      showToast("🗂️ 기타로 처리했습니다.");
+      loadBankTransactions();
+      loadStatsSummary();
+    } catch (err) {
+      console.error("submitDepositMarkOther error:", err);
+    }
   });
 }
 
@@ -2018,7 +1920,6 @@ window.onNativeDetectionLogged = function (entryJson) {
     showToast(`✅ ${entry.detail || "입금이 자동 등록되었습니다."}`);
     loadAdminUsers();
     loadDepositHistories();
-    loadRechargeQueue();
     loadBankTransactions();
     loadStatsSummary();
   }
