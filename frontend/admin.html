@@ -101,15 +101,20 @@
       <!-- 검색창/스캔 버튼은 고정, 목록만 남은 공간을 차지하며 그 안에서만 스크롤된다
            (홈 탭과 동일한 패턴 - admin.js의 updateFixedViewLayoutMetrics). -->
       <div id="admin-view-search" class="admin-view">
-        <div class="admin-page-title-row">
+        <div class="admin-page-title-row kiosk-title-row">
           <h1 class="admin-page-title">사용자 관리</h1>
-          <button type="button" class="admin-page-title-action" onclick="openProxyRegisterModal()" title="회원 등록">+</button>
-        </div>
-        <div class="glass-container" style="padding: 1rem; margin-bottom: 1rem;">
-          <input type="text" id="member-search-input" class="form-control" placeholder="이름 또는 연락처로 검색" style="margin-bottom: 0.8rem;" oninput="renderMemberFeed()">
-          <button class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);" onclick="openScannerModal('SEARCH')">
-            NFC/QR 태그로 회원 찾기
-          </button>
+          <div class="admin-page-title-actions">
+            <button type="button" class="admin-page-title-action" onclick="openProxyRegisterModal()" title="회원 등록">+</button>
+            <button type="button" id="member-search-toggle" class="admin-page-title-action" onclick="toggleMemberSearchPanel()" title="회원 검색">
+              <span data-icon="search"></span>
+            </button>
+          </div>
+          <div id="member-search-panel" class="member-search-dropdown">
+            <input type="text" id="member-search-input" class="form-control" placeholder="이름 또는 연락처로 검색" style="margin-bottom: 0.8rem;" oninput="renderMemberFeed()">
+            <button class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);" onclick="openScannerModal('SEARCH')">
+              NFC/QR 태그로 회원 찾기
+            </button>
+          </div>
         </div>
         <div class="member-feed" id="search-member-feed"></div>
       </div>

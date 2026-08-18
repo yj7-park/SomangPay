@@ -557,19 +557,52 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .admin-page-title-row .admin-page-title {
   margin: 0.1rem 0 0;
 }
+.admin-page-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
 .admin-page-title-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   padding: 0.2rem 0.3rem;
   min-height: auto;
-  color: var(--accent-cyan);
-  font-size: 1.7rem;
+  color: var(--text-main);
+  font-size: 1.3rem;
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
 }
 .admin-page-title-action:hover {
   opacity: 0.75;
+}
+
+/* 사용자 관리 탭 - 돋보기 버튼을 누르면 검색창/스캔 버튼 카드가 제목줄 바로 아래로
+   펼쳐지는 드롭다운(키오스크 선택기 .kiosk-selector-list와 같은 위치/느낌이지만, 폭이
+   좁은 선택 목록이 아니라 원래 검색 카드와 동일한 전체 폭/구성을 유지해야 해서 별도
+   클래스로 둔다). 부모 .kiosk-title-row가 이미 position:relative를 준다. */
+.member-search-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.4rem;
+  background: var(--bg-card);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  box-shadow: var(--shadow-subtle);
+  z-index: 95;
+}
+.member-search-dropdown.open {
+  display: block;
 }
 
 /* admin.js의 showToast()가 #admin-toast를 만들어 .show 클래스로 토글하는데, 지금까지 이

@@ -991,6 +991,20 @@ function renderMemberFeedCard(u) {
   return div;
 }
 
+// 사용자 관리 탭 - 돋보기 버튼을 누르면 검색창/스캔 버튼 카드가 제목줄 바로 아래로
+// 펼쳐진다(키오스크 선택기와 같은 위치/느낌의 드롭다운 - fitDropdownVertically 참고).
+let memberSearchOpen = false;
+function toggleMemberSearchPanel() {
+  memberSearchOpen = !memberSearchOpen;
+  const panel = document.getElementById("member-search-panel");
+  if (!panel) return;
+  panel.classList.toggle("open", memberSearchOpen);
+  if (memberSearchOpen) {
+    fitDropdownVertically(panel);
+    document.getElementById("member-search-input")?.focus();
+  }
+}
+
 function renderMemberFeed() {
   const feed = document.getElementById("search-member-feed");
   if (!feed) return;
