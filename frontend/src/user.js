@@ -178,7 +178,7 @@ function userLogout() {
   document.getElementById("user-login-section").style.display = "block";
   document.getElementById("user-card-box").style.display = "none";
   document.getElementById("charge-guide-section").style.display = "none";
-  document.getElementById("user-info-section").style.display = "none";
+  hideModal("user-settings-modal");
   document.getElementById("login-phone").value = "";
   document.getElementById("login-password").value = "";
 }
@@ -187,7 +187,6 @@ function onLoginSuccess(user) {
   document.getElementById("user-login-section").style.display = "none";
   document.getElementById("user-card-box").style.display = "block";
   document.getElementById("charge-guide-section").style.display = "block";
-  document.getElementById("user-info-section").style.display = "block";
 
   document.getElementById("display-user-name").innerText = user.name;
   document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
@@ -235,6 +234,15 @@ function openUserQrModal() {
 
 function closeUserQrModal() {
   hideModal("user-qr-modal");
+}
+
+// ============ 설정 모달(내 정보/테마/로그아웃) ============
+function openUserSettingsModal() {
+  showModal("user-settings-modal");
+}
+
+function closeUserSettingsModal() {
+  hideModal("user-settings-modal");
 }
 
 // ============ 실시간 갱신 (WebSocket) ============
