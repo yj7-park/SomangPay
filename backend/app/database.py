@@ -30,6 +30,74 @@ def _run_migration_step(db, sql, description=""):
         print(f"Migration step skipped ({description or sql[:60]}): {e}")
 
 
+def _backfill_balance_snapshots(db):
+    """과거 이력에는 반영 시점 잔액 스냅샷(balance_after)이 없어 이력 카드에서 충전 건만
+    잔액이 안 보이는 문제(#19 후속) - 회원별로 잔액에 영향을 준 사건(deposit_histories +
+    성공한 payment_transactions)을 시간순으로 재생해 각 시점의 잔액을 역산해 채운다.
+    deposit_histories와 bank_transactions는 같은 계좌이체 충전 사건을 서로 다른
+    테이블에 중복 기록하므로(각각 admin.js/user.js가 읽는 소스), 두 테이블에 대해
+    각자의 타임스탬프 기준으로 독립적으로 재생한다 - 같은 사건은 같은 커밋에서 생성돼
+    두 테이블의 타임스탬프가 사실상 동시이므로 순서가 어긋나지 않는다."""
+    from . import models
+
+    pending_dh = db.query(models.DepositHistory).filter(models.DepositHistory.balance_after.is_(None)).count()
+    pending_bt = db.query(models.BankTransaction).filter(
+        models.BankTransaction.balance_after.is_(None),
+        models.BankTransaction.status.in_(["CREDITED", "CREDITED_MANUAL"]),
+    ).count()
+    if not pending_dh and not pending_bt:
+        return
+    print(f"Backfilling balance_after snapshots: {pending_dh} deposit_histories, {pending_bt} bank_transactions rows...")
+
+    user_ids = [row[0] for row in db.query(models.DepositHistory.user_id).distinct().all()]
+
+    for user_id in user_ids:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            continue
+
+        payment_deltas = [
+            (p.created_at, p.id, -p.amount, None)
+            for p in db.query(models.PaymentTransaction).filter(
+                models.PaymentTransaction.user_id == user_id,
+                models.PaymentTransaction.status == "SUCCESS",
+            ).all()
+        ]
+
+        # Timeline 1: deposit_histories 자체("충전 경로 불문 통합 원장") + 성공 결제
+        all_deposits = db.query(models.DepositHistory).filter(models.DepositHistory.user_id == user_id).all()
+        if any(d.balance_after is None for d in all_deposits):
+            events = [(d.created_at, d.id, d.amount, d) for d in all_deposits] + payment_deltas
+            events.sort(key=lambda e: (e[0], e[1] if isinstance(e[1], int) else 0))
+            running = user.credit_balance - sum(e[2] for e in events)
+            for _, _, delta, row in events:
+                running += delta
+                if row is not None and row.balance_after is None:
+                    row.balance_after = running
+
+        # Timeline 2: bank_transactions(CREDITED/CREDITED_MANUAL, 계좌이체 충전) + 비계좌이체
+        # deposit_histories(직권 충전/차감) + 성공 결제 - Timeline 1과 같은 사건 집합을
+        # 계좌이체 건만 bank_transactions 쪽 표현으로 바꿔서 재생한 것.
+        all_bts = db.query(models.BankTransaction).filter(
+            models.BankTransaction.matched_user_id == user_id,
+            models.BankTransaction.status.in_(["CREDITED", "CREDITED_MANUAL"]),
+        ).all()
+        if any(t.balance_after is None for t in all_bts):
+            non_bank_deposits = [d for d in all_deposits if d.deposit_type != "BANK_TRANSFER"]
+            events = [(t.created_at, t.id, t.amount, t) for t in all_bts] + \
+                     [(d.created_at, d.id, d.amount, None) for d in non_bank_deposits] + \
+                     payment_deltas
+            events.sort(key=lambda e: (e[0], e[1] if isinstance(e[1], int) else 0))
+            running = user.credit_balance - sum(e[2] for e in events)
+            for _, _, delta, row in events:
+                running += delta
+                if row is not None and row.balance_after is None:
+                    row.balance_after = running
+
+        db.commit()
+    print("Balance snapshot backfill complete.")
+
+
 def init_db():
     from . import models
 
@@ -73,6 +141,12 @@ def init_db():
 
         # 어드민 회원상세 이력 카드에도 동일하게 "처리 후 잔액" 표시(#19)
         _run_migration_step(db, "ALTER TABLE deposit_histories ADD COLUMN IF NOT EXISTS balance_after INTEGER;", "deposit_histories.balance_after")
+
+        try:
+            _backfill_balance_snapshots(db)
+        except Exception as e:
+            db.rollback()
+            print(f"Balance snapshot backfill error: {e}")
     finally:
         db.close()
 
