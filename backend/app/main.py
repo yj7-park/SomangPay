@@ -848,6 +848,21 @@ def get_my_payment_transactions(db: Session = Depends(get_db), user: models.User
     ).order_by(models.PaymentTransaction.id.desc()).limit(100).all()
     return [_payment_tx_response(db, t, user.name) for t in txs]
 
+@app.get("/api/deposit-histories/me", response_model=List[schemas.DepositHistoryResponse])
+def get_my_deposit_histories(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
+    """관리자가 직권으로 충전/차감한 내역(계좌이체 충전은 bank-transactions/me에 이미
+    포함되므로 여기서는 제외) - 회원 PWA 이용 내역에서 결제/계좌이체 충전과 함께 표시."""
+    histories = db.query(models.DepositHistory).filter(
+        models.DepositHistory.user_id == user.id,
+        models.DepositHistory.deposit_type != "BANK_TRANSFER",
+    ).order_by(models.DepositHistory.id.desc()).limit(100).all()
+    result = []
+    for h in histories:
+        res = schemas.DepositHistoryResponse.from_orm(h)
+        res.user_name = user.name
+        result.append(res)
+    return result
+
 # ================= 계좌이체 충전 (회원) =================
 
 def _bank_txn_response(db: Session, txn: "models.BankTransaction") -> schemas.BankTransactionResponse:

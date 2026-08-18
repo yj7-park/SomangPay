@@ -380,17 +380,20 @@ function depositReason(d) {
 
 let _myDeposits = [];
 let _myPayments = [];
+let _myAdminDeposits = [];
 
 async function loadMyDeposits() {
   const box = document.getElementById("my-deposits-list");
   if (!box) return;
   try {
-    const [depRes, payRes] = await Promise.all([
+    const [depRes, payRes, adminDepRes] = await Promise.all([
       authFetch(`${API_BASE}/bank-transactions/me`),
       authFetch(`${API_BASE}/payments/me`),
+      authFetch(`${API_BASE}/deposit-histories/me`),
     ]);
     _myDeposits = depRes.ok ? await depRes.json() : [];
     _myPayments = payRes.ok ? await payRes.json() : [];
+    _myAdminDeposits = adminDepRes.ok ? await adminDepRes.json() : [];
     renderPendingDepositCard();
     renderMyDeposits();
   } catch (err) {
@@ -416,6 +419,29 @@ function depositRowHtml(d) {
       <div class="history-item-right">
         <div class="history-item-amount ${amountCls}">${amountText}</div>
         ${d.balance_after != null ? `<div class="history-item-balance">잔액 ${d.balance_after.toLocaleString()}원</div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+// 관리자 직권 충전/차감(#19 후속) - 계좌이체가 아니라 bank-transactions/me에 안 잡히므로
+// deposit-histories/me로 따로 받아온다. 안 보여줬더니 차감 내역이 이용 내역에서 통째로
+// 빠져 보이는 문제가 있었다.
+function adminDepositRowHtml(h) {
+  const isDeduct = h.deposit_type === "ADMIN_MANUAL_DEDUCT";
+  const type = isDeduct ? { text: "차감", cls: "status-rejected" } : { text: "충전", cls: "status-done" };
+  return `
+    <div class="history-item">
+      <div class="history-item-left">
+        <div class="history-item-top">
+          <span class="activity-status ${type.cls}">${type.text}</span>
+          <span class="history-item-date">${new Date(h.created_at).toLocaleString()}</span>
+        </div>
+        <div class="history-item-reason">${escapeHtml(h.memo || (isDeduct ? "관리자 직권 차감" : "관리자 직권 충전"))}</div>
+      </div>
+      <div class="history-item-right">
+        <div class="history-item-amount ${isDeduct ? "amount-negative" : "amount-positive"}">${h.amount >= 0 ? "+" : ""}${h.amount.toLocaleString()}원</div>
+        ${h.balance_after != null ? `<div class="history-item-balance">잔액 ${h.balance_after.toLocaleString()}원</div>` : ""}
       </div>
     </div>
   `;
@@ -456,6 +482,7 @@ function renderMyDeposits() {
   const history = [
     ..._myDeposits.filter(d => d.status !== "PENDING").map(d => ({ at: d.created_at, html: depositRowHtml(d) })),
     ..._myPayments.map(p => ({ at: p.created_at, html: paymentRowHtml(p) })),
+    ..._myAdminDeposits.map(h => ({ at: h.created_at, html: adminDepositRowHtml(h) })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at));
 
   if (history.length === 0) {
