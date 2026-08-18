@@ -174,13 +174,13 @@
   </div>
 
   <!-- Custom Repeat Payment Confirm Popup (replaces window.confirm blocked in Android WebView) -->
-  <div id="repeat-pay-modal" class="modal-overlay" style="display: none; z-index: 9999;">
+  <div id="repeat-pay-modal" class="modal-overlay" style="display: none; z-index: 9999;" onclick="if (event.target === this) closeRepeatPayModal(false)">
     <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: var(--accent-amber); padding: 3rem 4rem;">
       <div style="font-size: 5rem; margin-bottom: 0.8rem;">⚠️</div>
       <h2 style="font-size: 2.2rem; color: var(--accent-amber); margin-bottom: 0.8rem;">추가 결제 하시겠습니까?</h2>
       <p id="repeat-pay-msg" style="font-size: 1.4rem; color: var(--text-muted); margin: 1rem 0 2rem;">방금 결제하셨습니다.</p>
       <div style="display: flex; gap: 1rem; justify-content: center;">
-        <button class="btn-action" style="flex: 1; background: var(--surface-1); font-size: 1.4rem; min-height: 68px;" onclick="closeRepeatPayModal(false)">✕ 취소</button>
+        <button class="btn-action" style="flex: 1; background: var(--surface-1); color: var(--text-main); font-size: 1.4rem; min-height: 68px;" onclick="closeRepeatPayModal(false)">✕ 취소</button>
         <button class="btn-action btn-primary" style="flex: 1; background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 1.4rem; font-weight: 800; min-height: 68px;" onclick="closeRepeatPayModal(true)">✓ 추가 결제</button>
       </div>
     </div>
