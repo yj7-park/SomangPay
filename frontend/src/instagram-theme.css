@@ -48,6 +48,7 @@
   --accent-emerald: #10b981; /* 성공/온라인 상태 - 상태색이라 유지 */
   --accent-success: #10b981;
   --accent-danger: #ef4444;  /* 오류/경고 - 상태색이라 유지 */
+  --icon-danger: #fca5a5;    /* 삭제 아이콘 색 - 어두운 배경에서는 옅은 톤이 잘 보임 */
 
   --text-main: #fafafa;
   --text-muted: #a8a8a8;
@@ -115,6 +116,7 @@
     --accent-emerald: #0e9f6e;
     --accent-success: #0e9f6e;
     --accent-danger: #dc2626;
+    --icon-danger: #b91c1c;    /* 흰 배경 위 옅은 분홍 배경과 대비를 주기 위해 진하게 */
 
     --text-main: #262626;
     --text-muted: #737373;
@@ -155,6 +157,7 @@ body[data-theme="light"] {
   --accent-emerald: #0e9f6e;
   --accent-success: #0e9f6e;
   --accent-danger: #dc2626;
+  --icon-danger: #b91c1c;
 
   --text-main: #262626;
   --text-muted: #737373;

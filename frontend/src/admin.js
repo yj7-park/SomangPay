@@ -2285,7 +2285,7 @@ function renderKioskDetail() {
         <label class="form-label" style="margin-bottom: 0;">키오스크 이름</label>
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           <span id="kiosk-detail-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
-          <button type="button" class="btn-action" style="width: auto; padding: 0.5rem 0.7rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="confirmDeleteKiosk(${k.id})" title="키오스크 삭제">
+          <button type="button" class="btn-action" style="width: 32px; height: 32px; min-height: 32px; padding: 0; flex: none; background: rgba(239,68,68,0.15); color: var(--icon-danger, #fca5a5);" onclick="confirmDeleteKiosk(${k.id})" title="키오스크 삭제">
             <span data-icon="trash"></span>
           </button>
         </div>
