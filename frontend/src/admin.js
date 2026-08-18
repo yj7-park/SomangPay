@@ -1133,9 +1133,13 @@ function renderMemberDetail() {
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
 
   const statusBtn = document.getElementById("detail-status-btn");
+  const isAdminUser = user.role === "ADMIN";
   statusBtn.innerText = isActive ? "정지" : "재활성화";
   statusBtn.style.background = isActive ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)";
   statusBtn.style.color = isActive ? "#fca5a5" : "#6ee7b7";
+  statusBtn.disabled = isActive && isAdminUser;
+  statusBtn.style.opacity = statusBtn.disabled ? "0.4" : "1";
+  statusBtn.title = statusBtn.disabled ? "관리자 계정은 정지할 수 없습니다." : "";
 
   renderDetailCardSlots();
   renderDetailHistory();
@@ -2142,13 +2146,18 @@ let kiosks = [];
 let selectedKioskId = null;
 let kioskSelectorOpen = false;
 let kioskSalesPeriod = "today";
+let kioskSalesPeriodOpen = false;
 
 async function loadKiosks() {
   try {
     const res = await adminFetch(`${API_BASE}/admin/kiosks`);
     if (!res.ok) return;
     kiosks = await res.json();
-    if (selectedKioskId && !kiosks.some(k => k.id === selectedKioskId)) selectedKioskId = null;
+    // 선택된 키오스크가 없거나(최초 진입) 지워졌다면 "선택하세요" 상태 대신 맨 위 키오스크를
+    // 기본으로 선택해 둔다.
+    if (!kiosks.some(k => k.id === selectedKioskId)) {
+      selectedKioskId = kiosks.length > 0 ? kiosks[0].id : null;
+    }
     renderKioskList();
   } catch (err) {
     console.error("Failed to load kiosks:", err);
@@ -2168,21 +2177,52 @@ function renderKioskSalesRows(rows) {
   `).join('');
 }
 
-const KIOSK_SALES_PERIOD_LABEL = { today: "오늘", this_month: "이번달", all_time: "전체" };
+const KIOSK_SALES_PERIODS = ["today", "this_week", "this_month", "all_time"];
+const KIOSK_SALES_PERIOD_LABEL = { today: "오늘", this_week: "이번주", this_month: "이번달", all_time: "전체" };
 
-// 자체 select box 대신 모달에서 오늘/이번달/전체를 고른다 (kiosk-sales-period-modal, admin.html).
-function openKioskSalesPeriodModal() {
-  showModal("kiosk-sales-period-modal");
+// 키오스크 선택기와 같은 패턴 - 버튼을 누르면 바로 아래에 드롭다운으로 목록이 펼쳐진다.
+function toggleKioskSalesPeriodSelector() {
+  kioskSalesPeriodOpen = !kioskSalesPeriodOpen;
+  renderKioskSalesPeriodSelector();
 }
 
 function selectKioskSalesPeriod(period) {
   kioskSalesPeriod = period;
-  hideModal("kiosk-sales-period-modal");
-  const label = document.getElementById("kiosk-sales-period-label");
-  if (label) label.innerText = KIOSK_SALES_PERIOD_LABEL[period];
+  kioskSalesPeriodOpen = false;
+  renderKioskSalesPeriodSelector();
   const k = kiosks.find(x => x.id === selectedKioskId);
   const tbody = document.querySelector(".kiosk-sales-table tbody");
   if (k && tbody) tbody.innerHTML = renderKioskSalesRows(k.sales[period]);
+}
+
+// 화면 아래쪽에서 열면 목록이 하단 탭바에 가려질 수 있어, 펼친 뒤 실제 위치를 재보고
+// 안 맞으면 위로 펼치도록(drop-up) 뒤집는다 (키오스크 선택기와 매출 기간 선택기 공용).
+function fitDropdownVertically(list) {
+  list.classList.remove("drop-up");
+  const rect = list.getBoundingClientRect();
+  const tabbar = document.querySelector(".admin-tabbar");
+  const bottomLimit = window.innerHeight - (tabbar ? tabbar.getBoundingClientRect().height : 0);
+  if (rect.bottom > bottomLimit) list.classList.add("drop-up");
+}
+
+function renderKioskSalesPeriodSelector() {
+  const label = document.getElementById("kiosk-sales-period-label");
+  const arrow = document.getElementById("kiosk-sales-period-arrow");
+  const list = document.getElementById("kiosk-sales-period-list");
+  if (!label || !list) return;
+
+  label.innerText = KIOSK_SALES_PERIOD_LABEL[kioskSalesPeriod];
+  if (arrow) arrow.style.transform = kioskSalesPeriodOpen ? "rotate(180deg)" : "rotate(0deg)";
+
+  list.style.display = kioskSalesPeriodOpen ? "flex" : "none";
+  if (!kioskSalesPeriodOpen) return;
+
+  list.innerHTML = KIOSK_SALES_PERIODS.map(period => `
+    <button type="button" class="kiosk-selector-item-main ${period === kioskSalesPeriod ? 'active' : ''}" onclick="selectKioskSalesPeriod('${period}')">
+      <span class="kiosk-selector-item-name">${KIOSK_SALES_PERIOD_LABEL[period]}</span>
+    </button>
+  `).join('');
+  fitDropdownVertically(list);
 }
 
 // ---------- 상단 선택기: "키오스크를 선택하세요" 옆 화살표를 누르면 목록이 펼쳐진다 ----------
@@ -2195,6 +2235,7 @@ function selectKiosk(id) {
   selectedKioskId = id;
   kioskSelectorOpen = false;
   kioskSalesPeriod = "today";
+  kioskSalesPeriodOpen = false;
   renderKioskSelector();
   renderKioskDetail();
 }
@@ -2203,26 +2244,24 @@ function renderKioskSelector() {
   const label = document.getElementById("kiosk-selector-label");
   const arrow = document.getElementById("kiosk-selector-arrow");
   const list = document.getElementById("kiosk-selector-list");
-  const deleteBtn = document.getElementById("kiosk-delete-btn");
   if (!label || !list) return;
 
   const selected = kiosks.find(k => k.id === selectedKioskId);
-  label.innerText = kiosks.length === 0 ? "등록된 키오스크가 없습니다"
-    : selected ? (selected.device_name || "이름 없는 단말기") : "키오스크를 선택하세요";
+  label.innerText = selected ? (selected.device_name || "이름 없는 단말기") : "등록된 키오스크가 없습니다";
   if (arrow) arrow.style.transform = kioskSelectorOpen ? "rotate(180deg)" : "rotate(0deg)";
-  if (deleteBtn) deleteBtn.disabled = !selected;
 
   list.style.display = kioskSelectorOpen ? "flex" : "none";
   if (!kioskSelectorOpen) return;
 
+  // 목록에는 이름만 보여준다 - UUID와 삭제 버튼은 상세 정보 쪽으로 옮겼다.
   list.innerHTML = kiosks.length === 0
-    ? `<div style="padding: 0.6rem 0.2rem; font-size: 0.85rem; color: var(--text-muted);">단말기에서 접속하면 자동으로 등록됩니다.</div>`
+    ? `<div class="kiosk-selector-empty">단말기에서 접속하면 자동으로 등록됩니다.</div>`
     : kiosks.map(k => `
-      <button type="button" class="kiosk-selector-item ${k.id === selectedKioskId ? 'active' : ''}" onclick="selectKiosk(${k.id})">
+      <button type="button" class="kiosk-selector-item-main ${k.id === selectedKioskId ? 'active' : ''}" onclick="selectKiosk(${k.id})">
         <span class="kiosk-selector-item-name">${escapeHtml(k.device_name || '이름 없는 단말기')}</span>
-        <span class="kiosk-selector-item-uuid">${escapeHtml(k.device_uuid)}</span>
       </button>
     `).join('');
+  fitDropdownVertically(list);
 }
 
 function renderKioskList() {
@@ -2242,12 +2281,20 @@ function renderKioskDetail() {
 
   wrap.innerHTML = `
     <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; gap: 0.5rem;">
         <label class="form-label" style="margin-bottom: 0;">키오스크 이름</label>
-        <span id="kiosk-detail-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span id="kiosk-detail-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
+          <button type="button" class="btn-action" style="width: auto; padding: 0.5rem 0.7rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="confirmDeleteKiosk(${k.id})" title="키오스크 삭제">
+            <span data-icon="trash"></span>
+          </button>
+        </div>
       </div>
-      <input type="text" class="form-control kiosk-name-input" value="${escapeHtml(k.device_name || '')}" style="margin-bottom: 1rem;"
+      <input type="text" class="form-control kiosk-name-input" value="${escapeHtml(k.device_name || '')}" style="margin-bottom: 0.8rem;"
         onblur="autoSaveKiosk(${k.id})" onkeyup="if(event.key==='Enter') this.blur();">
+
+      <label class="form-label">키오스크 ID</label>
+      <div class="kiosk-detail-uuid" style="margin-bottom: 1rem;">${escapeHtml(k.device_uuid)}</div>
 
       <label class="form-label">메뉴</label>
       <div class="kiosk-menu-assign-grid">
@@ -2270,13 +2317,14 @@ function renderKioskDetail() {
       </select>
     </div>
 
-    <div class="glass-container" style="padding: 1.5rem;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
+    <div class="glass-container" style="padding: 1.5rem; overflow: visible;">
+      <div class="admin-page-title-row kiosk-title-row" style="margin-bottom: 0.8rem;">
         <span style="font-size: 0.85rem; color: var(--text-muted);">메뉴별 매출</span>
-        <button type="button" class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="openKioskSalesPeriodModal()">
+        <button type="button" class="kiosk-selector-btn" onclick="toggleKioskSalesPeriodSelector()">
           <span id="kiosk-sales-period-label">${KIOSK_SALES_PERIOD_LABEL[kioskSalesPeriod]}</span>
-          <span data-icon="chevron-down" style="font-size: 0.65em;"></span>
+          <span id="kiosk-sales-period-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
         </button>
+        <div id="kiosk-sales-period-list" class="kiosk-sales-period-list"></div>
       </div>
       <div style="overflow-x: auto;">
         <table class="table-custom kiosk-sales-table">
@@ -2352,22 +2400,22 @@ function flashKioskSaveStatus(success) {
   window._kioskSaveStatusTimer = setTimeout(() => { el.style.opacity = "0"; }, 1600);
 }
 
-async function confirmDeleteSelectedKiosk() {
-  const k = kiosks.find(x => x.id === selectedKioskId);
+async function confirmDeleteKiosk(id) {
+  const k = kiosks.find(x => x.id === id);
   if (!k) return;
   if (!(await showConfirmModal(`"${k.device_name || '이름 없는 단말기'}" 키오스크를 삭제하시겠습니까?\n메뉴 배정 등 설정이 모두 사라지며 되돌릴 수 없습니다. (지난 결제 이력은 남습니다)`))) return;
 
   try {
-    const res = await adminFetch(`${API_BASE}/admin/kiosks/${selectedKioskId}`, { method: "DELETE" });
+    const res = await adminFetch(`${API_BASE}/admin/kiosks/${id}`, { method: "DELETE" });
     if (res.ok) {
       showToast("키오스크를 삭제했습니다.");
-      selectedKioskId = null;
+      if (selectedKioskId === id) selectedKioskId = null;
       loadKiosks();
     } else {
       const data = await res.json().catch(() => ({}));
       await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
     }
   } catch (err) {
-    console.error("confirmDeleteSelectedKiosk error:", err);
+    console.error("confirmDeleteKiosk error:", err);
   }
 }

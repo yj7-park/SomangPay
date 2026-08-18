@@ -278,18 +278,12 @@
 
       <!-- ================= KIOSK (키오스크 관리) ================= -->
       <div id="admin-view-kiosk" class="admin-view">
-        <h1 class="admin-page-title">키오스크 관리</h1>
-
-        <div class="glass-container" style="padding: 0.9rem 1rem; margin-bottom: 1rem;">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <button type="button" id="kiosk-selector-toggle" class="kiosk-selector-btn" onclick="toggleKioskSelector()">
-              <span id="kiosk-selector-label">키오스크를 선택하세요</span>
-              <span id="kiosk-selector-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
-            </button>
-            <button type="button" id="kiosk-delete-btn" class="btn-action" style="width: auto; padding: 0.65rem 0.85rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="confirmDeleteSelectedKiosk()" disabled>
-              <span data-icon="trash"></span>
-            </button>
-          </div>
+        <div class="admin-page-title-row kiosk-title-row">
+          <h1 class="admin-page-title">키오스크 관리</h1>
+          <button type="button" id="kiosk-selector-toggle" class="kiosk-selector-btn" onclick="toggleKioskSelector()">
+            <span id="kiosk-selector-label">키오스크를 선택하세요</span>
+            <span id="kiosk-selector-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
+          </button>
           <div id="kiosk-selector-list" class="kiosk-selector-list"></div>
         </div>
 
@@ -596,20 +590,6 @@
     </div>
   </div>
 
-  <!-- Kiosk Sales Period Picker Modal (자체 select box 대신 모달로) -->
-  <div id="kiosk-sales-period-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large" style="max-width: 320px;">
-      <h2 style="font-size: 1.2rem; margin-bottom: 1rem;">기간 선택</h2>
-      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-        <button type="button" class="btn-action" style="width: 100%; background: var(--surface-1); color: var(--text-main);" onclick="selectKioskSalesPeriod('today')">오늘</button>
-        <button type="button" class="btn-action" style="width: 100%; background: var(--surface-1); color: var(--text-main);" onclick="selectKioskSalesPeriod('this_month')">이번달</button>
-        <button type="button" class="btn-action" style="width: 100%; background: var(--surface-1); color: var(--text-main);" onclick="selectKioskSalesPeriod('all_time')">전체</button>
-      </div>
-      <div class="modal-footer" style="margin-top: 1.2rem;">
-        <button type="button" class="btn-action" style="background: var(--surface-1); color: var(--text-main); width: 100%;" onclick="hideModal('kiosk-sales-period-modal')">취소</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Generic Alert Modal (alert() 대체) -->
   <div id="generic-alert-modal" class="modal-overlay" style="display: none;">

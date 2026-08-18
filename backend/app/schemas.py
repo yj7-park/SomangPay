@@ -119,6 +119,7 @@ class KioskProductSales(BaseModel):
 
 class KioskSalesSummary(BaseModel):
     today: List[KioskProductSales] = []
+    this_week: List[KioskProductSales] = []
     this_month: List[KioskProductSales] = []
     all_time: List[KioskProductSales] = []
 

@@ -120,52 +120,6 @@ def startup_db_seed():
         )
         db.add(admin)
 
-    # 시니어 시범 회원 생성
-    senior = db.query(models.User).filter(models.User.name == "김순자 어르신").first()
-    if not senior:
-        senior_phone = normalize_phone("010-1234-5678")
-        senior = models.User(
-            username=senior_phone,
-            name="김순자 어르신",
-            phone=senior_phone,
-            role="USER",
-            user_type="SENIOR",
-            credit_balance=30000
-        )
-        db.add(senior)
-        db.commit()
-        db.refresh(senior)
-        # NFC 카드 등록
-        card1 = models.NFCCard(
-            card_uid="CARD_SENIOR_01",
-            card_name="김순자 어르신 실물 NFC 카드",
-            user_id=senior.id
-        )
-        db.add(card1)
-
-    # 어린이/일반 회원 생성
-    child = db.query(models.User).filter(models.User.name == "이동민 어린이").first()
-    if not child:
-        child_phone = normalize_phone("010-9876-5432")
-        child = models.User(
-            username=child_phone,
-            name="이동민 어린이",
-            phone=child_phone,
-            role="USER",
-            user_type="GENERAL",
-            credit_balance=15000
-        )
-        db.add(child)
-        db.commit()
-        db.refresh(child)
-        # NFC 카드 등록
-        card2 = models.NFCCard(
-            card_uid="CARD_CHILD_01",
-            card_name="이동민 어린이 스마트폰 NFC",
-            user_id=child.id
-        )
-        db.add(card2)
-
     # 기본 메뉴/상품 등록
     if db.query(models.Product).count() == 0:
         products = [
@@ -425,6 +379,8 @@ async def update_user_status(
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+    if req.status == "SUSPENDED" and user.role == "ADMIN":
+        raise HTTPException(status_code=400, detail="관리자 계정은 정지할 수 없습니다.")
     user.status = req.status
     db.commit()
     await notify_admins(["users"])
@@ -618,8 +574,13 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
 
     if req.pin and hmac.compare_digest(req.pin, security.ADMIN_PIN):
         security.clear_pin_attempts(client_ip)
-        admin_user = db.query(models.User).filter(models.User.role == "ADMIN").first()
-        token = security.create_admin_token(admin_user.id if admin_user else 0)
+        admin_user = db.query(models.User).filter(
+            models.User.role == "ADMIN",
+            models.User.status == "ACTIVE",
+        ).first()
+        if not admin_user:
+            raise HTTPException(status_code=401, detail="관리자 계정이 정지되어 있어 인증할 수 없습니다.")
+        token = security.create_admin_token(admin_user.id)
         return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN", "token": token}
 
     if req.card_uid:
@@ -1161,6 +1122,16 @@ async def ws_user(websocket: WebSocket, token: str = Query(...), db: Session = D
 
 # ================= KIOSK DEVICE PERSISTENCE APIS =================
 
+def _next_kiosk_name(db: Session) -> str:
+    """이름을 정하지 않고 등록되는 단말기에 "키오스크 1", "키오스크 2"... 처럼 겹치지 않는
+    이름을 순서대로 붙여준다. 기존 이름 중 빈 번호를 찾아 채운다(중간 번호가 삭제로
+    비어도 그 번호부터 다시 채움)."""
+    existing_names = {name for (name,) in db.query(models.KioskDevice.device_name).all() if name}
+    n = 1
+    while f"키오스크 {n}" in existing_names:
+        n += 1
+    return f"키오스크 {n}"
+
 @app.post("/api/kiosk/device/sync")
 def sync_kiosk_device(req: dict = Body(...), db: Session = Depends(get_db)):
     """단말기 접속 시 UUID 자동 프로비저닝 및 가맹점/기본결제 설정 동기화 API"""
@@ -1192,7 +1163,7 @@ def sync_kiosk_device(req: dict = Body(...), db: Session = Depends(get_db)):
         # 신규 키오스크 단말기 자동 등록 (Auto Provisioning)
         device = models.KioskDevice(
             device_uuid=device_uuid,
-            device_name=device_name or f"단말기-{device_uuid[:8]}",
+            device_name=device_name or _next_kiosk_name(db),
             merchant_id=m_id,
             assigned_products=assigned_json,
             default_product_id=def_prod_id,
@@ -1301,6 +1272,7 @@ def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depen
             updated_at=device.updated_at,
             sales=schemas.KioskSalesSummary(
                 today=_kiosk_sales_for(db, device.id, period_starts["today"]),
+                this_week=_kiosk_sales_for(db, device.id, period_starts["this_week"]),
                 this_month=_kiosk_sales_for(db, device.id, period_starts["this_month"]),
                 all_time=_kiosk_sales_for(db, device.id),
             ),
