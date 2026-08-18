@@ -44,7 +44,9 @@
         </div>
         <!-- 우측 상단 설정 버튼(#16) - 내 정보/테마/로그아웃을 여기서 모달로 연다 -->
         <button onclick="openUserSettingsModal()" title="설정" aria-label="설정"
-          style="flex-shrink: 0; width: 38px; height: 38px; padding: 0; background: none; border: none; color: #fff; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; line-height: 1;">⚙️</button>
+          style="flex-shrink: 0; width: 38px; height: 38px; padding: 0; background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;">
+          <svg class="icon-line" viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        </button>
       </div>
 
       <div style="margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
@@ -91,7 +93,7 @@
         계좌이체 충전 안내
       </h4>
       <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.8rem;">
-        아래 계좌로 입금하시면 자동으로 확인되어 아래 목록에 나타납니다. 목록에서 <strong>본인이 넣으신 건</strong>을 선택해 충전을 완료해주세요.
+        아래 계좌로 입금하시면 자동으로 확인되어 화면 상단에 입금 내역 카드로 표시됩니다. 카드를 눌러 <strong>본인이 넣으신 건</strong>을 선택해 충전을 완료해주세요.
       </p>
       <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem; margin-bottom: 1rem;">
         <div>입금 계좌:
