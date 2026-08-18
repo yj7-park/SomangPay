@@ -775,6 +775,15 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
         created_at=tx_success.created_at
     )
 
+def _payment_tx_response(db: Session, tx: "models.PaymentTransaction", user_name: Optional[str] = None) -> schemas.PaymentTransactionResponse:
+    """PaymentTransaction을 응답 스키마로 변환하며 회원명/결제된 키오스크명을 조인해 채운다."""
+    res = schemas.PaymentTransactionResponse.from_orm(tx)
+    res.user_name = user_name
+    if tx.kiosk_device_id:
+        kiosk = db.query(models.KioskDevice).filter(models.KioskDevice.id == tx.kiosk_device_id).first()
+        res.kiosk_name = kiosk.device_name if kiosk else None
+    return res
+
 @app.get("/api/payments", response_model=List[schemas.PaymentTransactionResponse])
 def get_payment_transactions(
     user_id: Optional[int] = None,
@@ -791,11 +800,17 @@ def get_payment_transactions(
 
     result = []
     for tx in txs:
-        res = schemas.PaymentTransactionResponse.from_orm(tx)
         user = db.query(models.User).filter(models.User.id == tx.user_id).first()
-        res.user_name = user.name if user else "Unknown"
-        result.append(res)
+        result.append(_payment_tx_response(db, tx, user.name if user else "Unknown"))
     return result
+
+@app.get("/api/payments/me", response_model=List[schemas.PaymentTransactionResponse])
+def get_my_payment_transactions(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
+    """본인 결제 내역(성공/실패 포함) - 회원 PWA에서 충전 내역과 함께 이용 내역으로 표시."""
+    txs = db.query(models.PaymentTransaction).filter(
+        models.PaymentTransaction.user_id == user.id
+    ).order_by(models.PaymentTransaction.id.desc()).limit(100).all()
+    return [_payment_tx_response(db, t, user.name) for t in txs]
 
 # ================= 계좌이체 충전 (회원) =================
 

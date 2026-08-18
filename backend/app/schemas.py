@@ -203,6 +203,7 @@ class PaymentTransactionResponse(BaseModel):
     balance_after: int
     status: str
     product_details: Optional[str] = None
+    kiosk_name: Optional[str] = None
     created_at: UTCDatetime
 
     class Config:

@@ -3,6 +3,13 @@ const API_BASE = "/api";
 let userToken = null;
 let loggedInUser = null;
 
+// 관리자가 입력한 키오스크명/상품명 등 신뢰할 수 없는 텍스트를 innerHTML에 꽂을 때 XSS를 막는 이스케이프.
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const savedToken = localStorage.getItem("user_token");
   if (savedToken) {
@@ -331,14 +338,18 @@ const DEPOSIT_STATUS_LABEL = {
 };
 
 let _myDeposits = [];
+let _myPayments = [];
 
 async function loadMyDeposits() {
   const box = document.getElementById("my-deposits-list");
   if (!box) return;
   try {
-    const res = await authFetch(`${API_BASE}/bank-transactions/me`);
-    if (!res.ok) return;
-    _myDeposits = await res.json();
+    const [depRes, payRes] = await Promise.all([
+      authFetch(`${API_BASE}/bank-transactions/me`),
+      authFetch(`${API_BASE}/payments/me`),
+    ]);
+    _myDeposits = depRes.ok ? await depRes.json() : [];
+    _myPayments = payRes.ok ? await payRes.json() : [];
     renderMyDeposits();
   } catch (err) {
     console.error("loadMyDeposits error:", err);
@@ -355,22 +366,49 @@ function depositRowHtml(d) {
         <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date(d.created_at).toLocaleString()}</div>
         <span class="activity-status ${label.cls}">${label.text}</span>
       </div>
-      <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">${d.amount.toLocaleString()}원</div>
+      <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">+${d.amount.toLocaleString()}원</div>
     </div>
   `;
 }
 
-// 현재 확정을 기다리는 대기 건과, 이미 처리가 끝난 과거 히스토리를 한 목록에 섞어 보여주면
-// 어떤 걸 눌러야 하는지 구분이 안 된다(#14) - 두 그룹으로 나눠 각각 소제목을 붙인다.
+const PAYMENT_STATUS_LABEL = {
+  SUCCESS: { text: "결제 완료", cls: "status-done" },
+  FAILED: { text: "결제 실패", cls: "status-rejected" },
+};
+
+// 회원 본인의 키오스크 결제 내역(#15) - 충전과 반대로 잔액이 빠져나간 건이라 지난 내역
+// 안에서 금액을 빨간색 마이너스로 표시해 충전(+)과 한눈에 구분되게 한다.
+function paymentRowHtml(p) {
+  const label = PAYMENT_STATUS_LABEL[p.status] || { text: p.status, cls: "status-pending" };
+  const sub = [p.kiosk_name, p.product_details].filter(Boolean).map(escapeHtml).join(" · ");
+  return `
+    <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
+      <div style="min-width: 0;">
+        <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</div>
+        <span class="activity-status ${label.cls}">${label.text}</span>
+        ${sub ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${sub}</div>` : ""}
+      </div>
+      <div style="font-weight: 800; color: ${p.status === "SUCCESS" ? "var(--accent-danger)" : "var(--text-muted)"}; font-size: 1.05rem; flex-shrink: 0;">-${p.amount.toLocaleString()}원</div>
+    </div>
+  `;
+}
+
+// 현재 확정을 기다리는 충전 대기 건과, 이미 끝난 과거 내역(충전 완료 + 결제)을 한 목록에
+// 섞어 보여주면 어떤 걸 눌러야 하는지 구분이 안 된다(#14) - 두 그룹으로 나눠 소제목을 붙인다.
+// 지난 내역은 충전(+)과 결제(-) 내역을 시간순으로 함께 보여준다(#15).
 function renderMyDeposits() {
   const box = document.getElementById("my-deposits-list");
   if (!box) return;
-  if (_myDeposits.length === 0) {
-    box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 확인된 입금 내역이 없습니다.</p>`;
+  const pending = _myDeposits.filter(d => d.status === "PENDING");
+  const history = [
+    ..._myDeposits.filter(d => d.status !== "PENDING").map(d => ({ at: d.created_at, html: depositRowHtml(d) })),
+    ..._myPayments.map(p => ({ at: p.created_at, html: paymentRowHtml(p) })),
+  ].sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  if (pending.length === 0 && history.length === 0) {
+    box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 이용 내역이 없습니다.</p>`;
     return;
   }
-  const pending = _myDeposits.filter(d => d.status === "PENDING");
-  const history = _myDeposits.filter(d => d.status !== "PENDING");
 
   let html = "";
   if (pending.length > 0) {
@@ -379,7 +417,7 @@ function renderMyDeposits() {
   }
   if (history.length > 0) {
     html += `<div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-top: ${pending.length > 0 ? "0.4rem" : "0"}; margin-bottom: -0.15rem;">지난 내역</div>`;
-    html += history.map(depositRowHtml).join("");
+    html += history.map(h => h.html).join("");
   }
   box.innerHTML = html;
 }
