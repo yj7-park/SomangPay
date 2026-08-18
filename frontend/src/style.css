@@ -172,9 +172,11 @@ html, body {
 }
 
 /* user.html은 kiosk/admin과 달리 상단 타이틀바가 없어(#14) 첫 카드가 화면 맨 위에 바로
-   붙는다 - 노치/상태바 아래로 안전하게 내려주는 여백을 래퍼가 직접 갖는다. */
+   붙는다 - 노치/상태바 아래로 안전하게 내려주는 여백을 래퍼가 직접 갖는다.
+   좌우 여백은 admin.html의 .admin-main과 동일하게 카드가 화면 가장자리에 바로 붙지 않도록
+   준다(#17 - 이전에는 좌우 패딩이 아예 없어 카드가 화면 끝까지 꽉 찼었다). */
 .mobile-wrapper {
-  padding-top: max(1rem, env(safe-area-inset-top));
+  padding: max(1rem, env(safe-area-inset-top)) clamp(0.75rem, 4vw, 1.5rem) 1.5rem;
 }
 
 /* 키오스크 화면 잠금 - 길게 눌러 텍스트 선택/컨텍스트 메뉴 호출 차단.
@@ -918,6 +920,21 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .activity-status.status-other {
   background: rgba(148, 163, 184, 0.15);
   color: var(--text-muted);
+}
+/* 회원 앱 지난 내역에서 "결제 완료"(잔액 차감)를 "충전 완료"(status-done, 초록)와
+   구분되게 표시한다(#17) - 둘 다 초록이면 금액 부호(+/-)를 안 보고는 구분이 안 된다. */
+.activity-status.status-payment {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue);
+}
+
+/* user.html은 40~50대 이용자가 많아 다른 페이지보다 글자를 더 키운다(위 html 루트
+   font-size 참고) - 이 목록의 상태 배지는 예외적으로 고정 rem이라 그 스케일을 못 받아서
+   여전히 작다는 피드백(#17)이 있었다. .mobile-wrapper로 스코프를 걸어 admin.html 등
+   다른 페이지의 동일 클래스에는 영향이 없게 한다. */
+.mobile-wrapper .activity-status {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.6rem;
 }
 
 /* Member detail view (회원 상세 - 트위터 프로필 페이지 격) */

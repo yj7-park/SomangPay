@@ -152,7 +152,14 @@
   }
 
   function initUpdateWidget() {
-    if (!hasAndroidUpdateBridge()) return;
+    if (!hasAndroidUpdateBridge()) {
+      // 웹 브라우저에서는 아무 것도 그리지 않는데, user.html은 root 옆에 "앱 버전" 라벨이
+      // 항상 붙어 있어 내용 없는 라벨만 남는다(#17) - 그 행 전체를 감춘다. kiosk.html/
+      // admin.html은 이 id가 없어 영향 없다.
+      var versionRow = document.getElementById("user-app-version-row");
+      if (versionRow) versionRow.style.display = "none";
+      return;
+    }
     var root = document.getElementById("update-widget-root");
     if (!root) return;
 

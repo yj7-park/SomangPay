@@ -298,10 +298,9 @@ async function refreshMyInfo() {
 
 // ============ 계좌이체 충전 안내 & 확인된 입금 내역 ============
 
-// 클립보드에 복사할 계좌번호 원본(하이픈 없는 순수 숫자) - 은행 앱들의 클립보드 자동인식
-// 파서가 계좌번호를 숫자로만 정규식 매칭하는 경우가 많아, 복사본은 표시용 문구가 아니라
-// 이 값을 써야 다른 은행 앱에 붙여넣었을 때 인식된다.
-let _chargeGuideAccountDigits = "";
+// 클립보드에 복사할 문구 - "{은행명} {계좌번호}" 형태로 복사되게 해달라는 요청(#17)에 맞춰
+// 표시용 텍스트("(예금주: ...)" 포함)와 별개로 은행명+계좌번호만 담아둔다.
+let _chargeGuideAccountCopyText = "";
 
 async function loadChargeGuide() {
   try {
@@ -310,16 +309,16 @@ async function loadChargeGuide() {
     const guide = await res.json();
     document.getElementById("charge-guide-account").innerText = `${guide.bank_name} ${guide.account_number} (예금주: ${guide.account_holder})`;
     document.getElementById("charge-guide-depositor-name").innerText = guide.depositor_name;
-    _chargeGuideAccountDigits = String(guide.account_number || "").replace(/\D/g, "");
+    _chargeGuideAccountCopyText = `${guide.bank_name} ${guide.account_number}`;
   } catch (err) {
     console.error("loadChargeGuide error:", err);
   }
 }
 
 async function copyAccountNumber(btn) {
-  if (!_chargeGuideAccountDigits) return;
+  if (!_chargeGuideAccountCopyText) return;
   try {
-    await navigator.clipboard.writeText(_chargeGuideAccountDigits);
+    await navigator.clipboard.writeText(_chargeGuideAccountCopyText);
   } catch (err) {
     console.error("copyAccountNumber error:", err);
     return;
@@ -338,8 +337,10 @@ async function copyAccountNumber(btn) {
 
 // 회원 본인 이름으로 자동 매칭된 입금 내역(대기 중 + 과거 처리분 히스토리 포함).
 // PENDING 건만 탭하면 확인 모달을 거쳐 본인 충전으로 확정할 수 있다.
+// PENDING 배지는 "(눌러서 충전)"을 중복으로 달지 않는다 - 같은 안내가 그룹 소제목
+// "충전 대기 중 (눌러서 충전)"에 이미 있다(#17).
 const DEPOSIT_STATUS_LABEL = {
-  PENDING: { text: "대기 (눌러서 충전)", cls: "status-pending" },
+  PENDING: { text: "대기", cls: "status-pending" },
   CREDITED: { text: "충전 완료", cls: "status-done" },
   CREDITED_MANUAL: { text: "충전 완료(관리자 처리)", cls: "status-done" },
   OTHER: { text: "처리 보류(관리자 문의)", cls: "status-rejected" },
@@ -371,7 +372,7 @@ function depositRowHtml(d) {
     <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; ${clickable ? "cursor: pointer; border: 1px solid rgba(245, 158, 11, 0.4);" : ""}"
          ${clickable ? `onclick="openDepositClaimModal(${d.id})"` : ""}>
       <div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date(d.created_at).toLocaleString()}</div>
+        <div style="font-size: 0.88rem; color: var(--text-muted);">${new Date(d.created_at).toLocaleString()}</div>
         <span class="activity-status ${label.cls}">${label.text}</span>
       </div>
       <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">+${d.amount.toLocaleString()}원</div>
@@ -379,8 +380,10 @@ function depositRowHtml(d) {
   `;
 }
 
+// SUCCESS는 status-done(초록, 충전 완료와 동일)이 아니라 status-payment(파랑)를 써서
+// 지난 내역에서 충전 완료와 결제 완료가 한눈에 구분되게 한다(#17).
 const PAYMENT_STATUS_LABEL = {
-  SUCCESS: { text: "결제 완료", cls: "status-done" },
+  SUCCESS: { text: "결제 완료", cls: "status-payment" },
   FAILED: { text: "결제 실패", cls: "status-rejected" },
 };
 
@@ -392,9 +395,9 @@ function paymentRowHtml(p) {
   return `
     <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
       <div style="min-width: 0;">
-        <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</div>
+        <div style="font-size: 0.88rem; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</div>
         <span class="activity-status ${label.cls}">${label.text}</span>
-        ${sub ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${sub}</div>` : ""}
+        ${sub ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${sub}</div>` : ""}
       </div>
       <div style="font-weight: 800; color: ${p.status === "SUCCESS" ? "var(--accent-danger)" : "var(--text-muted)"}; font-size: 1.05rem; flex-shrink: 0;">-${p.amount.toLocaleString()}원</div>
     </div>
@@ -420,11 +423,13 @@ function renderMyDeposits() {
 
   let html = "";
   if (pending.length > 0) {
-    html += `<div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-amber); margin-bottom: -0.15rem;">충전 대기 중</div>`;
+    // 개별 배지(depositRowHtml)에서 "(눌러서 충전)"을 빼는 대신 이 소제목에 붙인다(#17) -
+    // 같은 안내를 두 곳에 중복 표기하지 않기 위함.
+    html += `<div style="font-size: 0.88rem; font-weight: 700; color: var(--accent-amber); margin-bottom: -0.15rem;">충전 대기 중 <span style="font-weight: 500;">(눌러서 충전)</span></div>`;
     html += pending.map(depositRowHtml).join("");
   }
   if (history.length > 0) {
-    html += `<div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-top: ${pending.length > 0 ? "0.4rem" : "0"}; margin-bottom: -0.15rem;">지난 내역</div>`;
+    html += `<div style="font-size: 0.88rem; font-weight: 700; color: var(--text-muted); margin-top: ${pending.length > 0 ? "0.4rem" : "0"}; margin-bottom: -0.15rem;">지난 내역</div>`;
     html += history.map(h => h.html).join("");
   }
   box.innerHTML = html;
