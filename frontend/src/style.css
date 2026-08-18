@@ -948,6 +948,10 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   background: var(--surface-2);
   border-radius: 10px;
   padding: 0.8rem 1rem;
+  margin-bottom: 0.6rem;
+}
+.history-item:last-child {
+  margin-bottom: 0;
 }
 .history-item-left {
   min-width: 0;

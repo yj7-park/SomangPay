@@ -366,7 +366,7 @@ async function copyAccountNumber(btn) {
 // 충전된 것처럼 보이므로 그 경우만 "보류"로 따로 표시한다(#19).
 function depositTypeInfo(d) {
   if (d.status === "OTHER") return { text: "보류", cls: "status-rejected" };
-  return { text: "충전", cls: "status-done" };
+  return { text: "금액 충전", cls: "status-done" };
 }
 
 // 좌하단 사유 - 백엔드가 DepositHistory.memo에 남기는 문구와 맞춰 자기 확인/관리자 대신
@@ -429,7 +429,7 @@ function depositRowHtml(d) {
 // 빠져 보이는 문제가 있었다.
 function adminDepositRowHtml(h) {
   const isDeduct = h.deposit_type === "ADMIN_MANUAL_DEDUCT";
-  const type = isDeduct ? { text: "차감", cls: "status-rejected" } : { text: "충전", cls: "status-done" };
+  const type = isDeduct ? { text: "금액 차감", cls: "status-rejected" } : { text: "금액 충전", cls: "status-done" };
   return `
     <div class="history-item">
       <div class="history-item-left">
@@ -453,7 +453,7 @@ function adminDepositRowHtml(h) {
 // 구분되고(#17), FAILED는 실제 차감이 없었던 시도이므로 별도의 "실패" 종류로 나눈다(#19).
 function paymentRowHtml(p) {
   const isFailed = p.status === "FAILED";
-  const type = isFailed ? { text: "실패", cls: "status-rejected" } : { text: "결제", cls: "status-payment" };
+  const type = isFailed ? { text: "결제 실패", cls: "status-rejected" } : { text: "결제 성공", cls: "status-payment" };
   const reason = isFailed
     ? (p.failure_reason || "결제 실패")
     : ([p.kiosk_name, p.product_details].filter(Boolean).join(" · ") || "-");

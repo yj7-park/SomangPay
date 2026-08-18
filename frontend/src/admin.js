@@ -1332,7 +1332,7 @@ async function renderDetailHistory() {
     .map(h => {
       const isDeduct = h.deposit_type === "ADMIN_MANUAL_DEDUCT";
       return {
-        type: isDeduct ? "차감" : "충전", cls: isDeduct ? "status-rejected" : "status-done",
+        type: isDeduct ? "금액 차감" : "금액 충전", cls: isDeduct ? "status-rejected" : "status-done",
         amount: h.amount, balance_after: h.balance_after,
         reason: h.memo || (isDeduct ? "관리자 직권 차감" : "관리자 직권 충전"), created_at: h.created_at,
       };
@@ -1346,7 +1346,7 @@ async function renderDetailHistory() {
       payments = txs.map(t => {
         const isFailed = t.status === "FAILED";
         return {
-          type: isFailed ? "실패" : "결제", cls: isFailed ? "status-rejected" : "status-payment",
+          type: isFailed ? "결제 실패" : "결제 성공", cls: isFailed ? "status-rejected" : "status-payment",
           amount: -t.amount, balance_after: t.balance_after,
           reason: isFailed ? (t.failure_reason || "결제 실패") : (t.product_details || "-"),
           created_at: t.created_at,
@@ -1365,7 +1365,7 @@ async function renderDetailHistory() {
   }
 
   box.innerHTML = combined.slice(0, 30).map(h => {
-    const amountCls = h.type === "실패" ? "amount-neutral" : (h.amount >= 0 ? "amount-positive" : "amount-negative");
+    const amountCls = h.type === "결제 실패" ? "amount-neutral" : (h.amount >= 0 ? "amount-positive" : "amount-negative");
     return `
     <div class="history-item">
       <div class="history-item-left">
