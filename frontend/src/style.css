@@ -874,6 +874,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 #admin-view-inbox.active > *:not(.activity-feed-scroll) {
   flex-shrink: 0;
 }
+/* 제목 줄(.admin-page-title-row) 자체의 margin-bottom과 위 flex의 gap이 겹쳐 카드 시작
+   위치가 다른 탭보다 한 칸 더 내려가 있었다 - flex gap이 이미 간격을 주므로 여기서는 0으로. */
+#admin-view-inbox.active > .admin-page-title-row {
+  margin-bottom: 0;
+}
 
 /* "최근 처리 내역" 실시간 피드 - 남은 공간 안에서만 스크롤되고, 스크롤이
    하단에 가까워지면 admin.js가 다음 페이지를 이어붙인다(무한 스크롤). */

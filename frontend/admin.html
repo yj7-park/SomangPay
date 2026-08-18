@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="src/style.css?v=20260818_0006">
+  <link rel="stylesheet" href="src/style.css?v=20260818_0007">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260818_0001">
   <script src="jsQR.min.js"></script>
 </head>
@@ -123,7 +123,14 @@
       <!-- 헤더/탭바를 제외한 남은 공간을 "최근 처리 내역" 피드(구 홈 탭)가 전부 차지하며
            그 안에서만 스크롤된다 (admin.js의 updateFixedViewLayoutMetrics - style.css 참고). -->
       <div id="admin-view-inbox" class="admin-view">
-        <h1 class="admin-page-title">충전함 관리</h1>
+        <div class="admin-page-title-row kiosk-title-row">
+          <h1 class="admin-page-title">충전함 관리</h1>
+          <button type="button" id="inbox-filter-toggle" class="kiosk-selector-btn" onclick="toggleInboxFilterSelector()">
+            <span id="inbox-filter-label">전체</span>
+            <span id="inbox-filter-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
+          </button>
+          <div id="inbox-filter-list" class="kiosk-selector-list"></div>
+        </div>
         <div class="activity-feed-scroll" id="inbox-activity-feed-scroll">
           <div class="activity-feed" id="inbox-activity-feed"></div>
         </div>
@@ -621,6 +628,6 @@
 
   <script src="src/update-widget.js?v=20260818_0002"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
-  <script src="src/admin.js?v=20260818_0006"></script>
+  <script src="src/admin.js?v=20260818_0007"></script>
 </body>
 </html>

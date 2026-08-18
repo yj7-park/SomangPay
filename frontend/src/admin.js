@@ -1040,8 +1040,49 @@ const DEPOSIT_STATUS_META = {
   OTHER: { text: "기타", cls: "status-other" },
 };
 
+// 충전함 제목 옆 필터 - 키오스크 선택기와 같은 드롭다운 패턴(toggleKioskSelector 참고).
+const INBOX_FILTERS = ["ALL", "PENDING", "ERROR"];
+const INBOX_FILTER_LABEL = { ALL: "전체", PENDING: "대기 중인 계좌 입금", ERROR: "매칭 오류 계좌 입금" };
+let inboxDepositFilter = "ALL";
+let inboxFilterOpen = false;
+
+function toggleInboxFilterSelector() {
+  inboxFilterOpen = !inboxFilterOpen;
+  renderInboxFilterSelector();
+}
+
+function selectInboxFilter(filter) {
+  inboxDepositFilter = filter;
+  inboxFilterOpen = false;
+  activityFeedLimit = ACTIVITY_PAGE_SIZE;
+  renderInboxFilterSelector();
+  renderInboxActivityFeed();
+}
+
+function renderInboxFilterSelector() {
+  const label = document.getElementById("inbox-filter-label");
+  const arrow = document.getElementById("inbox-filter-arrow");
+  const list = document.getElementById("inbox-filter-list");
+  if (!label || !list) return;
+
+  label.innerText = INBOX_FILTER_LABEL[inboxDepositFilter];
+  if (arrow) arrow.style.transform = inboxFilterOpen ? "rotate(180deg)" : "rotate(0deg)";
+
+  list.style.display = inboxFilterOpen ? "flex" : "none";
+  if (!inboxFilterOpen) return;
+
+  list.innerHTML = INBOX_FILTERS.map(f => `
+    <button type="button" class="kiosk-selector-item-main ${f === inboxDepositFilter ? 'active' : ''}" onclick="selectInboxFilter('${f}')">
+      <span class="kiosk-selector-item-name">${INBOX_FILTER_LABEL[f]}</span>
+    </button>
+  `).join('');
+  fitDropdownVertically(list);
+}
+
 function buildDepositEvents() {
-  return bankTransactions.map(t => {
+  return bankTransactions
+    .filter(t => inboxDepositFilter === "ALL" || t.status === inboxDepositFilter)
+    .map(t => {
     // "SIM_" 접두사(processDepositDetection 참고)는 수신 시뮬레이션 버튼으로 등록된 테스트
     // 건이다 - 실제 입금과 겉모습이 똑같으면 관리자가 실제 수신으로 착각할 수 있어(실제로
     // 겪은 문제) 목록에서부터 표시를 다르게 한다.
