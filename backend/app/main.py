@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import hmac
 import json
@@ -860,6 +861,7 @@ async def claim_bank_transaction(
     txn.resolved_at = datetime.datetime.utcnow()
 
     user.credit_balance += txn.amount
+    txn.balance_after = user.credit_balance
     db.add(models.DepositHistory(
         user_id=user.id,
         amount=txn.amount,
@@ -963,6 +965,7 @@ async def admin_resolve_bank_transaction(
     txn.resolved_at = datetime.datetime.utcnow()
 
     user.credit_balance += txn.amount
+    txn.balance_after = user.credit_balance
     db.add(models.DepositHistory(
         user_id=user.id,
         amount=txn.amount,
@@ -1059,6 +1062,19 @@ def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depen
 # 브라우저 WebSocket API는 커스텀 헤더를 못 보내므로, 기존 Bearer 토큰을 쿼리 파라미터로
 # 받아 기존 verify_admin_token/verify_user_token으로 그대로 검증한다.
 
+WS_PING_INTERVAL = 20  # seconds
+
+async def _ws_keepalive_loop(websocket: WebSocket):
+    """클라이언트는 먼저 말을 걸어오지 않으므로 receive_text()만 기다리면 이동통신망/공유기의
+    유휴 NAT 타임아웃에 걸려 연결이 양쪽 모르게 끊길 수 있다(특히 휴대폰으로 접속하는 사용자
+    앱에서 "실시간 반영이 안 된다"로 나타남, #18). 일정 주기로 ping을 보내 트래픽을 유지하고,
+    전송 실패 시 예외를 던져 죽은 연결을 즉시 정리한다."""
+    while True:
+        try:
+            await asyncio.wait_for(websocket.receive_text(), timeout=WS_PING_INTERVAL)
+        except asyncio.TimeoutError:
+            await websocket.send_json({"type": "ping"})
+
 @app.websocket("/ws/admin")
 async def ws_admin(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
     admin_id = security.verify_admin_token(token)
@@ -1071,9 +1087,8 @@ async def ws_admin(websocket: WebSocket, token: str = Query(...), db: Session = 
 
     await manager.connect_admin(websocket)
     try:
-        while True:
-            await websocket.receive_text()  # 연결 유지 목적, 내용은 사용하지 않음
-    except WebSocketDisconnect:
+        await _ws_keepalive_loop(websocket)
+    except Exception:
         manager.disconnect_admin(websocket)
 
 @app.websocket("/ws/user")
@@ -1088,9 +1103,8 @@ async def ws_user(websocket: WebSocket, token: str = Query(...), db: Session = D
 
     await manager.connect_user(user.id, websocket)
     try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+        await _ws_keepalive_loop(websocket)
+    except Exception:
         manager.disconnect_user(user.id, websocket)
 
 # ================= KIOSK DEVICE PERSISTENCE APIS =================

@@ -1023,6 +1023,129 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   margin-top: 0.2rem;
 }
 
+/* 충전 대기 카드(#18) - 메인 잔액 카드 바로 아래, 비슷한 크기로 강조 표시해 눈에 띄게 한다.
+   확정은 별도 모달 대신 행 안에 버튼을 오버레이해서 처리(모달 사용성이 안 좋다는 요청). */
+.pending-deposit-card {
+  background: var(--surface-1);
+  border: 1.5px solid rgba(245, 158, 11, 0.55);
+  border-radius: var(--radius-lg);
+  padding: 1.3rem 1.4rem;
+  margin-bottom: 1.2rem;
+  box-shadow: var(--shadow-subtle);
+  animation: pendingDepositGlow 2.6s ease-in-out infinite;
+}
+
+@keyframes pendingDepositGlow {
+  0%, 100% { box-shadow: var(--shadow-subtle), 0 0 0 rgba(245, 158, 11, 0); }
+  50% { box-shadow: var(--shadow-subtle), 0 0 22px rgba(245, 158, 11, 0.45); }
+}
+
+.pending-deposit-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.pending-deposit-header svg {
+  flex-shrink: 0;
+  color: var(--accent-amber);
+  margin-top: 0.15rem;
+}
+
+.pending-deposit-title {
+  font-weight: 800;
+  font-size: 1.02rem;
+  color: var(--accent-amber);
+}
+
+.pending-deposit-subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.pending-deposit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pending-deposit-row {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.pending-deposit-row-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  transition: opacity 0.15s ease;
+}
+
+.pending-deposit-row.armed .pending-deposit-row-info {
+  opacity: 0;
+}
+
+.pending-deposit-row-date {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.pending-deposit-row-amount {
+  font-weight: 800;
+  color: var(--accent-emerald);
+  font-size: 1.1rem;
+}
+
+/* 확정 오버레이 - 카드(행) 밖으로 나가는 별도 모달 대신 같은 행 위에 겹쳐서 보여준다 */
+.pending-deposit-confirm-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0 0.7rem 0 1rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.pending-deposit-row.armed .pending-deposit-confirm-overlay {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.pending-deposit-confirm-text {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-deposit-confirm-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.pending-deposit-confirm-actions .btn-action {
+  width: auto;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+}
+
 .table-custom {
   width: 100%;
   border-collapse: collapse;

@@ -100,6 +100,7 @@ class BankTransaction(Base):
     status = Column(String(20), default="PENDING")
     matched_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     resolved_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True) # CREDITED_MANUAL/OTHER 처리한 관리자
+    balance_after = Column(Integer, nullable=True) # 충전 반영 시점의 회원 잔액 (CREDITED/CREDITED_MANUAL만 채워짐)
     resolution_memo = Column(String(200), nullable=True) # OTHER 처리 사유, 또는 관리자 처리 메모
     resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

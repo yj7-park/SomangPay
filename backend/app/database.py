@@ -67,6 +67,9 @@ def init_db():
         _run_migration_step(db, "UPDATE bank_transactions SET status='ERROR' WHERE status='UNMATCHED';", "bank_transactions backfill ERROR")
         _run_migration_step(db, "UPDATE bank_transactions SET status='CREDITED' WHERE status='MATCHED';", "bank_transactions backfill CREDITED")
         _run_migration_step(db, "DROP TABLE IF EXISTS recharge_requests;", "recharge_requests drop table")
+
+        # 이력 카드에 "처리 후 잔액" 표시(#18) - 충전이 실제 반영된 시점의 잔액 스냅샷
+        _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS balance_after INTEGER;", "bank_transactions.balance_after")
     finally:
         db.close()
 

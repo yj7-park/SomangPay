@@ -202,6 +202,7 @@ class PaymentTransactionResponse(BaseModel):
     amount: int
     balance_after: int
     status: str
+    failure_reason: Optional[str] = None
     product_details: Optional[str] = None
     kiosk_name: Optional[str] = None
     created_at: UTCDatetime
@@ -253,6 +254,7 @@ class BankTransactionResponse(BaseModel):
     status: str  # PENDING, ERROR, CREDITED, CREDITED_MANUAL, OTHER
     matched_user_id: Optional[int] = None
     matched_user_name: Optional[str] = None
+    balance_after: Optional[int] = None
     resolution_memo: Optional[str] = None
     resolved_by_admin_id: Optional[int] = None
     resolved_by_admin_name: Optional[str] = None

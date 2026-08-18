@@ -177,6 +177,7 @@ function userLogout() {
   disconnectUserWebSocket();
   document.getElementById("user-login-section").style.display = "block";
   document.getElementById("user-card-box").style.display = "none";
+  document.getElementById("pending-deposit-card").style.display = "none";
   document.getElementById("charge-guide-section").style.display = "none";
   hideModal("user-settings-modal");
   document.getElementById("login-phone").value = "";
@@ -288,6 +289,25 @@ function disconnectUserWebSocket() {
   }
 }
 
+// 모바일 브라우저는 화면이 꺼지거나 탭이 백그라운드로 가면 WS 연결을 조용히 끊어버리는데,
+// onclose가 늦게(또는 안) 불려서 3초 재연결 타이머가 안 걸리는 경우가 실제로 있다(#18) -
+// 화면을 다시 보는 시점(visibilitychange/pageshow)에 소켓 상태를 점검해 필요하면 즉시
+// 재연결하고, 그 사이 놓쳤을 수 있는 갱신을 잡기 위해 최신 데이터도 바로 한 번 더 불러온다.
+function resumeUserRealtime() {
+  if (!userToken) return;
+  if (!userWs || userWs.readyState >= 2) { // CLOSING(2) 또는 CLOSED(3)
+    connectUserWebSocket();
+  }
+  refreshMyInfo();
+  loadMyDeposits();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) resumeUserRealtime();
+});
+window.addEventListener("pageshow", resumeUserRealtime);
+window.addEventListener("online", resumeUserRealtime);
+
 async function refreshMyInfo() {
   const res = await authFetch(`${API_BASE}/users/me`);
   if (res.ok) {
@@ -309,7 +329,10 @@ async function loadChargeGuide() {
     const guide = await res.json();
     document.getElementById("charge-guide-account").innerText = `${guide.bank_name} ${guide.account_number} (예금주: ${guide.account_holder})`;
     document.getElementById("charge-guide-depositor-name").innerText = guide.depositor_name;
-    _chargeGuideAccountCopyText = `${guide.bank_name} ${guide.account_number}`;
+    // 복사 문구는 "NH농협"처럼 통신사/제휴 접두어가 붙은 은행명이어도 접두어를 떼고
+    // "농협 <번호>"만 담는다(#18) - 표시용 텍스트는 원래 은행명을 그대로 유지.
+    const copyBankName = guide.bank_name.replace(/^NH\s*/, "");
+    _chargeGuideAccountCopyText = `${copyBankName} ${guide.account_number}`;
   } catch (err) {
     console.error("loadChargeGuide error:", err);
   }
@@ -336,11 +359,10 @@ async function copyAccountNumber(btn) {
 }
 
 // 회원 본인 이름으로 자동 매칭된 입금 내역(대기 중 + 과거 처리분 히스토리 포함).
-// PENDING 건만 탭하면 확인 모달을 거쳐 본인 충전으로 확정할 수 있다.
-// PENDING 배지는 "(눌러서 충전)"을 중복으로 달지 않는다 - 같은 안내가 그룹 소제목
-// "충전 대기 중 (눌러서 충전)"에 이미 있다(#17).
+// PENDING 건은 "이용 내역" 목록이 아니라 메인 카드 바로 아래 별도 강조 카드
+// (#pending-deposit-card, renderPendingDepositCard)로 분리해서 보여준다(#18) -
+// 처리해야 할 일과 지난 기록이 한 목록에 섞이면 뭘 눌러야 하는지 구분이 안 됐다(#14).
 const DEPOSIT_STATUS_LABEL = {
-  PENDING: { text: "대기", cls: "status-pending" },
   CREDITED: { text: "충전 완료", cls: "status-done" },
   CREDITED_MANUAL: { text: "충전 완료(관리자 처리)", cls: "status-done" },
   OTHER: { text: "처리 보류(관리자 문의)", cls: "status-rejected" },
@@ -359,6 +381,7 @@ async function loadMyDeposits() {
     ]);
     _myDeposits = depRes.ok ? await depRes.json() : [];
     _myPayments = payRes.ok ? await payRes.json() : [];
+    renderPendingDepositCard();
     renderMyDeposits();
   } catch (err) {
     console.error("loadMyDeposits error:", err);
@@ -367,15 +390,16 @@ async function loadMyDeposits() {
 
 function depositRowHtml(d) {
   const label = DEPOSIT_STATUS_LABEL[d.status] || { text: d.status, cls: "status-pending" };
-  const clickable = d.status === "PENDING";
   return `
-    <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; ${clickable ? "cursor: pointer; border: 1px solid rgba(245, 158, 11, 0.4);" : ""}"
-         ${clickable ? `onclick="openDepositClaimModal(${d.id})"` : ""}>
+    <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
       <div>
         <div style="font-size: 0.88rem; color: var(--text-muted);">${new Date(d.created_at).toLocaleString()}</div>
         <span class="activity-status ${label.cls}">${label.text}</span>
       </div>
-      <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">+${d.amount.toLocaleString()}원</div>
+      <div style="text-align: right; flex-shrink: 0;">
+        <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">+${d.amount.toLocaleString()}원</div>
+        ${d.balance_after != null ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">잔액 ${d.balance_after.toLocaleString()}원</div>` : ""}
+      </div>
     </div>
   `;
 }
@@ -392,81 +416,109 @@ const PAYMENT_STATUS_LABEL = {
 function paymentRowHtml(p) {
   const label = PAYMENT_STATUS_LABEL[p.status] || { text: p.status, cls: "status-pending" };
   const sub = [p.kiosk_name, p.product_details].filter(Boolean).map(escapeHtml).join(" · ");
+  const failureNote = p.status === "FAILED" && p.failure_reason ? ` (${escapeHtml(p.failure_reason)})` : "";
   return `
     <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
       <div style="min-width: 0;">
         <div style="font-size: 0.88rem; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</div>
-        <span class="activity-status ${label.cls}">${label.text}</span>
+        <span class="activity-status ${label.cls}">${label.text}${failureNote}</span>
         ${sub ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${sub}</div>` : ""}
       </div>
-      <div style="font-weight: 800; color: ${p.status === "SUCCESS" ? "var(--accent-danger)" : "var(--text-muted)"}; font-size: 1.05rem; flex-shrink: 0;">-${p.amount.toLocaleString()}원</div>
+      <div style="text-align: right; flex-shrink: 0;">
+        <div style="font-weight: 800; color: ${p.status === "SUCCESS" ? "var(--accent-danger)" : "var(--text-muted)"}; font-size: 1.05rem;">-${p.amount.toLocaleString()}원</div>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">잔액 ${p.balance_after.toLocaleString()}원</div>
+      </div>
     </div>
   `;
 }
 
-// 현재 확정을 기다리는 충전 대기 건과, 이미 끝난 과거 내역(충전 완료 + 결제)을 한 목록에
-// 섞어 보여주면 어떤 걸 눌러야 하는지 구분이 안 된다(#14) - 두 그룹으로 나눠 소제목을 붙인다.
-// 지난 내역은 충전(+)과 결제(-) 내역을 시간순으로 함께 보여준다(#15).
+// 이미 끝난 과거 내역(충전 완료 + 결제)만 시간순으로 함께 보여준다(#15). 대기 중인 건은
+// #pending-deposit-card가 따로 담당한다(#18).
 function renderMyDeposits() {
   const box = document.getElementById("my-deposits-list");
   if (!box) return;
-  const pending = _myDeposits.filter(d => d.status === "PENDING");
   const history = [
     ..._myDeposits.filter(d => d.status !== "PENDING").map(d => ({ at: d.created_at, html: depositRowHtml(d) })),
     ..._myPayments.map(p => ({ at: p.created_at, html: paymentRowHtml(p) })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at));
 
-  if (pending.length === 0 && history.length === 0) {
+  if (history.length === 0) {
     box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 이용 내역이 없습니다.</p>`;
     return;
   }
+  box.innerHTML = history.map(h => h.html).join("");
+}
 
-  let html = "";
-  if (pending.length > 0) {
-    // 개별 배지(depositRowHtml)에서 "(눌러서 충전)"을 빼는 대신 이 소제목에 붙인다(#17) -
-    // 같은 안내를 두 곳에 중복 표기하지 않기 위함.
-    html += `<div style="font-size: 0.88rem; font-weight: 700; color: var(--accent-amber); margin-bottom: -0.15rem;">충전 대기 중 <span style="font-weight: 500;">(눌러서 충전)</span></div>`;
-    html += pending.map(depositRowHtml).join("");
+// ============ 충전 대기 카드 - 행을 누르면 확정 버튼이 그 행 안에 오버레이된다(#18) ============
+// 별도 확인 모달(과거 deposit-claim-modal) 대신, 카드 자체가 두 단계 상태(기본/확정 대기)를
+// 갖는다. 한 번에 하나만 확정 대기 상태로 둔다 - 여러 건을 동시에 열어두면 실수로 엉뚱한
+// 건을 확정할 위험이 있다.
+let _armedDepositId = null;
+
+function renderPendingDepositCard() {
+  const card = document.getElementById("pending-deposit-card");
+  const list = document.getElementById("pending-deposit-list");
+  if (!card || !list) return;
+
+  const pending = _myDeposits.filter(d => d.status === "PENDING");
+  if (pending.length === 0) {
+    card.style.display = "none";
+    _armedDepositId = null;
+    return;
   }
-  if (history.length > 0) {
-    html += `<div style="font-size: 0.88rem; font-weight: 700; color: var(--text-muted); margin-top: ${pending.length > 0 ? "0.4rem" : "0"}; margin-bottom: -0.15rem;">지난 내역</div>`;
-    html += history.map(h => h.html).join("");
-  }
-  box.innerHTML = html;
+  if (!pending.some(d => d.id === _armedDepositId)) _armedDepositId = null;
+
+  card.style.display = "block";
+  list.innerHTML = pending.map(pendingDepositRowHtml).join("");
 }
 
-let _pendingClaimId = null;
-
-function openDepositClaimModal(id) {
-  const deposit = _myDeposits.find(d => d.id === id);
-  if (!deposit) return;
-  _pendingClaimId = id;
-  document.getElementById("deposit-claim-message").innerText = `${deposit.amount.toLocaleString()}원 입금 건을 본인 충전으로 확정하시겠습니까?`;
-  showModal("deposit-claim-modal");
+function pendingDepositRowHtml(d) {
+  const armed = _armedDepositId === d.id;
+  return `
+    <div class="pending-deposit-row ${armed ? "armed" : ""}" onclick="event.stopPropagation(); armPendingDeposit(${d.id})">
+      <div class="pending-deposit-row-info">
+        <div class="pending-deposit-row-date">${new Date(d.created_at).toLocaleString()}</div>
+        <div class="pending-deposit-row-amount">+${d.amount.toLocaleString()}원</div>
+      </div>
+      <div class="pending-deposit-confirm-overlay" onclick="event.stopPropagation()">
+        <span class="pending-deposit-confirm-text">${d.amount.toLocaleString()}원을 충전할까요?</span>
+        <div class="pending-deposit-confirm-actions">
+          <button class="btn-action" onclick="armPendingDeposit(null)">취소</button>
+          <button class="btn-action btn-primary" onclick="confirmPendingDeposit(${d.id}, this)">확정</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
-function closeDepositClaimModal() {
-  _pendingClaimId = null;
-  hideModal("deposit-claim-modal");
+function armPendingDeposit(id) {
+  _armedDepositId = (_armedDepositId === id) ? null : id;
+  renderPendingDepositCard();
 }
 
-async function confirmDepositClaim(btn) {
-  if (!_pendingClaimId || btn.disabled) return;
+// 카드 바깥(또는 다른 대기 항목 바깥)을 누르면 확정 대기 상태를 취소한다 - 오버레이 버튼
+// 클릭은 위에서 stopPropagation으로 여기까지 안 올라온다.
+document.addEventListener("click", () => {
+  if (_armedDepositId !== null) armPendingDeposit(null);
+});
+
+async function confirmPendingDeposit(id, btn) {
+  if (btn.disabled) return;
   btn.disabled = true;
   try {
-    const res = await authFetch(`${API_BASE}/bank-transactions/${_pendingClaimId}/claim`, { method: "POST" });
+    const res = await authFetch(`${API_BASE}/bank-transactions/${id}/claim`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
-    closeDepositClaimModal();
     if (!res.ok) {
       await showAlertModal(`충전 실패: ${data.detail || '오류 발생'}`);
+      btn.disabled = false;
       return;
     }
-    await showAlertModal(data.message, "🎉 충전 완료");
+    _armedDepositId = null;
     await refreshMyInfo();
     await loadMyDeposits();
   } catch (err) {
-    console.error("confirmDepositClaim error:", err);
-  } finally {
+    console.error("confirmPendingDeposit error:", err);
+    await showAlertModal("서버 연결에 실패했습니다.");
     btn.disabled = false;
   }
 }
