@@ -72,11 +72,12 @@ class DepositHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    amount = Column(Integer, nullable=False)
-    deposit_type = Column(String(30), nullable=False) # ADMIN_MANUAL, BANK_TRANSFER (과거 데이터에 TOSS_DEEPLINK/KAKAOPAY_DEEPLINK가 남아 있을 수 있음)
+    amount = Column(Integer, nullable=False) # 차감(ADMIN_MANUAL_DEDUCT)은 음수로 저장
+    deposit_type = Column(String(30), nullable=False) # ADMIN_MANUAL, ADMIN_MANUAL_DEDUCT, BANK_TRANSFER (과거 데이터에 TOSS_DEEPLINK/KAKAOPAY_DEEPLINK가 남아 있을 수 있음)
     transaction_id = Column(String(100), nullable=True, index=True)
     admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     memo = Column(String(200), nullable=True)
+    balance_after = Column(Integer, nullable=True) # 반영 시점의 회원 잔액 스냅샷(#19 이력 카드 우하단 표시용)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User", foreign_keys=[user_id], back_populates="deposits")

@@ -79,6 +79,12 @@ class AdminRechargeRequest(BaseModel):
     amount: int = Field(gt=0)
     memo: Optional[str] = "관리자 직권 충전"
 
+# Admin Credit Manual Deduct (환불/오충전 정정 등 - amount는 양수만 받고 서버에서 차감)
+class AdminDeductRequest(BaseModel):
+    user_id: int
+    amount: int = Field(gt=0)
+    memo: Optional[str] = "관리자 직권 차감"
+
 # NFC/QR Card Schemas
 class KioskDeviceSync(BaseModel):
     device_uuid: str
@@ -219,6 +225,7 @@ class DepositHistoryResponse(BaseModel):
     deposit_type: str
     transaction_id: Optional[str] = None
     memo: Optional[str]
+    balance_after: Optional[int] = None
     created_at: UTCDatetime
 
     class Config:

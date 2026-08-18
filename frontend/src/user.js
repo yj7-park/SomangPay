@@ -362,11 +362,21 @@ async function copyAccountNumber(btn) {
 // PENDING 건은 "이용 내역" 목록이 아니라 메인 카드 바로 아래 별도 강조 카드
 // (#pending-deposit-card, renderPendingDepositCard)로 분리해서 보여준다(#18) -
 // 처리해야 할 일과 지난 기록이 한 목록에 섞이면 뭘 눌러야 하는지 구분이 안 됐다(#14).
-const DEPOSIT_STATUS_LABEL = {
-  CREDITED: { text: "충전 완료", cls: "status-done" },
-  CREDITED_MANUAL: { text: "충전 완료(관리자 처리)", cls: "status-done" },
-  OTHER: { text: "처리 보류(관리자 문의)", cls: "status-rejected" },
-};
+// 좌상단 종류 배지 - 실제 크레딧 반영 여부와 무관하게 "충전"으로 뭉뚱그리면 미반영건(OTHER)이
+// 충전된 것처럼 보이므로 그 경우만 "보류"로 따로 표시한다(#19).
+function depositTypeInfo(d) {
+  if (d.status === "OTHER") return { text: "보류", cls: "status-rejected" };
+  return { text: "충전", cls: "status-done" };
+}
+
+// 좌하단 사유 - 백엔드가 DepositHistory.memo에 남기는 문구와 맞춰 자기 확인/관리자 대신
+// 처리/보류 사유를 구분한다(main.py의 claim_bank_transaction / admin_resolve_bank_transaction 참고).
+function depositReason(d) {
+  if (d.status === "CREDITED") return "본인 확인 후 충전";
+  if (d.status === "CREDITED_MANUAL") return d.resolution_memo || "관리자가 대신 충전 처리";
+  if (d.status === "OTHER") return d.resolution_memo || "처리 보류(관리자 문의)";
+  return "-";
+}
 
 let _myDeposits = [];
 let _myPayments = [];
@@ -388,45 +398,51 @@ async function loadMyDeposits() {
   }
 }
 
+// 이력 카드 레이아웃(#19): 좌상단 종류 배지 + 날짜, 좌하단 사유, 우상단 금액, 우하단 잔액.
+// 어드민 회원상세의 renderDetailHistory()와 동일한 마크업/클래스(.history-item*)를 쓴다.
 function depositRowHtml(d) {
-  const label = DEPOSIT_STATUS_LABEL[d.status] || { text: d.status, cls: "status-pending" };
+  const type = depositTypeInfo(d);
+  const amountCls = type.text === "보류" ? "amount-neutral" : "amount-positive";
+  const amountText = type.text === "보류" ? `${d.amount.toLocaleString()}원` : `+${d.amount.toLocaleString()}원`;
   return `
-    <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
-      <div>
-        <div style="font-size: 0.88rem; color: var(--text-muted);">${new Date(d.created_at).toLocaleString()}</div>
-        <span class="activity-status ${label.cls}">${label.text}</span>
+    <div class="history-item">
+      <div class="history-item-left">
+        <div class="history-item-top">
+          <span class="activity-status ${type.cls}">${type.text}</span>
+          <span class="history-item-date">${new Date(d.created_at).toLocaleString()}</span>
+        </div>
+        <div class="history-item-reason">${escapeHtml(depositReason(d))}</div>
       </div>
-      <div style="text-align: right; flex-shrink: 0;">
-        <div style="font-weight: 800; color: var(--accent-emerald); font-size: 1.05rem;">+${d.amount.toLocaleString()}원</div>
-        ${d.balance_after != null ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">잔액 ${d.balance_after.toLocaleString()}원</div>` : ""}
+      <div class="history-item-right">
+        <div class="history-item-amount ${amountCls}">${amountText}</div>
+        ${d.balance_after != null ? `<div class="history-item-balance">잔액 ${d.balance_after.toLocaleString()}원</div>` : ""}
       </div>
     </div>
   `;
 }
 
-// SUCCESS는 status-done(초록, 충전 완료와 동일)이 아니라 status-payment(파랑)를 써서
-// 지난 내역에서 충전 완료와 결제 완료가 한눈에 구분되게 한다(#17).
-const PAYMENT_STATUS_LABEL = {
-  SUCCESS: { text: "결제 완료", cls: "status-payment" },
-  FAILED: { text: "결제 실패", cls: "status-rejected" },
-};
-
 // 회원 본인의 키오스크 결제 내역(#15) - 충전과 반대로 잔액이 빠져나간 건이라 지난 내역
-// 안에서 금액을 빨간색 마이너스로 표시해 충전(+)과 한눈에 구분되게 한다.
+// 안에서 금액을 빨간색 마이너스로 표시해 충전(+)과 한눈에 구분되게 한다. SUCCESS는
+// status-done(초록, 충전 완료와 동일)이 아니라 status-payment(파랑)를 써서 충전 완료와도
+// 구분되고(#17), FAILED는 실제 차감이 없었던 시도이므로 별도의 "실패" 종류로 나눈다(#19).
 function paymentRowHtml(p) {
-  const label = PAYMENT_STATUS_LABEL[p.status] || { text: p.status, cls: "status-pending" };
-  const sub = [p.kiosk_name, p.product_details].filter(Boolean).map(escapeHtml).join(" · ");
-  const failureNote = p.status === "FAILED" && p.failure_reason ? ` (${escapeHtml(p.failure_reason)})` : "";
+  const isFailed = p.status === "FAILED";
+  const type = isFailed ? { text: "실패", cls: "status-rejected" } : { text: "결제", cls: "status-payment" };
+  const reason = isFailed
+    ? (p.failure_reason || "결제 실패")
+    : ([p.kiosk_name, p.product_details].filter(Boolean).join(" · ") || "-");
   return `
-    <div style="background: var(--surface-2); border-radius: 10px; padding: 0.8rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
-      <div style="min-width: 0;">
-        <div style="font-size: 0.88rem; color: var(--text-muted);">${new Date(p.created_at).toLocaleString()}</div>
-        <span class="activity-status ${label.cls}">${label.text}${failureNote}</span>
-        ${sub ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${sub}</div>` : ""}
+    <div class="history-item">
+      <div class="history-item-left">
+        <div class="history-item-top">
+          <span class="activity-status ${type.cls}">${type.text}</span>
+          <span class="history-item-date">${new Date(p.created_at).toLocaleString()}</span>
+        </div>
+        <div class="history-item-reason">${escapeHtml(reason)}</div>
       </div>
-      <div style="text-align: right; flex-shrink: 0;">
-        <div style="font-weight: 800; color: ${p.status === "SUCCESS" ? "var(--accent-danger)" : "var(--text-muted)"}; font-size: 1.05rem;">-${p.amount.toLocaleString()}원</div>
-        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem;">잔액 ${p.balance_after.toLocaleString()}원</div>
+      <div class="history-item-right">
+        <div class="history-item-amount ${isFailed ? "amount-neutral" : "amount-negative"}">-${p.amount.toLocaleString()}원</div>
+        <div class="history-item-balance">잔액 ${p.balance_after.toLocaleString()}원</div>
       </div>
     </div>
   `;

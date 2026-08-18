@@ -1280,6 +1280,48 @@ async function submitDetailRecharge(btn) {
   });
 }
 
+async function submitDetailDeduct(btn) {
+  const amount = parseInt(document.getElementById("detail-deduct-amount").value);
+  const memo = document.getElementById("detail-deduct-memo").value;
+
+  if (!amount || amount <= 0) {
+    await showAlertModal("차감 금액을 올바르게 입력하세요.");
+    return;
+  }
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/deduct-credit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: currentDetailUserId,
+          amount: amount,
+          memo: memo || "관리자 직권 차감"
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await showAlertModal(data.message);
+        document.getElementById("detail-deduct-memo").value = "";
+        await loadAdminUsers();
+        await loadDepositHistories();
+        await loadStatsSummary();
+        renderMemberDetail();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await showAlertModal(`차감 실패: ${data.detail ? JSON.stringify(data.detail) : '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("Detail deduct error:", err);
+    }
+  });
+}
+
+// 이력 카드 레이아웃(#19): 좌상단 종류 배지(충전/결제/실패) + 날짜, 좌하단 사유(충전 메모 /
+// 결제 목록 / 실패 사유), 우상단 금액(+/-), 우하단 잔액. 유저 앱 이용 내역(user.js의
+// depositRowHtml/paymentRowHtml)과 동일한 .history-item* 마크업/클래스를 쓴다.
 async function renderDetailHistory() {
   const box = document.getElementById("detail-history-list");
   if (!box) return;
@@ -1287,14 +1329,29 @@ async function renderDetailHistory() {
 
   const deposits = depositHistories
     .filter(h => h.user_id === currentDetailUserId)
-    .map(h => ({ type: "충전", amount: h.amount, label: h.deposit_type, memo: h.memo, created_at: h.created_at }));
+    .map(h => {
+      const isDeduct = h.deposit_type === "ADMIN_MANUAL_DEDUCT";
+      return {
+        type: isDeduct ? "차감" : "충전", cls: isDeduct ? "status-rejected" : "status-done",
+        amount: h.amount, balance_after: h.balance_after,
+        reason: h.memo || (isDeduct ? "관리자 직권 차감" : "관리자 직권 충전"), created_at: h.created_at,
+      };
+    });
 
   let payments = [];
   try {
     const res = await adminFetch(`${API_BASE}/payments?user_id=${currentDetailUserId}&limit=20`);
     if (res.ok) {
       const txs = await res.json();
-      payments = txs.map(t => ({ type: "결제", amount: -t.amount, label: t.status, memo: t.product_details, created_at: t.created_at }));
+      payments = txs.map(t => {
+        const isFailed = t.status === "FAILED";
+        return {
+          type: isFailed ? "실패" : "결제", cls: isFailed ? "status-rejected" : "status-payment",
+          amount: -t.amount, balance_after: t.balance_after,
+          reason: isFailed ? (t.failure_reason || "결제 실패") : (t.product_details || "-"),
+          created_at: t.created_at,
+        };
+      });
     }
   } catch (err) {
     console.error("Failed to load payment history:", err);
@@ -1307,16 +1364,24 @@ async function renderDetailHistory() {
     return;
   }
 
-  box.innerHTML = combined.slice(0, 30).map(h => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0; border-bottom: 1px solid var(--border-glass);">
-      <div>
-        <span class="badge-tag ${h.type === '충전' ? 'badge-general' : 'badge-senior'}" style="font-size:0.68rem;">${h.type}</span>
-        <span style="margin-left: 0.4rem; color: var(--text-muted); font-size: 0.78rem;">${new Date(h.created_at).toLocaleString()}</span>
-        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.1rem;">${h.memo || h.label || '-'}</div>
+  box.innerHTML = combined.slice(0, 30).map(h => {
+    const amountCls = h.type === "실패" ? "amount-neutral" : (h.amount >= 0 ? "amount-positive" : "amount-negative");
+    return `
+    <div class="history-item">
+      <div class="history-item-left">
+        <div class="history-item-top">
+          <span class="activity-status ${h.cls}">${h.type}</span>
+          <span class="history-item-date">${new Date(h.created_at).toLocaleString()}</span>
+        </div>
+        <div class="history-item-reason">${escapeHtml(h.reason)}</div>
       </div>
-      <div style="font-weight: 800; color: ${h.amount >= 0 ? 'var(--accent-emerald)' : 'var(--accent-danger)'};">${h.amount >= 0 ? '+' : ''}${h.amount.toLocaleString()}원</div>
+      <div class="history-item-right">
+        <div class="history-item-amount ${amountCls}">${h.amount >= 0 ? '+' : ''}${h.amount.toLocaleString()}원</div>
+        ${h.balance_after != null ? `<div class="history-item-balance">잔액 ${h.balance_after.toLocaleString()}원</div>` : ""}
+      </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 // ============ 계좌 입금 목록 (충전함 - 전체) ============

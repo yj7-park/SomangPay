@@ -296,6 +296,7 @@ async def admin_register_user(
             deposit_type="ADMIN_MANUAL",
             memo="신규 등록 관리자 직권 초기 충전",
             admin_id=admin.id,
+            balance_after=new_user.credit_balance,
         ))
         db.commit()
 
@@ -365,6 +366,7 @@ async def admin_recharge_credit(
         deposit_type="ADMIN_MANUAL",
         memo=req.memo or "관리자 직권 충전",
         admin_id=admin.id,
+        balance_after=user.credit_balance,
     ))
     db.commit()
     db.refresh(user)
@@ -374,6 +376,39 @@ async def admin_recharge_credit(
     return {
         "success": True,
         "message": f"{user.name}님에게 {req.amount:,}원이 충전되었습니다.",
+        "new_balance": user.credit_balance
+    }
+
+@app.post("/api/admin/deduct-credit")
+async def admin_deduct_credit(
+    req: schemas.AdminDeductRequest,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 수동 직권 크레딧 차감 API (오충전 정정, 환불 등). 잔액 부족 시 거부한다."""
+    user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+    if user.credit_balance < req.amount:
+        raise HTTPException(status_code=400, detail=f"잔액이 부족합니다. (현재 잔액 {user.credit_balance:,}원)")
+
+    user.credit_balance -= req.amount
+    db.add(models.DepositHistory(
+        user_id=user.id,
+        amount=-req.amount,
+        deposit_type="ADMIN_MANUAL_DEDUCT",
+        memo=req.memo or "관리자 직권 차감",
+        admin_id=admin.id,
+        balance_after=user.credit_balance,
+    ))
+    db.commit()
+    db.refresh(user)
+
+    await notify_admins(["users", "stats", "deposits"])
+    await notify_user(user.id, ["me"])
+    return {
+        "success": True,
+        "message": f"{user.name}님의 잔액에서 {req.amount:,}원이 차감되었습니다.",
         "new_balance": user.credit_balance
     }
 
@@ -867,6 +902,7 @@ async def claim_bank_transaction(
         amount=txn.amount,
         deposit_type="BANK_TRANSFER",
         memo="회원 본인 확인 후 충전",
+        balance_after=user.credit_balance,
     ))
     db.commit()
     db.refresh(user)
@@ -972,6 +1008,7 @@ async def admin_resolve_bank_transaction(
         deposit_type="BANK_TRANSFER",
         memo=req.memo or "관리자가 회원을 지정해 대신 충전 처리",
         admin_id=admin.id,
+        balance_after=user.credit_balance,
     ))
     db.commit()
     db.refresh(txn)

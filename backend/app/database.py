@@ -70,6 +70,9 @@ def init_db():
 
         # 이력 카드에 "처리 후 잔액" 표시(#18) - 충전이 실제 반영된 시점의 잔액 스냅샷
         _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS balance_after INTEGER;", "bank_transactions.balance_after")
+
+        # 어드민 회원상세 이력 카드에도 동일하게 "처리 후 잔액" 표시(#19)
+        _run_migration_step(db, "ALTER TABLE deposit_histories ADD COLUMN IF NOT EXISTS balance_after INTEGER;", "deposit_histories.balance_after")
     finally:
         db.close()
 

@@ -937,6 +937,66 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   padding: 0.2rem 0.6rem;
 }
 
+/* 충전/결제 통합 이력 카드 - 어드민 회원상세와 유저 앱 이용내역이 동일한 레이아웃을
+   쓴다(#19): 좌상단 종류 배지, 좌하단 사유(충전 메모/실패 사유/결제 목록), 우상단
+   금액(+/-), 우하단 잔액. */
+.history-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+}
+.history-item-left {
+  min-width: 0;
+}
+.history-item-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.history-item-top .activity-status {
+  margin-top: 0;
+}
+.history-item-date {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.history-item-reason {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-item-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+.history-item-amount {
+  font-weight: 800;
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+.history-item-amount.amount-positive {
+  color: var(--accent-emerald);
+}
+.history-item-amount.amount-negative {
+  color: var(--accent-danger);
+}
+.history-item-amount.amount-neutral {
+  color: var(--text-muted);
+}
+.history-item-balance {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
 /* Member detail view (회원 상세 - 트위터 프로필 페이지 격) */
 .detail-header {
   display: flex;
