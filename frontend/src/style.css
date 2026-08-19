@@ -607,9 +607,68 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   display: block;
 }
 
-/* 검색어가 입력된 상태에서는 돋보기 아이콘 버튼에 밑줄로 필터가 걸려있음을 표시한다(#26) */
-#member-search-toggle.filter-active {
-  border-bottom: 2px solid var(--accent-cyan);
+/* 검색어가 입력된 상태에서는 돋보기 아이콘 버튼 아래에 작은 점을 찍어 필터가 걸려있음을
+   표시한다(#26) - 하단 탭바 활성 표시(.admin-tab-btn.active::after, instagram-theme.css)와
+   같은 패턴. */
+#member-search-toggle {
+  position: relative;
+}
+#member-search-toggle.filter-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+}
+
+/* 검색어 입력칸 - 입력값이 있을 때만 오른쪽 끝에 X(지우기) 버튼을 겹쳐 보여준다(#26) */
+.member-search-input-wrap {
+  position: relative;
+  margin-bottom: 0.8rem;
+}
+.member-search-input-wrap .form-control {
+  margin-bottom: 0;
+  padding-right: 2.2rem;
+}
+.member-search-clear-btn {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.member-search-input-wrap.has-value .member-search-clear-btn {
+  display: flex;
+}
+
+/* 필터가 걸린 상태에서 목록 맨 위에 뜨는 "필터 해제" 버튼(#26) */
+.member-search-clear-filter {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+  background: rgba(103,129,192,0.1);
+  border: 1px dashed var(--accent-cyan);
+  border-radius: var(--radius-md);
+  color: var(--accent-cyan);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* admin.js의 showToast()가 #admin-toast를 만들어 .show 클래스로 토글하는데, 지금까지 이

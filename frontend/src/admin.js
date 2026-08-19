@@ -1041,22 +1041,38 @@ document.addEventListener("click", (e) => {
   panel.classList.remove("open");
 });
 
+// 입력칸 오른쪽 X 버튼(#26) - 검색어를 지우고 목록/하이라이팅을 원래대로 되돌린다.
+function clearMemberSearchInput() {
+  const input = document.getElementById("member-search-input");
+  if (!input) return;
+  input.value = "";
+  renderMemberFeed();
+  input.focus();
+}
+
 function renderMemberFeed() {
   const feed = document.getElementById("search-member-feed");
   if (!feed) return;
   const query = (document.getElementById("member-search-input")?.value || "").trim().toLowerCase();
   document.getElementById("member-search-toggle")?.classList.toggle("filter-active", !!query);
+  document.getElementById("member-search-input-wrap")?.classList.toggle("has-value", !!query);
 
   const filtered = !query ? users : users.filter(u => {
     const haystack = [u.name, u.phone].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(query);
   });
 
-  feed.innerHTML = "";
+  // 필터가 걸려 있으면 목록 맨 위에 "필터 해제" 버튼을 둔다(#26) - 검색 패널을 다시 열지
+  // 않고도 목록만 빠르게 전체로 되돌릴 수 있게.
+  const clearFilterHtml = query
+    ? `<button type="button" class="member-search-clear-filter" onclick="clearMemberSearchInput()">필터 해제 (${filtered.length}건 검색됨)</button>`
+    : "";
+
   if (filtered.length === 0) {
-    feed.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 2rem 0;">${query ? '검색 결과가 없습니다.' : '등록된 회원이 없습니다.'}</p>`;
+    feed.innerHTML = clearFilterHtml + `<p style="text-align:center; color: var(--text-muted); padding: 2rem 0;">${query ? '검색 결과가 없습니다.' : '등록된 회원이 없습니다.'}</p>`;
     return;
   }
+  feed.innerHTML = clearFilterHtml;
   filtered.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
 }
 
