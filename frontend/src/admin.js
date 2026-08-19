@@ -23,6 +23,8 @@ const ICON_SVGS = {
   "chevron-down": '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   trash: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
   x: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  plus: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  minus: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>',
 };
 function icon(name) {
   return ICON_SVGS[name] || "";
@@ -1240,17 +1242,24 @@ function renderMemberDetail() {
   document.getElementById("detail-member-phone").innerText = user.phone || "-";
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
 
-  const statusBtn = document.getElementById("detail-status-btn");
+  renderDetailCardSlots();
+  renderDetailHistory();
+}
+
+// #27: 정지/삭제가 정보수정 모달 안으로 옮겨가면서, 계정 정지 버튼 상태(라벨/색/비활성화)는
+// 모달을 열 때(openEditUserModal)와 정지 토글 성공 직후(모달을 닫지 않고 바로 반영) 둘 다에서
+// 갱신해야 해 별도 함수로 뺐다.
+function renderEditModalStatusButton(user) {
+  const statusBtn = document.getElementById("edit-user-status-btn");
+  if (!statusBtn) return;
+  const isActive = user.status === "ACTIVE";
   const isAdminUser = user.role === "ADMIN";
-  statusBtn.innerText = isActive ? "정지" : "재활성화";
-  statusBtn.style.background = isActive ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)";
-  statusBtn.style.color = isActive ? "#fca5a5" : "#6ee7b7";
+  statusBtn.innerText = isActive ? "계정 정지" : "계정 활성";
+  statusBtn.style.background = isActive ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)";
+  statusBtn.style.color = isActive ? "var(--icon-danger)" : "var(--accent-emerald)";
   statusBtn.disabled = isActive && isAdminUser;
   statusBtn.style.opacity = statusBtn.disabled ? "0.4" : "1";
   statusBtn.title = statusBtn.disabled ? "관리자 계정은 정지할 수 없습니다." : "";
-
-  renderDetailCardSlots();
-  renderDetailHistory();
 }
 
 // 잔액이 남아있어도 삭제는 허용한다(관리자의 명시적 선택). 다만 결제/입금/충전 이력이
@@ -1265,6 +1274,7 @@ async function deleteDetailUser() {
     const res = await adminFetch(`${API_BASE}/admin/users/${currentDetailUserId}`, { method: "DELETE" });
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
+      closeEditUserModal();
       closeMemberDetail();
       await loadAdminUsers();
       await loadStatsSummary();
@@ -1297,8 +1307,7 @@ function renderCardSlot(cardType, containerId, label) {
           <div class="card-slot-uid">${card.card_uid}</div>
         </div>
         <div style="display:flex; gap:0.4rem;">
-          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: rgba(59,130,246,0.2); color:#93c5fd;" onclick="openScannerModal('REGISTER', {userId: currentDetailUserId, cardType: '${cardType}'})">교체</button>
-          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: rgba(239,68,68,0.2); color:#fca5a5;" onclick="deleteDetailCard(${card.id})">삭제</button>
+          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: rgba(239,68,68,0.2); color: var(--icon-danger);" onclick="deleteDetailCard(${card.id})">삭제</button>
         </div>
       </div>
     `;
@@ -1332,7 +1341,7 @@ async function toggleDetailUserStatus() {
   const user = users.find(u => u.id === currentDetailUserId);
   if (!user) return;
   const newStatus = user.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-  const label = newStatus === "SUSPENDED" ? "정지" : "재활성화";
+  const label = newStatus === "SUSPENDED" ? "정지" : "활성화";
   if (!(await showConfirmModal(`${user.name}님을 ${label}하시겠습니까? 정지된 회원은 즉시 결제가 차단됩니다.`))) return;
 
   try {
@@ -1344,6 +1353,8 @@ async function toggleDetailUserStatus() {
     if (res.ok) {
       await loadAdminUsers();
       renderMemberDetail();
+      const updatedUser = users.find(u => u.id === user.id);
+      if (updatedUser) renderEditModalStatusButton(updatedUser);
     } else {
       const data = await res.json().catch(() => ({}));
       await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
@@ -1351,6 +1362,15 @@ async function toggleDetailUserStatus() {
   } catch (err) {
     console.error("toggleDetailUserStatus error:", err);
   }
+}
+
+function openDetailRechargeModal() {
+  document.getElementById("detail-recharge-amount").value = 5000;
+  document.getElementById("detail-recharge-memo").value = "";
+  showModal("detail-recharge-modal");
+}
+function closeDetailRechargeModal() {
+  hideModal("detail-recharge-modal");
 }
 
 async function submitDetailRecharge(btn) {
@@ -1370,14 +1390,14 @@ async function submitDetailRecharge(btn) {
         body: JSON.stringify({
           user_id: currentDetailUserId,
           amount: amount,
-          memo: memo || "관리자 직권 충전"
+          memo: memo || "현금 수령 후 충전 처리"
         })
       });
 
       if (res.ok) {
         const data = await res.json();
+        closeDetailRechargeModal();
         await showAlertModal(data.message);
-        document.getElementById("detail-recharge-memo").value = "";
         await loadAdminUsers();
         await loadDepositHistories();
         await loadStatsSummary();
@@ -1390,6 +1410,15 @@ async function submitDetailRecharge(btn) {
       console.error("Detail recharge error:", err);
     }
   });
+}
+
+function openDetailDeductModal() {
+  document.getElementById("detail-deduct-amount").value = 5000;
+  document.getElementById("detail-deduct-memo").value = "";
+  showModal("detail-deduct-modal");
+}
+function closeDetailDeductModal() {
+  hideModal("detail-deduct-modal");
 }
 
 async function submitDetailDeduct(btn) {
@@ -1409,14 +1438,14 @@ async function submitDetailDeduct(btn) {
         body: JSON.stringify({
           user_id: currentDetailUserId,
           amount: amount,
-          memo: memo || "관리자 직권 차감"
+          memo: memo || "잘못 충전됨"
         })
       });
 
       if (res.ok) {
         const data = await res.json();
+        closeDetailDeductModal();
         await showAlertModal(data.message);
-        document.getElementById("detail-deduct-memo").value = "";
         await loadAdminUsers();
         await loadDepositHistories();
         await loadStatsSummary();
@@ -2191,6 +2220,7 @@ function openEditUserModal(userId) {
   document.getElementById("edit-user-type").value = user.user_type === "SENIOR" ? "SENIOR" : "GENERAL";
   document.getElementById("edit-user-birth-date").value = user.birth_date || "";
   document.getElementById("edit-user-password").value = "";
+  renderEditModalStatusButton(user);
 
   showModal("admin-user-edit-modal");
 }
