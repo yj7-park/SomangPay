@@ -57,6 +57,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private Button qrCameraFlipButton;
     private static final String QR_PREFS_NAME = "somang_qr_prefs";
     private static final String QR_PREF_FRONT_CAMERA = "qr_front_camera";
+    private static final String NOTIF_ACCESS_PREFS_NAME = "somang_notif_access_prefs";
+    private static final String NOTIF_ACCESS_PROMPTED_KEY = "notif_access_prompted";
 
     // DepositAutoDetector가 입금 문자/알림을 처리(등록/필터링/실패 등)하고 나서, 지금
     // 액티비티/웹뷰가 살아있으면 바로 결과를 웹의 "수신 로그"로 보여줄 수 있도록 약한 참조로
@@ -208,9 +210,19 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
                     () -> DepositAutoDetector.drainLogQueue(this, MainActivity::deliverNativeLogToWebIfAlive), 3000);
 
             // 4. 입금 알림 자동감지(2번째 경로) - BankNotificationListener. "알림 접근" 권한은
-            // RECEIVE_SMS와 달리 requestPermissions()로 팝업을 띄울 수 없어 여기서 자동 요청하지
-            // 않는다 - 웹 UI(설정 탭)가 isNotificationAccessGranted()로 현재 상태를 보여주고,
-            // 꺼져있으면 openNotificationAccessSettings()로 관리자가 직접 설정 화면에서 켜게 한다.
+            // RECEIVE_SMS와 달리 requestPermissions()로 팝업을 띄울 수 없다 - Android가 모든 앱의
+            // 알림 내용을 통째로 읽을 수 있는 특수 권한이라 설치 시점 팝업 자체가 없고, 반드시
+            // 사용자가 설정 화면에서 직접 켜야 한다. "설치할 때 허용되어 상시 유지"에 최대한
+            // 가깝게 만들기 위해, 최초 실행 1회에 한해 그 설정 화면을 자동으로 띄운다(매 실행마다
+            // 뜨면 방해가 되므로 SharedPreferences로 1회만). 이후에는 웹 설정 탭의 "권한 설정
+            // 열기" 버튼으로만 다시 접근한다.
+            boolean notifAccessAlreadyPrompted = getSharedPreferences(NOTIF_ACCESS_PREFS_NAME, MODE_PRIVATE)
+                    .getBoolean(NOTIF_ACCESS_PROMPTED_KEY, false);
+            if (!isNotificationAccessGranted() && !notifAccessAlreadyPrompted) {
+                getSharedPreferences(NOTIF_ACCESS_PREFS_NAME, MODE_PRIVATE)
+                        .edit().putBoolean(NOTIF_ACCESS_PROMPTED_KEY, true).apply();
+                mainHandler.postDelayed(this::openNotificationAccessSettings, 1500);
+            }
         }
 
         // TTS 엔진 초기화

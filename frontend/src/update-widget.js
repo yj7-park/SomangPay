@@ -201,5 +201,12 @@
     setStatusText(message || "업데이트 중 오류가 발생했습니다.", true);
   };
 
+  // admin.html "앱 버전" 행의 새로고침 버튼 - 모달을 열지 않고 바로 업데이트를 확인한다.
+  window.triggerAppVersionRefresh = function () {
+    if (!hasAndroidUpdateBridge()) return;
+    refreshVersionInfoFromNative();
+    triggerManualCheck();
+  };
+
   document.addEventListener("DOMContentLoaded", initUpdateWidget);
 })();

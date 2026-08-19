@@ -151,7 +151,10 @@
             <h3 style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 0.4rem;">
               <span data-icon="refresh" style="color: var(--accent-cyan);"></span>앱 버전
             </h3>
-            <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+              <button type="button" class="icon-plain-btn" title="업데이트 확인" aria-label="업데이트 확인" onclick="triggerAppVersionRefresh()"><span data-icon="refresh"></span></button>
+            </div>
           </div>
 
           <div id="app-download-links" style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
@@ -169,15 +172,6 @@
             </div>
           </div>
 
-          <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">다른 화면으로 이동</div>
-            <nav class="nav-pills">
-              <a href="kiosk.html" class="nav-item">키오스크</a>
-              <a href="user.html" class="nav-item">회원 PWA</a>
-              <a href="admin.html" class="nav-item active">관리자</a>
-            </nav>
-          </div>
-
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
             <span style="font-size: 0.8rem; color: var(--text-muted);">화면 테마</span>
             <div style="display: flex; gap: 0.4rem; margin-left: auto;">
@@ -188,31 +182,13 @@
           </div>
         </div>
 
-        <div class="glass-container" style="padding: 1.5rem; border-color: var(--accent-cyan); margin-bottom: 1.5rem; background: rgba(103,129,192,0.06);">
-          <h2 style="color: var(--accent-cyan); font-size: 1.15rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span data-icon="bank"></span>계좌이체 입금 확인 등록
-          </h2>
-
-          <div class="admin-form-grid admin-form-grid-3">
-            <div>
-              <label class="form-label">입금자명 (통장 표시)</label>
-              <input type="text" id="sim-depositor-name" class="form-control" placeholder="예: 홍길동B" style="margin-bottom: 0;">
-            </div>
-            <div>
-              <label class="form-label">입금 금액 (원)</label>
-              <input type="number" id="sim-amount" class="form-control" value="10000" style="margin-bottom: 0;">
-            </div>
-            <button class="btn-action btn-emerald" style="height: 52px;" onclick="submitBankTransaction(this)">
-              입금 확인 등록
-            </button>
-          </div>
-        </div>
-
         <div class="glass-container" style="padding: 1.5rem;">
-          <h3 style="font-size: 1.05rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span data-icon="bell"></span>입금 알림 자동감지 설정 (문자 + RCS/푸시 알림)
+          <h3 id="dev-mode-toggle-header" style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: pointer;" onclick="toggleDevModeSection()">
+            <span style="display: flex; align-items: center; gap: 0.4rem;"><span data-icon="bell"></span>개발자 모드</span>
+            <span id="dev-mode-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
           </h3>
 
+          <div id="dev-mode-body" style="display: none; margin-top: 1rem;">
           <div class="admin-form-grid admin-form-grid-3" style="margin-bottom: 1rem;">
             <div>
               <label class="form-label">감지할 발신번호 / 발신자 (SMS 전용)</label>
@@ -289,6 +265,7 @@
               <button class="btn-action" style="width: auto; padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="clearSmsLog()">로그 지우기</button>
             </div>
             <div id="sms-log-list" class="sms-log-scroll"></div>
+          </div>
           </div>
         </div>
       </div>

@@ -1613,21 +1613,6 @@ async function registerBankTransaction(depositorName, amount, { externalTxnIdPre
   }
 }
 
-async function submitBankTransaction(btn) {
-  const depositorName = document.getElementById("sim-depositor-name").value.trim();
-  const amount = parseInt(document.getElementById("sim-amount").value);
-
-  if (!depositorName || !amount || amount <= 0) {
-    await showAlertModal("입금자명과 입금 금액을 입력하세요.");
-    return;
-  }
-
-  await withButtonLock(btn, async () => {
-    const ok = await registerBankTransaction(depositorName, amount, { externalTxnIdPrefix: "MANUAL" });
-    if (ok) document.getElementById("sim-depositor-name").value = "";
-  });
-}
-
 // ============ 계좌 입금 상세 모달 (회원 지정 처리 / 기타 처리) ============
 let _depositDetailTxn = null;
 let _depositDetailSelectedUserId = null;
@@ -1834,6 +1819,16 @@ function syncDetectSettingsToNative() {
   const pushPackage = (localStorage.getItem(SMS_DETECT_PUSH_PACKAGE_KEY) ?? SMS_DETECT_PUSH_PACKAGE_DEFAULT).trim();
   const pushTitle = (localStorage.getItem(SMS_DETECT_PUSH_TITLE_KEY) ?? SMS_DETECT_PUSH_TITLE_DEFAULT).trim();
   window.AndroidInterface.saveDetectSettings(sender, regexStr, pushPackage, pushTitle);
+}
+
+// ---------------- 개발자 모드 섹션 접기/펼치기 (기본은 접힌 상태) ----------------
+function toggleDevModeSection() {
+  const body = document.getElementById("dev-mode-body");
+  const arrow = document.getElementById("dev-mode-arrow");
+  if (!body) return;
+  const wasOpen = body.style.display !== "none";
+  body.style.display = wasOpen ? "none" : "block";
+  if (arrow) arrow.style.transform = wasOpen ? "rotate(0deg)" : "rotate(180deg)";
 }
 
 // ---------------- 알림 접근 권한 (BankNotificationListener용) ----------------
