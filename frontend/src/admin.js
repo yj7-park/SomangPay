@@ -451,6 +451,7 @@ function switchAdminScanMode(mode) {
   const qrBtn = document.getElementById("admin-mode-qr-btn");
   const nfcView = document.getElementById("admin-nfc-scan-view");
   const qrView = document.getElementById("admin-qr-scan-view");
+  const nativeGuide = document.getElementById("admin-qr-native-guide");
 
   if (mode === "NFC") {
     nfcBtn.className = "btn-action btn-primary";
@@ -459,7 +460,9 @@ function switchAdminScanMode(mode) {
     qrBtn.style.color = "var(--text-main)";
     nfcView.style.display = "block";
     qrView.style.display = "none";
+    if (nativeGuide) nativeGuide.style.display = "none";
     stopAdminCameraScanner();
+    stopNativeQrScanIfActive();
     initAdminNfcReader();
   } else {
     qrBtn.className = "btn-action btn-primary";
@@ -473,15 +476,17 @@ function switchAdminScanMode(mode) {
     const webPanel = document.getElementById("admin-qr-web-panel");
     if (hasNativeQrBridge()) {
       // http로 접속하는 관리자/회원 앱은 비보안 컨텍스트라 브라우저 getUserMedia(카메라)가
-      // OS 권한을 이미 줬어도 아예 막힌다 - 대신 네이티브 카메라 액티비티를 띄운다
-      // (window.onAndroidQrScanned로 결과가 돌아옴). "카메라 켜기" 버튼 없이 QR 모드로
-      // 전환하는 즉시 카메라가 뜨게 한다.
+      // OS 권한을 이미 줬어도 아예 막힌다 - 대신 네이티브 카메라를 이 점선 박스 안(전체화면이
+      // 아님)에 그대로 겹쳐서 띄운다(window.onAndroidQrScanned로 결과가 돌아옴). "카메라 켜기"
+      // 버튼 없이 QR 모드로 전환하는 즉시 카메라가 뜨게 한다.
       if (nativePanel) nativePanel.style.display = "block";
       if (webPanel) webPanel.style.display = "none";
-      window.AndroidInterface.startQrScan();
+      if (nativeGuide) nativeGuide.style.display = "block";
+      startNativeQrScanForCurrentViewport();
     } else {
       if (nativePanel) nativePanel.style.display = "none";
       if (webPanel) webPanel.style.display = "block";
+      if (nativeGuide) nativeGuide.style.display = "none";
       // "카메라 켜기" 버튼을 따로 누르지 않아도 QR 모드로 전환하는 즉시 카메라가 켜지게 한다.
       if (!adminCameraScanning) startAdminCameraScanner();
     }
@@ -493,6 +498,30 @@ function switchAdminScanMode(mode) {
 function hasNativeQrBridge() {
   return !!(window.AndroidInterface && typeof window.AndroidInterface.startQrScan === "function");
 }
+
+// 네이티브 카메라 프리뷰를 #admin-qr-native-camera-slot과 정확히 같은 화면 위치/크기에 겹쳐
+// 띄운다 - getBoundingClientRect()는 CSS px(WebView에서는 Android dp와 동일) 기준이라, 실 픽셀
+// 변환(density 곱셈)은 네이티브(MainActivity.startNativeQrScan) 쪽에서 처리한다.
+function startNativeQrScanForCurrentViewport() {
+  if (!hasNativeQrBridge()) return;
+  const slot = document.getElementById("admin-qr-native-camera-slot");
+  if (!slot) return;
+  const rect = slot.getBoundingClientRect();
+  window.AndroidInterface.startQrScan(rect.left, rect.top, rect.width, rect.height);
+}
+
+function stopNativeQrScanIfActive() {
+  if (window.AndroidInterface && typeof window.AndroidInterface.stopQrScan === "function") {
+    window.AndroidInterface.stopQrScan();
+  }
+}
+
+// 화면 회전 등으로 슬롯 위치/크기가 바뀌면 네이티브 카메라 프리뷰도 다시 맞춰준다.
+window.addEventListener("resize", () => {
+  const modal = document.getElementById("card-scanner-modal");
+  if (!modal || !modal.classList.contains("active") || adminScanMode !== "QR") return;
+  startNativeQrScanForCurrentViewport();
+});
 
 let adminCheckTimeout = null;
 
@@ -662,20 +691,18 @@ window.onKioskReaderError = function (message) {
   currentReaderMode = "NONE";
 };
 
-// 네이티브 QR 스캔(startNativeQrScan) 결과 콜백 - MainActivity.onActivityResult가 호출한다.
-// 함수명을 바꾸면 안 된다.
+// 네이티브 QR 스캔(startNativeQrScan) 결과 콜백 - MainActivity.onNativeQrDecoded가 호출한다.
+// 함수명을 바꾸면 안 된다. 카메라가 계속 켜져 있는 채로 프레임마다 계속 디코딩되므로(예전
+// 전체화면 1회성 스캔과 달리), 웹 카메라 경로(scanAdminQrFrame)와 동일한 쿨다운을 공유해
+// 같은 QR을 반복 인식해 진동/사운드가 연달아 울리지 않게 한다.
 window.onAndroidQrScanned = function (text) {
   const modal = document.getElementById("card-scanner-modal");
-  if (!modal || !modal.classList.contains("active")) return;
+  if (!modal || !modal.classList.contains("active") || adminQrCooldown) return;
+  adminQrCooldown = true;
   document.getElementById("admin-card-uid-input").value = text;
   triggerDetectionFeedback();
   console.log("⚡ [Android Native App] 네이티브 QR 스캔 성공:", text);
-};
-
-// 네이티브 스캔 화면에서 사용자가 뒤로가기 등으로 취소했을 때 - 별도 처리 없이 "다시 열기"
-// 버튼(admin-qr-native-panel)으로 재시도할 수 있어 여기서는 로그만 남긴다.
-window.onAndroidQrScanCancelled = function () {
-  console.log("ℹ️ [Android Native App] QR 스캔이 취소되었습니다.");
+  setTimeout(() => { adminQrCooldown = false; }, 2000);
 };
 
 // USB 키보드 에뮬레이션형 리더(드라이버 불필요, 태그 시 UID를 키 입력처럼 전송) 지원.
@@ -877,6 +904,7 @@ function openScannerModal(mode, context) {
 
 function closeScannerModal() {
   stopAdminCameraScanner();
+  stopNativeQrScanIfActive();
   hideModal("card-scanner-modal");
 }
 

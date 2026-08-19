@@ -478,14 +478,15 @@
         <!-- Mode 2: Camera QR Scanner View -->
         <div id="admin-qr-scan-view" style="display: none; width: 100%;">
 
-          <!-- 네이티브 앱(AndroidInterface.startQrScan 존재): 별도 카메라 액티비티가 뜨므로
-               여기는 안내 문구 + 재시도 버튼만 - http 접속(웹소켓 유지 목적)에서는 브라우저
-               getUserMedia가 비보안 컨텍스트라 아예 막혀 네이티브로 대체했다. -->
-          <div id="admin-qr-native-panel" style="display: none;">
-            <div style="font-size: 2.6rem; margin-bottom: 0.4rem; color: var(--accent-cyan);" data-icon="camera"></div>
-            <h4 style="font-size: 1rem; color: var(--accent-cyan); margin-bottom: 0.3rem;">카메라 화면에서 QR 코드를 비춰주세요</h4>
-            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">카메라 화면이 뜨지 않았다면 아래 버튼을 눌러 다시 열어주세요.</p>
-            <button class="btn-action btn-primary" style="padding: 0.4rem 0.9rem; font-size: 0.82rem;" onclick="window.AndroidInterface.startQrScan()">QR 스캔 다시 열기</button>
+          <!-- 네이티브 앱(AndroidInterface.startQrScan 존재): http 접속(웹소켓 유지 목적)에서는
+               브라우저 getUserMedia가 비보안 컨텍스트라 아예 막혀 네이티브 카메라를 대신 쓴다.
+               예전에는 전체화면 카메라 액티비티를 띄웠지만, 여기 슬롯(admin-qr-native-camera-slot)의
+               화면 좌표를 JS가 계산해 넘기면 네이티브가 그 위치/크기에 정확히 겹쳐서 카메라
+               프리뷰를 그린다(MainActivity.startNativeQrScan) - 전/후면 전환 버튼도 그 카메라 뷰
+               위에 보여야 해서 HTML이 아니라 네이티브 버튼으로 우상단에 함께 그려진다. 이 슬롯의
+               높이는 NFC 뷰(admin-nfc-scan-view)와 바깥 점선 박스 크기가 같아지도록 맞춘 값이다. -->
+          <div id="admin-qr-native-panel" style="display: none; width: 100%;">
+            <div id="admin-qr-native-camera-slot" style="width: 100%; min-height: 110px;"></div>
           </div>
 
           <!-- 일반 브라우저: 기존 getUserMedia 인라인 실시간 미리보기 -->
@@ -506,6 +507,10 @@
         </div>
 
       </div>
+
+      <!-- 네이티브 카메라 모드일 때만 표시 - 점선 박스 "아래쪽"에 안내 문구를 둔다(박스 안쪽은
+           카메라 프리뷰가 차지). -->
+      <p id="admin-qr-native-guide" style="display: none; font-size: 0.78rem; color: var(--text-muted); text-align: center; margin: -0.5rem 0 1rem;">카메라 화면에 QR 코드를 비춰주세요. 화면이 보이지 않는다면 <a href="#" onclick="startNativeQrScanForCurrentViewport(); return false;" style="color: var(--accent-cyan);">여기를 눌러 다시 시도</a>하세요.</p>
 
       <div class="modal-footer">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeScannerModal()">취소</button>

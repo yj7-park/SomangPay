@@ -5,23 +5,28 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.hardware.usb.UsbManager;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
+import android.graphics.Color;
+import android.hardware.Camera;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.webkit.JsResult;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import com.journeyapps.barcodescanner.BarcodeResult;
+import com.journeyapps.barcodescanner.DecoratedBarcodeView;
+import com.journeyapps.barcodescanner.camera.CameraSettings;
 import com.somangpay.kiosk.reader.CardReaderManager;
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
@@ -42,6 +47,16 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private CardReaderManager cardReaderManager;
     private UpdateManager updateManager;
     static TextToSpeech tts;
+
+    // 인라인(비-전체화면) 네이티브 QR 스캐너 - admin.html의 점선 박스(#admin-qr-native-camera-slot)
+    // 위치/크기에 맞춰 겹쳐 그려진다. cameraFlipButton도 같은 FrameLayout의 형제 뷰라 카메라
+    // 프리뷰 위로 정상적으로 그려진다(SurfaceView punch-through 문제 없음 - DecoratedBarcodeView가
+    // 이미 내부적으로 뷰파인더 오버레이를 같은 방식으로 그린다).
+    private FrameLayout rootLayout;
+    private DecoratedBarcodeView qrScannerView;
+    private Button qrCameraFlipButton;
+    private static final String QR_PREFS_NAME = "somang_qr_prefs";
+    private static final String QR_PREF_FRONT_CAMERA = "qr_front_camera";
 
     // DepositAutoDetector가 입금 문자/알림을 처리(등록/필터링/실패 등)하고 나서, 지금
     // 액티비티/웹뷰가 살아있으면 바로 결과를 웹의 "수신 로그"로 보여줄 수 있도록 약한 참조로
@@ -90,7 +105,29 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
             WebView.setWebContentsDebuggingEnabled(true);
         }
-        setContentView(webView);
+
+        // WebView 위에 인라인 QR 카메라 프리뷰 + 전환 버튼을 겹쳐 그리기 위한 루트 컨테이너.
+        // 두 뷰 모두 처음엔 크기 0/GONE 상태로 추가해두고, startNativeQrScan()이 JS가 넘겨준
+        // 화면 좌표로 위치/크기를 잡은 뒤 보여준다.
+        rootLayout = new FrameLayout(this);
+        rootLayout.addView(webView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        qrScannerView = new DecoratedBarcodeView(this);
+        qrScannerView.setVisibility(View.GONE);
+        rootLayout.addView(qrScannerView, new FrameLayout.LayoutParams(0, 0));
+
+        qrCameraFlipButton = new Button(this);
+        qrCameraFlipButton.setText("전환");
+        qrCameraFlipButton.setAllCaps(false);
+        qrCameraFlipButton.setTextColor(Color.WHITE);
+        qrCameraFlipButton.setBackgroundColor(Color.argb(160, 0, 0, 0));
+        qrCameraFlipButton.setVisibility(View.GONE);
+        qrCameraFlipButton.setOnClickListener(v -> flipNativeQrCamera());
+        rootLayout.addView(qrCameraFlipButton, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.LEFT));
+
+        setContentView(rootLayout);
 
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
@@ -203,6 +240,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             webView.onResume();
             webView.resumeTimers();
         }
+        if (qrScannerView != null && qrScannerView.getVisibility() == View.VISIBLE) {
+            qrScannerView.resume();
+        }
         cardReaderManager.onResume();
     }
 
@@ -212,6 +252,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         if (webView != null) {
             webView.onPause();
             webView.pauseTimers();
+        }
+        if (qrScannerView != null) {
+            qrScannerView.pause();
         }
         cardReaderManager.onPause();
     }
@@ -345,16 +388,17 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         return cardReaderManager.getCurrentModeName();
     }
 
-    // ============ 네이티브 QR 스캔 (zxing-android-embedded) ============
+    // ============ 인라인 네이티브 QR 스캔 (zxing-android-embedded, DecoratedBarcodeView 임베드) ============
     // 관리자/회원 앱은 http 대신 https로 접속하면 웹소켓(wss)이 WebView에서 막히는 문제 때문에
     // 계속 http로 접속한다 - 그런데 브라우저의 getUserMedia(웹 카메라 API)는 http 같은 "비보안
     // 컨텍스트"에서는 OS 카메라 권한을 이미 줬어도 아예 동작하지 않는다(별개의 제약). 그래서
-    // 웹 카메라 대신 이 네이티브 스캐너를 쓴다 - 별도 액티비티를 띄우고 그동안 MainActivity는
-    // onPause() 되면서 cardReaderManager.onPause()가 자동으로 호출돼 NFC 리더와 충돌하지 않는다
-    // (웹 카메라 플로우의 pauseReaderForCamera()/reenableNfcReader()와 동일한 효과를 별도 코드
-    // 없이 액티비티 생명주기만으로 얻는다). 일반 브라우저(AndroidInterface 없음)는 이 메서드
-    // 자체가 존재하지 않으므로 admin.js가 기존 getUserMedia 경로를 그대로 쓴다.
-    void startNativeQrScan() {
+    // 웹 카메라 대신 이 네이티브 스캐너를 쓴다. 예전에는 별도의 전체화면 CaptureActivity를
+    // 띄웠지만(#28), 그러면 WebView 뒤 화면 전체를 카메라가 덮어버려서 요청에 따라 대신
+    // DecoratedBarcodeView를 WebView와 같은 FrameLayout(rootLayout)의 형제 뷰로 두고, JS가
+    // getBoundingClientRect()로 넘겨준 #admin-qr-native-camera-slot의 화면 좌표에 정확히 겹쳐
+    // 그린다 - 별도 액티비티가 없으므로 화면 전환/뒤로가기 취소 개념 자체가 없다.
+    // 좌표는 CSS px(=dp) 단위로 오므로 density를 곱해 실 픽셀로 변환해야 한다.
+    void startNativeQrScan(double cssX, double cssY, double cssWidth, double cssHeight) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
                 && checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             new AlertDialog.Builder(this)
@@ -363,36 +407,111 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
                     .show();
             return;
         }
+        if (qrScannerView == null) return;
 
-        IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("QR 코드를 카메라에 비춰주세요");
-        integrator.setBeepEnabled(false);
-        integrator.setOrientationLocked(false);
-        integrator.initiateScan();
+        float density = getResources().getDisplayMetrics().density;
+        int x = Math.round((float) cssX * density);
+        int y = Math.round((float) cssY * density);
+        int width = Math.round((float) cssWidth * density);
+        int height = Math.round((float) cssHeight * density);
+        if (width <= 0 || height <= 0) return;
+
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) qrScannerView.getLayoutParams();
+        params.width = width;
+        params.height = height;
+        params.leftMargin = x;
+        params.topMargin = y;
+        params.gravity = Gravity.TOP | Gravity.LEFT;
+        qrScannerView.setLayoutParams(params);
+        qrScannerView.setVisibility(View.VISIBLE);
+
+        int buttonMargin = Math.round(6 * density);
+        FrameLayout.LayoutParams btnParams = (FrameLayout.LayoutParams) qrCameraFlipButton.getLayoutParams();
+        btnParams.leftMargin = x + width - buttonMargin; // 실제 폭은 wrap_content라 우측 정렬로 보정
+        btnParams.topMargin = y + buttonMargin;
+        btnParams.gravity = Gravity.TOP | Gravity.LEFT;
+        qrCameraFlipButton.setLayoutParams(btnParams);
+        qrCameraFlipButton.setVisibility(View.VISIBLE);
+        qrCameraFlipButton.bringToFront();
+        // wrap_content라 실제 폭을 모른 채로 leftMargin을 잡았으므로, 레이아웃 확정 후
+        // 실측 폭을 이용해 우측 끝에 정확히 붙도록 한 번 더 보정한다.
+        final int rightEdge = x + width - buttonMargin;
+        qrCameraFlipButton.post(() -> {
+            FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) qrCameraFlipButton.getLayoutParams();
+            p.leftMargin = rightEdge - qrCameraFlipButton.getWidth();
+            qrCameraFlipButton.setLayoutParams(p);
+        });
+
+        CameraSettings settings = new CameraSettings();
+        int camId = findCameraId(isNativeQrFrontFacing());
+        if (camId >= 0) settings.setRequestedCameraId(camId);
+        qrScannerView.setCameraSettings(settings);
+        qrScannerView.resume();
+        qrScannerView.decodeContinuous(result -> onNativeQrDecoded(result));
+
+        pauseCardReaderForCamera();
     }
 
-    // IntentIntegrator.parseActivityResult()가 requestCode를 자체 검사해 이 스캐너가 보낸
-    // 결과가 아니면 null을 반환하므로(라이브러리 표준 사용 패턴), 여기서 별도로 requestCode를
-    // 직접 비교할 필요가 없다.
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    private void onNativeQrDecoded(BarcodeResult result) {
+        String scannedText = result.getText();
+        if (scannedText == null || webView == null) return;
+        webView.evaluateJavascript(
+                "window.onAndroidQrScanned && window.onAndroidQrScanned("
+                        + org.json.JSONObject.quote(scannedText) + ");",
+                null);
+    }
 
-        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (result == null || webView == null) return;
-
-        String scannedText = result.getContents();
-        if (scannedText != null) {
-            webView.evaluateJavascript(
-                    "window.onAndroidQrScanned && window.onAndroidQrScanned("
-                            + org.json.JSONObject.quote(scannedText) + ");",
-                    null);
-        } else {
-            // 사용자가 뒤로가기 등으로 스캔을 취소한 경우 - 웹 쪽이 "카메라 켜기" 버튼 상태로
-            // 되돌릴 수 있게 알려준다.
-            webView.evaluateJavascript("window.onAndroidQrScanCancelled && window.onAndroidQrScanCancelled();", null);
+    // admin.js가 QR 모드를 벗어나거나(NFC 탭 전환, 모달 닫기) 화면이 파괴될 때 호출 -
+    // 카메라를 끄고 NFC 리더를 재활성화한다.
+    void stopNativeQrScan() {
+        if (qrScannerView != null) {
+            qrScannerView.pause();
+            qrScannerView.setVisibility(View.GONE);
         }
+        if (qrCameraFlipButton != null) {
+            qrCameraFlipButton.setVisibility(View.GONE);
+        }
+        if (cardReaderManager != null) {
+            cardReaderManager.evaluateAndActivate();
+        }
+    }
+
+    // 우상단 네이티브 "전환" 버튼(HTML이 아니라 네이티브 View인 이유는 클래스 상단 주석 참고) -
+    // 전/후면 선호도를 SharedPreferences에 저장해두고 같은 위치/크기로 카메라만 다시 연다.
+    private void flipNativeQrCamera() {
+        if (qrScannerView == null || qrScannerView.getVisibility() != View.VISIBLE) return;
+        setNativeQrFrontFacing(!isNativeQrFrontFacing());
+
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) qrScannerView.getLayoutParams();
+        float density = getResources().getDisplayMetrics().density;
+        startNativeQrScan(params.leftMargin / density, params.topMargin / density,
+                params.width / density, params.height / density);
+    }
+
+    private boolean isNativeQrFrontFacing() {
+        return getSharedPreferences(QR_PREFS_NAME, MODE_PRIVATE).getBoolean(QR_PREF_FRONT_CAMERA, false);
+    }
+
+    private void setNativeQrFrontFacing(boolean front) {
+        getSharedPreferences(QR_PREFS_NAME, MODE_PRIVATE).edit().putBoolean(QR_PREF_FRONT_CAMERA, front).apply();
+    }
+
+    // CameraSettings.setRequestedCameraId(int)는 카메라 ID를 그대로 받을 뿐 전/후면을 모르므로,
+    // Camera.CameraInfo로 실제 방향을 조회해 원하는 방향의 첫 카메라 ID를 찾는다(기기별 카메라
+    // 개수/열거 순서에 안전).
+    private int findCameraId(boolean front) {
+        try {
+            int count = Camera.getNumberOfCameras();
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            for (int i = 0; i < count; i++) {
+                Camera.getCameraInfo(i, info);
+                boolean isFront = info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT;
+                if (isFront == front) return i;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "findCameraId failed: " + e.getMessage());
+        }
+        return -1;
     }
 
     // 아래 업데이트 관련 메서드들은 모두 KioskWebAppInterface(JS 브릿지)의 위임 대상 -
@@ -683,9 +802,17 @@ class KioskWebAppInterface implements Runnable {
     // admin.js가 이 메서드의 존재 여부(typeof ... === "function")로 네이티브 QR 스캔 지원을
     // 감지한다 - 앱 안(이 브릿지가 있는 곳)에서는 이걸로 스캔하고, 일반 브라우저는 기존
     // getUserMedia 경로를 그대로 쓴다. 결과는 window.onAndroidQrScanned(text)로 돌아온다.
+    // x/y/width/height는 카메라를 겹쳐 그릴 #admin-qr-native-camera-slot의 화면 좌표(CSS px) -
+    // admin.js가 getBoundingClientRect()로 계산해 넘긴다.
     @android.webkit.JavascriptInterface
-    public void startQrScan() {
-        activity.runOnUiThread(activity::startNativeQrScan);
+    public void startQrScan(double x, double y, double width, double height) {
+        activity.runOnUiThread(() -> activity.startNativeQrScan(x, y, width, height));
+    }
+
+    // QR 모드를 벗어나거나(NFC 탭 전환, 모달 닫기) 카메라를 끌 때 admin.js가 호출.
+    @android.webkit.JavascriptInterface
+    public void stopQrScan() {
+        activity.runOnUiThread(activity::stopNativeQrScan);
     }
 
     // kiosk.js가 설정 버튼 옆 자물쇠 버튼을 이 값들로 켜고(kiosk 락다운 빌드일 때만) 아이콘을
