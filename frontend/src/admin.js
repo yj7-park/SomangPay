@@ -1030,10 +1030,22 @@ function toggleMemberSearchPanel() {
   }
 }
 
+// 패널 바깥(회원 카드, 탭바 등)을 누르면 드롭다운을 닫는다(#26) - 토글 버튼 클릭은
+// toggleMemberSearchPanel이 이미 처리하므로 여기서 다시 닫지 않도록 제외한다.
+document.addEventListener("click", (e) => {
+  if (!memberSearchOpen) return;
+  const panel = document.getElementById("member-search-panel");
+  const toggle = document.getElementById("member-search-toggle");
+  if (panel?.contains(e.target) || toggle?.contains(e.target)) return;
+  memberSearchOpen = false;
+  panel.classList.remove("open");
+});
+
 function renderMemberFeed() {
   const feed = document.getElementById("search-member-feed");
   if (!feed) return;
   const query = (document.getElementById("member-search-input")?.value || "").trim().toLowerCase();
+  document.getElementById("member-search-toggle")?.classList.toggle("filter-active", !!query);
 
   const filtered = !query ? users : users.filter(u => {
     const haystack = [u.name, u.phone].filter(Boolean).join(" ").toLowerCase();

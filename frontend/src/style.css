@@ -582,15 +582,17 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 
 /* 사용자 관리 탭 - 돋보기 버튼을 누르면 검색창/스캔 버튼 카드가 제목줄 바로 아래로
-   펼쳐지는 드롭다운(키오스크 선택기 .kiosk-selector-list와 같은 위치/느낌이지만, 폭이
-   좁은 선택 목록이 아니라 원래 검색 카드와 동일한 전체 폭/구성을 유지해야 해서 별도
-   클래스로 둔다). 부모 .kiosk-title-row가 이미 position:relative를 준다. */
+   펼쳐지는 드롭다운(키오스크 선택기 .kiosk-selector-list와 같은 위치/느낌). 화면 전체
+   폭을 덮으면 뒤 목록이 안 보여 답답하므로 절반 정도만 차지하고 돋보기 버튼 아래
+   우측에 붙인다(#26) - min-width는 "NFC/QR 검색" 버튼이 한 줄로 나올 최소 폭. 부모
+   .kiosk-title-row가 이미 position:relative를 준다. */
 .member-search-dropdown {
   display: none;
   position: absolute;
   top: 100%;
-  left: 0;
   right: 0;
+  width: 50%;
+  min-width: 220px;
   margin-top: 0.4rem;
   background: var(--bg-card);
   backdrop-filter: var(--backdrop-blur);
@@ -603,6 +605,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 .member-search-dropdown.open {
   display: block;
+}
+
+/* 검색어가 입력된 상태에서는 돋보기 아이콘 버튼에 밑줄로 필터가 걸려있음을 표시한다(#26) */
+#member-search-toggle.filter-active {
+  border-bottom: 2px solid var(--accent-cyan);
 }
 
 /* admin.js의 showToast()가 #admin-toast를 만들어 .show 클래스로 토글하는데, 지금까지 이
