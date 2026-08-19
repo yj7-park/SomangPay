@@ -106,9 +106,9 @@ final class DepositAutoDetector {
     }
 
     // BankNotificationListener.onNotificationPosted()가 백그라운드 스레드에서 호출한다. 알림
-    // 접근 권한상 기기에 뜨는 모든 알림(카카오톡/날씨 등)이 다 들어오므로, 필터에 안 걸린
-    // 것도 전부 로그에 남기면 그만큼 로그가 늘어난다 - 원인 진단이 끝나면 다시 조용히
-    // 무시하도록 되돌려도 된다.
+    // 접근 권한상 기기에 뜨는 모든 알림(카카오톡/날씨 등)이 다 들어오므로, 로깅/검토 대상은
+    // 감지 대상 앱(메시지 앱)으로 제한한다 - 패키지가 안 맞으면 로그도 안 남기고 조용히
+    // 무시한다(그렇지 않으면 무관한 앱 알림으로 로그가 계속 늘어남).
     static void processPush(Context context, String packageName, String title, String text) {
         SharedPreferences p = prefs(context);
         String filterPackage = p.getString(PREF_PUSH_PACKAGE, PUSH_PACKAGE_DEFAULT).trim();
@@ -116,8 +116,6 @@ final class DepositAutoDetector {
         String body = isBlank(title) ? text : title + "\n" + text;
 
         if (!isBlank(filterPackage) && !filterPackage.equals(packageName)) {
-            log(context, "PUSH", packageName, packageName, body, "filtered",
-                    "감지 대상 앱(\"" + filterPackage + "\")과 달라 무시됨 - 실제 패키지: " + packageName);
             return;
         }
         if (!isBlank(filterTitle) && !filterTitle.equals(title)) {
