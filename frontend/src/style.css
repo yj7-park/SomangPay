@@ -1829,11 +1829,6 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 .menu-manage-grid .menu-card-add {
   cursor: pointer;
-  align-self: start;
-  height: 64px;
-  min-height: 64px !important;
-  max-height: 64px !important;
-  padding: 0 !important;
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -1842,7 +1837,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   box-shadow: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   line-height: 1;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
