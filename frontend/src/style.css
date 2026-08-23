@@ -1813,17 +1813,19 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  min-height: auto !important;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(239,68,68,0.15);
+  padding: 0;
+  background: none;
   color: var(--icon-danger, #fca5a5);
   border: none;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 .menu-manage-grid .menu-card-add {
   cursor: pointer;
