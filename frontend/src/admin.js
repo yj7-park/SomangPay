@@ -2460,7 +2460,7 @@ function renderKioskDetail() {
 
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.2rem;">
         <label class="form-label" style="margin-bottom: 0;">메뉴</label>
-        <button type="button" class="btn-action" style="width: 28px; height: 28px; min-height: 28px; padding: 0; flex: none; background: none; color: #60a5fa;" onclick="openMenuManageModal()" title="메뉴 관리">
+        <button type="button" class="btn-action" style="width: 28px; height: 28px; min-height: 28px; padding: 0; flex: none; background: none; color: var(--text-muted);" onclick="openMenuManageModal()" title="메뉴 관리">
           <span data-icon="edit"></span>
         </button>
       </div>
