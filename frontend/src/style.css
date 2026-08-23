@@ -1806,11 +1806,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   margin-top: 0.5rem;
 }
 .menu-manage-grid .menu-card {
-  /* 고정값 - 그리드 행 스트레치(align-items: stretch)에만 기대면 "+" 추가 카드가
-     혼자 마지막 줄에 남을 때(짝 없음) 스트레치 대상이 없어 내용만큼만 작게
-     쪼그라든다. 실제 메뉴 카드들의 내용 높이(이름 1줄+가격 2줄+패딩)가 항상
-     이 값으로 맞아떨어져서 실카드는 그대로고, 추가 카드만 이 값으로 강제된다. */
-  min-height: 132px !important;
+  min-height: auto !important;
   position: relative;
 }
 .menu-manage-grid .menu-card .menu-delete-btn {
