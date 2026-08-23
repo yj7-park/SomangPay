@@ -1796,6 +1796,52 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   transform: scale(1);
 }
 
+/* 어드민 "메뉴 관리" 모달 - 각 카드 우측 상단에 삭제 버튼, 마지막 칸은 "+" 추가 카드
+   (.kiosk-menu-assign-grid와 같은 2열 카드 그리드를 재사용하되 배정 토글이 아니라
+   삭제/추가 액션이라 별도 클래스로 분리). */
+.menu-manage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.menu-manage-grid .menu-card {
+  min-height: auto !important;
+  position: relative;
+}
+.menu-manage-grid .menu-card .menu-delete-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239,68,68,0.15);
+  color: var(--icon-danger, #fca5a5);
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.menu-manage-grid .menu-card-add {
+  cursor: pointer;
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--border-glass);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.8rem;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.menu-manage-grid .menu-card-add:hover {
+  border-color: var(--accent-emerald);
+  color: var(--accent-emerald);
+}
+
 /* Kiosk Menu Card Aspect Ratio & Compact Button Fix */
 .menu-grid {
   display: grid !important;

@@ -11,7 +11,6 @@ let videoStream = null;
 let isCameraScanning = false;
 let qrScanCooldown = false;
 let kioskFacingMode = "user"; // 기본 전면 카메라
-let editingProductId = null; // 수정 중인 상품 ID
 let currentDefaultProductId = null; // 기본 자동 결제 상품 ID
 let currentAssignedProducts = []; // 이 단말기에 노출할 메뉴 ID 목록 - 비어있으면 전체 메뉴 노출(하위호환)
 let kioskNdefReader = null; // 중복 NDEFReader 생성 방지용 글로벌 레퍼런스
@@ -528,7 +527,6 @@ async function loadProducts() {
     products = await res.json();
     appendDebugLog(`메뉴 데이터 ${products.length}건 로드 성공`, "SUCCESS");
     renderKioskProducts();
-    renderKioskAdminProducts();
     renderKioskAssignedChecklist();
 
     // 기본 자동 결제 메뉴 드롭다운 갱신
@@ -1144,7 +1142,6 @@ function updateKioskOrientationButtonsUI(activeMode) {
 
 function openKioskAdminModal() {
   kioskShowModal("kiosk-admin-modal");
-  renderKioskAdminProducts();
   updateCameraConcurrentToggleAvailability();
   updateKioskTestModeUI();
   updateKioskOrientationButtonsUI(screen.orientation ? screen.orientation.type.split("-")[0] : null);
@@ -1166,30 +1163,6 @@ function switchKioskAdminTab(tabName) {
   debugSec.style.display = isMenu ? "none" : "block";
   btnMenu.classList.toggle("btn-primary", isMenu);
   btnDebug.classList.toggle("btn-primary", !isMenu);
-}
-
-function renderKioskAdminProducts() {
-  const tbody = document.getElementById("kiosk-admin-product-tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  products.forEach(p => {
-    const tr = document.createElement("tr");
-    tr.style.borderBottom = "1px solid rgba(255,255,255,0.06)";
-    tr.style.transition = "background 0.2s ease";
-    tr.innerHTML = `
-      <td style="padding: 0.85rem 1rem; text-align: left; font-weight: 700; color: var(--text-main);">${p.name}</td>
-      <td style="padding: 0.85rem 0.5rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">${p.price_general.toLocaleString()}원</td>
-      <td style="padding: 0.85rem 0.5rem; text-align: center; color: var(--accent-amber); font-weight: 800; font-size: 0.95rem;">${p.price_senior.toLocaleString()}원</td>
-      <td style="padding: 0.85rem 1rem; text-align: center;">
-        <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
-          <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; font-weight: 600; border-radius: 6px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); min-height: 28px; transition: all 0.2s;" onclick="kioskStartEditProduct(${p.id})">수정</button>
-          <button class="btn-action" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; font-weight: 600; border-radius: 6px; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4); min-height: 28px; transition: all 0.2s;" onclick="kioskDeleteProduct(${p.id})">삭제</button>
-        </div>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
 }
 
 // 이 단말기에 노출할 메뉴 그리드 (전체 카탈로그 기준 - 메뉴 자체는 어느 단말기에서든
@@ -1224,136 +1197,6 @@ function toggleKioskAssignedProduct(productId) {
   const card = document.querySelector(`#k-assigned-products-checklist .menu-card[data-product-id="${productId}"]`);
   if (card) card.classList.toggle("assigned");
   saveKioskDeviceSettings();
-}
-
-function kioskStartEditProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-
-  document.getElementById("k-prod-name").value = product.name;
-  document.getElementById("k-prod-gen").value = product.price_general;
-  document.getElementById("k-prod-sen").value = product.price_senior;
-
-  editingProductId = id;
-
-  const titleElem = document.getElementById("kiosk-crud-title");
-  if (titleElem) titleElem.innerText = "메뉴 수정";
-
-  const btnElem = document.getElementById("k-add-btn");
-  if (btnElem) {
-    btnElem.innerText = "수정";
-    btnElem.className = "btn-action btn-primary";
-    btnElem.style.background = "var(--primary)";
-  }
-}
-
-async function kioskAddProduct() {
-  const name = document.getElementById("k-prod-name").value.trim();
-  const genPrice = parseInt(document.getElementById("k-prod-gen").value);
-  const senPrice = parseInt(document.getElementById("k-prod-sen").value);
-
-  if (!name || isNaN(genPrice)) {
-    alert("메뉴 이름과 일반 가격을 입력하세요.");
-    return;
-  }
-
-  const payload = {
-    name: name,
-    price_general: genPrice,
-    price_senior: isNaN(senPrice) ? genPrice : senPrice
-  };
-
-  try {
-    let res;
-    if (editingProductId !== null) {
-      // 수정 모드
-      res = await kioskAdminFetch(`${API_BASE}/products/${editingProductId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-    } else {
-      // 추가 모드
-      res = await kioskAdminFetch(`${API_BASE}/products`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-    }
-
-    if (res.ok) {
-      if (editingProductId !== null) {
-        appendDebugLog(`[ADMIN] 메뉴 수정 완료: ${name}`, "SUCCESS");
-      } else {
-        appendDebugLog(`[ADMIN] 신규 메뉴 추가 완료: ${name}`, "SUCCESS");
-      }
-
-      // 입력 폼 초기화 및 상태 원복
-      document.getElementById("k-prod-name").value = "";
-      document.getElementById("k-prod-gen").value = "";
-      document.getElementById("k-prod-sen").value = "";
-
-      editingProductId = null;
-      const titleElem = document.getElementById("kiosk-crud-title");
-      if (titleElem) titleElem.innerText = "메뉴 추가";
-
-      const btnElem = document.getElementById("k-add-btn");
-      if (btnElem) {
-        btnElem.innerText = "추가";
-        btnElem.className = "btn-action btn-emerald";
-        btnElem.style.background = ""; // Reset inline override style
-      }
-
-      await loadProducts();
-    } else {
-      appendDebugLog(`메뉴 처리 실패`, "ERROR");
-    }
-  } catch (err) {
-    appendDebugLog(`메뉴 처리 오류: ${err}`, "ERROR");
-  }
-}
-
-async function kioskDeleteProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-
-  if (!confirm(`"${product.name}" 메뉴를 정말 삭제하시겠습니까?`)) {
-    return;
-  }
-
-  try {
-    const res = await kioskAdminFetch(`${API_BASE}/products/${id}`, {
-      method: "DELETE"
-    });
-
-    if (res.ok) {
-      appendDebugLog(`[ADMIN] 메뉴 삭제 완료: ${product.name}`, "SUCCESS");
-
-      // 수정 중이던 메뉴가 삭제되는 경우 수정 모드 해제
-      if (editingProductId === id) {
-        document.getElementById("k-prod-name").value = "";
-        document.getElementById("k-prod-gen").value = "";
-        document.getElementById("k-prod-sen").value = "";
-
-        editingProductId = null;
-        const titleElem = document.getElementById("kiosk-crud-title");
-        if (titleElem) titleElem.innerText = "메뉴 추가";
-
-        const btnElem = document.getElementById("k-add-btn");
-        if (btnElem) {
-          btnElem.innerText = "추가";
-          btnElem.className = "btn-action btn-emerald";
-          btnElem.style.background = "";
-        }
-      }
-
-      await loadProducts();
-    } else {
-      appendDebugLog(`메뉴 삭제 실패`, "ERROR");
-    }
-  } catch (err) {
-    appendDebugLog(`메뉴 삭제 통신 오류: ${err}`, "ERROR");
-  }
 }
 
 function playSpeech(text) {

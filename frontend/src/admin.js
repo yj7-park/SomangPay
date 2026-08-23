@@ -963,8 +963,8 @@ async function loadAdminUsers() {
   }
 }
 
-// 전체 메뉴 카탈로그 - 키오스크 탭의 "노출 메뉴 배정" 체크리스트를 그리는 데 쓰인다.
-// 메뉴 자체의 CRUD는 각 단말기 관리자 패널에서 하므로 여기서는 조회만 한다.
+// 전체 메뉴 카탈로그 - 키오스크 탭의 "노출 메뉴 배정" 체크리스트와 "메뉴 관리" 모달을
+// 그리는 데 쓰인다. 메뉴 자체의 CRUD(추가/삭제)도 이 카탈로그를 대상으로 여기서 이뤄진다.
 async function loadAdminProducts() {
   try {
     const res = await fetch(`${API_BASE}/products`);
@@ -2298,10 +2298,11 @@ async function submitUserInfoEdit(btn) {
 }
 
 // ============ 키오스크 관리 ============
-// 메뉴 자체의 생성/수정/삭제는 각 키오스크 단말기의 관리자 패널에서 하고, 여기서는
-// 등록된 키오스크 중 하나를 골라 노출 메뉴 배정·메뉴별 매출만 다룬다(메뉴는 키오스크마다
-// 다르게 노출될 수 있어 전역 메뉴 편집 화면을 여기 두지 않는다). 단말기가 늘어도 화면이
-// 한없이 길어지지 않도록 제목 옆 선택기로 한 번에 하나만 펼쳐서 보여준다.
+// 메뉴 자체의 생성/삭제(전역 카탈로그 CRUD)는 "메뉴" 라벨 옆 수정 버튼 -> 메뉴 관리
+// 모달(openMenuManageModal 이하)에서 하고, 여기 상세 화면의 카드 그리드는 그 카탈로그
+// 중 이 키오스크에 노출할 항목만 고르는 배정 화면이다(메뉴는 키오스크마다 다르게 노출될
+// 수 있다). 단말기가 늘어도 화면이 한없이 길어지지 않도록 제목 옆 선택기로 한 번에
+// 하나만 펼쳐서 보여준다.
 
 let kiosks = [];
 let selectedKioskId = null;
@@ -2457,7 +2458,12 @@ function renderKioskDetail() {
       <label class="form-label">키오스크 ID</label>
       <div class="kiosk-detail-uuid" style="margin-bottom: 1rem;">${escapeHtml(k.device_uuid)}</div>
 
-      <label class="form-label">메뉴</label>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.2rem;">
+        <label class="form-label" style="margin-bottom: 0;">메뉴</label>
+        <button type="button" class="btn-action" style="width: 28px; height: 28px; min-height: 28px; padding: 0; flex: none; background: rgba(59,130,246,0.15); color: #60a5fa;" onclick="openMenuManageModal()" title="메뉴 관리">
+          <span data-icon="edit"></span>
+        </button>
+      </div>
       <div class="kiosk-menu-assign-grid">
         ${products.length === 0 ? `<span style="font-size: 0.8rem; color: var(--text-muted);">등록된 메뉴가 없습니다.</span>` : products.map(p => `
           <div class="menu-card ${k.assigned_products.includes(p.id) ? 'assigned' : ''}" data-product-id="${p.id}" onclick="toggleKioskProduct(${k.id}, ${p.id})">
@@ -2579,4 +2585,105 @@ async function confirmDeleteKiosk(id) {
   } catch (err) {
     console.error("confirmDeleteKiosk error:", err);
   }
+}
+
+// ============ 메뉴 관리 모달 (전역 메뉴 카탈로그 추가/삭제) ============
+// 메뉴 선택 배정 그리드(.kiosk-menu-assign-grid)와 같은 카드형 UI를 재사용하되, 여기서는
+// 카드를 눌러도 배정이 토글되지 않고 카드 우측 상단 휴지통 버튼으로만 삭제하며, 마지막
+// 칸에는 "+" 카드를 둬서 누르면 별도의 작은 입력 모달(admin-menu-add-modal)이 뜬다.
+function openMenuManageModal() {
+  renderMenuManageGrid();
+  showModal("admin-menu-manage-modal");
+}
+
+function closeMenuManageModal() {
+  hideModal("admin-menu-manage-modal");
+}
+
+function renderMenuManageGrid() {
+  const grid = document.getElementById("admin-menu-manage-grid");
+  if (!grid) return;
+
+  grid.innerHTML = products.map(p => `
+    <div class="menu-card">
+      <button type="button" class="menu-delete-btn" onclick="deleteMenuItem(${p.id})" title="메뉴 삭제">
+        <span data-icon="trash"></span>
+      </button>
+      <div>
+        <div class="menu-name">${escapeHtml(p.name)}</div>
+        <div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
+        <div class="menu-price-senior">시니어 ${p.price_senior.toLocaleString()}원</div>
+      </div>
+    </div>
+  `).join('') + `
+    <div class="menu-card menu-card-add" onclick="openMenuAddModal()" title="메뉴 추가">${icon('plus')}</div>
+  `;
+  hydrateIconPlaceholders(grid);
+}
+
+async function deleteMenuItem(productId) {
+  const p = products.find(x => x.id === productId);
+  if (!p) return;
+  if (!(await showConfirmModal(`"${p.name}" 메뉴를 삭제하시겠습니까?\n모든 키오스크의 노출 메뉴 배정에서도 함께 제거됩니다.`))) return;
+
+  try {
+    const res = await adminFetch(`${API_BASE}/products/${productId}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast(`"${p.name}" 메뉴를 삭제했습니다.`);
+      await loadAdminProducts();
+      renderMenuManageGrid();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`삭제 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("deleteMenuItem error:", err);
+  }
+}
+
+function openMenuAddModal() {
+  document.getElementById("admin-menu-add-name").value = "";
+  document.getElementById("admin-menu-add-price-general").value = "";
+  document.getElementById("admin-menu-add-price-senior").value = "";
+  showModal("admin-menu-add-modal");
+}
+
+function closeMenuAddModal() {
+  hideModal("admin-menu-add-modal");
+}
+
+async function saveMenuAdd(btn) {
+  const name = document.getElementById("admin-menu-add-name").value.trim();
+  const genPrice = parseInt(document.getElementById("admin-menu-add-price-general").value);
+  const senPrice = parseInt(document.getElementById("admin-menu-add-price-senior").value);
+
+  if (!name || isNaN(genPrice)) {
+    await showAlertModal("메뉴 이름과 일반 가격을 입력하세요.");
+    return;
+  }
+
+  await withButtonLock(btn, async () => {
+    try {
+      const res = await adminFetch(`${API_BASE}/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          price_general: genPrice,
+          price_senior: isNaN(senPrice) ? genPrice : senPrice,
+        })
+      });
+      if (res.ok) {
+        showToast(`"${name}" 메뉴를 추가했습니다.`);
+        closeMenuAddModal();
+        await loadAdminProducts();
+        renderMenuManageGrid();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        await showAlertModal(`추가 실패: ${data.detail || '오류 발생'}`);
+      }
+    } catch (err) {
+      console.error("saveMenuAdd error:", err);
+    }
+  });
 }

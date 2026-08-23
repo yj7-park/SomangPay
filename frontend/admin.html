@@ -496,6 +496,49 @@
     </div>
   </div>
 
+  <!-- Menu Management Modal (키오스크 탭 "메뉴" 카드 관리 - 추가/삭제) -->
+  <div id="admin-menu-manage-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 640px;">
+      <h2 style="font-size: 1.3rem; color: var(--accent-cyan); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="edit"></span> 메뉴 관리</h2>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.8rem;">메뉴는 전체 키오스크 공용 목록입니다. 여기서 추가/삭제한 메뉴는 모든 키오스크에 반영됩니다.</p>
+
+      <div class="modal-body">
+        <div id="admin-menu-manage-grid" class="menu-manage-grid"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeMenuManageModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu Add Modal (메뉴 관리 모달의 "+" 카드를 누르면 뜨는 입력 모달) -->
+  <div id="admin-menu-add-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 380px;">
+      <h2 style="font-size: 1.3rem; color: var(--accent-emerald); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="plus"></span> 메뉴 추가</h2>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">메뉴명</label>
+          <input type="text" id="admin-menu-add-name" class="form-control" placeholder="예: 라면">
+        </div>
+        <div class="form-group">
+          <label class="form-label">일반 가격</label>
+          <input type="number" id="admin-menu-add-price-general" class="form-control" placeholder="예: 3000">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">시니어 가격</label>
+          <input type="number" id="admin-menu-add-price-senior" class="form-control" placeholder="비워두면 일반 가격과 동일">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeMenuAddModal()">취소</button>
+        <button class="btn-action btn-emerald" onclick="saveMenuAdd(this)">추가</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit User Info Modal -->
   <div id="admin-user-edit-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 440px;">
