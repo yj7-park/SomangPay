@@ -484,60 +484,12 @@ async function loadMyDeposits() {
 }
 
 // ============ 이용 내역 (계좌이체/결제/관리자충전 통합, 스크롤 지연 로딩) ============
+// 카드 렌더링(historyItemHtml 등)은 admin.js 회원상세와 공통으로 src/history-render.js에
+// 있다 - 여기서는 이 페이지만의 커서/스크롤 상태만 관리한다.
 let _historyCursor = null;
 let _historyHasMore = true;
 let _historyLoading = false;
-let _historyLastDateKey = null;
-
-// 카드에 찍히는 시간 표기 - "오전/오후 h:mm" (날짜는 별도 구분선으로 뺀다, #33).
-function formatHistoryTime(date) {
-  let h = date.getHours();
-  const m = String(date.getMinutes()).padStart(2, "0");
-  const ampm = h < 12 ? "오전" : "오후";
-  h = h % 12 || 12;
-  return `${ampm} ${h}:${m}`;
-}
-
-function formatHistoryDateDivider(date) {
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 ${weekday}요일`;
-}
-
-function historyDateKey(date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-// 이력 카드 레이아웃(#19): 좌상단 종류 배지 + 시간, 좌하단 사유, 우상단 금액, 우하단 잔액.
-// 어드민 회원상세(admin.js의 historyItemHtml)와 동일한 마크업/클래스를 쓴다 - 백엔드가
-// label/badge_class/amount_text/amount_class를 이미 계산해서 내려주므로 여기선 그대로 꽂기만 한다.
-// 날짜별로 카드를 묶어 구분선(.history-date-divider)을 넣고, 카드 자체에는 시간만 표시한다(#33) -
-// 페이지네이션으로 이어 불러올 때도 날짜가 바뀔 때만 구분선이 새로 찍히도록 _historyLastDateKey로
-// 마지막에 찍은 날짜를 기억해 둔다.
-function historyItemHtml(item) {
-  const date = new Date(item.event_time);
-  const dateKey = historyDateKey(date);
-  let html = "";
-  if (dateKey !== _historyLastDateKey) {
-    html += `<div class="history-date-divider">${formatHistoryDateDivider(date)}</div>`;
-    _historyLastDateKey = dateKey;
-  }
-  html += `
-    <div class="history-item">
-      <div class="history-item-left">
-        <div class="history-item-top">
-          <span class="activity-status ${item.badge_class}">${item.label}</span>
-          <span class="history-item-date">${formatHistoryTime(date)}</span>
-        </div>
-        <div class="history-item-reason">${escapeHtml(item.reason)}</div>
-      </div>
-      <div class="history-item-right">
-        <div class="history-item-amount ${item.amount_class}">${item.amount_text}</div>
-        ${item.balance_after != null ? `<div class="history-item-balance">잔액 ${item.balance_after.toLocaleString()}원</div>` : ""}
-      </div>
-    </div>
-  `;
-  return html;
-}
+let _historyDateState = { last: null };
 
 async function loadMoreHistory(reset) {
   const box = document.getElementById("my-deposits-list");
@@ -545,7 +497,7 @@ async function loadMoreHistory(reset) {
   if (reset) {
     _historyCursor = null;
     _historyHasMore = true;
-    _historyLastDateKey = null;
+    _historyDateState = { last: null };
     box.innerHTML = "";
   }
   if (!_historyHasMore || _historyLoading) return;
@@ -562,7 +514,7 @@ async function loadMoreHistory(reset) {
       }
       return;
     }
-    box.insertAdjacentHTML("beforeend", data.items.map(historyItemHtml).join(""));
+    box.insertAdjacentHTML("beforeend", data.items.map((item) => historyItemHtml(item, _historyDateState)).join(""));
     _historyCursor = data.next_cursor;
   } catch (err) {
     console.error("loadMoreHistory error:", err);

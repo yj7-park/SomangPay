@@ -1617,32 +1617,17 @@ async function submitDetailDeduct(btn) {
   });
 }
 
-// 이력 카드 레이아웃(#19): 좌상단 종류 배지(충전/결제/실패) + 날짜, 좌하단 사유(충전 메모 /
+// 이력 카드 레이아웃(#19): 좌상단 종류 배지(충전/결제/실패) + 시간, 좌하단 사유(충전 메모 /
 // 결제 목록 / 실패 사유), 우상단 금액(+/-), 우하단 잔액. /api/admin/history(계좌이체/결제/
 // 관리자충전을 통일된 형태로 병합해서 커서 페이지네이션으로 내려줌 - app/services/history.py)를
-// 스크롤 시 이어서 불러온다(#history) - user 앱(user.js)과 완전히 같은 API/로직을 쓰므로
-// 두 화면이 서로 다른 이력을 보여주는 일이 구조적으로 없다.
+// 스크롤 시 이어서 불러온다(#history). 카드 렌더링(historyItemHtml, 날짜 구분선 등)은 user
+// 앱(user.js)과 완전히 같은 코드를 src/history-render.js에서 공유해서 쓰므로 두 화면이 서로
+// 다른 모양/로직을 보여주는 일이 구조적으로 없다(#33) - 여기서는 회원상세만의 커서/스크롤
+// 상태와 날짜 구분선 상태(_detailHistoryDateState)만 관리한다.
 let _detailHistoryCursor = null;
 let _detailHistoryHasMore = true;
 let _detailHistoryLoading = false;
-
-function historyItemHtml(item) {
-  return `
-    <div class="history-item">
-      <div class="history-item-left">
-        <div class="history-item-top">
-          <span class="activity-status ${item.badge_class}">${item.label}</span>
-          <span class="history-item-date">${new Date(item.event_time).toLocaleString()}</span>
-        </div>
-        <div class="history-item-reason">${escapeHtml(item.reason)}</div>
-      </div>
-      <div class="history-item-right">
-        <div class="history-item-amount ${item.amount_class}">${item.amount_text}</div>
-        ${item.balance_after != null ? `<div class="history-item-balance">잔액 ${item.balance_after.toLocaleString()}원</div>` : ""}
-      </div>
-    </div>
-  `;
-}
+let _detailHistoryDateState = { last: null };
 
 // 회원상세를 새로 열거나(renderMemberDetail) 잔액이 바뀌는 조작 직후 다시 그릴 때마다
 // 첫 페이지부터 새로 불러온다.
@@ -1651,6 +1636,7 @@ function renderDetailHistory() {
   if (!box) return;
   _detailHistoryCursor = null;
   _detailHistoryHasMore = true;
+  _detailHistoryDateState = { last: null };
   box.innerHTML = "";
   setupDetailHistoryInfiniteScroll();
   loadMoreDetailHistory();
@@ -1674,7 +1660,7 @@ async function loadMoreDetailHistory() {
       }
       return;
     }
-    box.insertAdjacentHTML("beforeend", data.items.map(historyItemHtml).join(""));
+    box.insertAdjacentHTML("beforeend", data.items.map((item) => historyItemHtml(item, _detailHistoryDateState)).join(""));
     _detailHistoryCursor = data.next_cursor;
   } catch (err) {
     console.error("loadMoreDetailHistory error:", err);
