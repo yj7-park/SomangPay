@@ -10,6 +10,12 @@
   <link rel="stylesheet" href="src/style.css?v=20260819_0002">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260818_0001">
   <script src="jsQR.min.js"></script>
+  <!-- admin.html은 지금까지 루트 font-size 조정이 없어 브라우저 기본값(16px)을 그대로 썼는데,
+       대시보드 곳곳의 인라인 텍스트가 0.78~0.85rem처럼 작게 잡혀 있어 브라우저 글자 크기
+       100% 기준으로 user.html(18px→17px, #16/#32)과 나란히 보면 글씨가 너무 작다는 피드백을
+       받았다(#32). rem 단위라 루트 font-size 하나만 올리면 페이지 전체가 비례해서 커진다 -
+       kiosk.html/user.html은 별도 html 태그(별도 문서)라 영향 없음. -->
+  <style>html { font-size: 17px; }</style>
 </head>
 <body>
   <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과

@@ -16,8 +16,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
   <!-- user.html은 40~50대 이용자도 많은 스마트폰 브라우저 전용 페이지라(#16) 다른 페이지보다
        기준 글자 크기를 키운다. 대부분의 크기가 rem 단위라 html 루트 font-size 하나만 올리면
-       페이지 전체가 비례해서 커진다 - kiosk.html/admin.html은 별도 html 태그(별도 문서)라 영향 없음. -->
-  <style>html { font-size: 18px; }</style>
+       페이지 전체가 비례해서 커진다 - kiosk.html/admin.html은 별도 html 태그(별도 문서)라 영향 없음.
+       처음엔 18px로 올렸다가(#16) 브라우저 기본 글자 크기(100%) 기준으로 admin.html과 나란히
+       놓고 보니 user는 너무 크고 admin(루트 font-size 조정 없음, 16px)은 너무 작다는 피드백을
+       받아(#32) 17px로 낮추고 admin.html 쪽을 17px로 올려 두 앱의 체감 글자 크기를 맞췄다. -->
+  <style>html { font-size: 17px; }</style>
 </head>
 <body>
   <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
