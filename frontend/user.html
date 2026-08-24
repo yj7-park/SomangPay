@@ -4,16 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>소망페이 - 회원 마이페이지 (User PWA)</title>
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="/manifest-user.json">
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260819_0002">
+  <link rel="stylesheet" href="src/style.css?v=20260824_0001">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260818_0001">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <script>
+    // 안드로이드 브라우저에서 "홈 화면에 추가" 시 PWA로 설치되려면 서비스 워커가
+    // 등록되어 있어야 함 (sw.js는 네트워크 우선 전략이라 최신 코드 반영을 막지 않음) - kiosk.html과 동일한 패턴.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
   <!-- user.html은 40~50대 이용자도 많은 스마트폰 브라우저 전용 페이지라(#16) 다른 페이지보다
        기준 글자 크기를 키운다. 대부분의 크기가 rem 단위라 html 루트 font-size 하나만 올리면
        페이지 전체가 비례해서 커진다 - kiosk.html/admin.html은 별도 html 태그(별도 문서)라 영향 없음.
@@ -46,9 +55,10 @@
           <span id="display-user-badge" class="badge-tag badge-general" style="flex-shrink: 0;">-</span>
         </div>
         <!-- 우측 상단 설정 버튼(#16) - 내 정보/테마/로그아웃을 여기서 모달로 연다 -->
+        <!-- #33: 더 크고 누르기 쉽게, 카드 모서리에 더 붙도록 음수 margin으로 당김 -->
         <button onclick="openUserSettingsModal()" title="설정" aria-label="설정"
-          style="flex-shrink: 0; width: 38px; height: 38px; padding: 0; background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;">
-          <svg class="icon-line" viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          style="flex-shrink: 0; width: 46px; height: 46px; margin: -0.5rem -0.6rem 0 0; padding: 0; background: none; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;">
+          <svg class="icon-line" viewBox="0 0 24 24" width="1.6em" height="1.6em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
         </button>
       </div>
 
@@ -72,7 +82,6 @@
         <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <div>
           <div class="pending-deposit-title">충전 대기 중인 입금 내역이 있습니다.</div>
-          <div class="pending-deposit-subtitle">카드를 눌러서 충전을 진행하세요.</div>
         </div>
       </div>
       <div id="pending-deposit-list" class="pending-deposit-list"></div>
@@ -95,10 +104,7 @@
         <span style="display: inline-flex;"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M4 10h16v9H4z"/><path d="M4 19h16M8 13v4M12 13v4M16 13v4"/></svg></span>
         계좌이체 충전 안내
       </h4>
-      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.8rem;">
-        아래 계좌로 입금하시면 자동으로 확인되어 화면 상단에 입금 내역 카드로 표시됩니다. 카드를 눌러 <strong>본인이 넣으신 건</strong>을 선택해 충전을 완료해주세요.
-      </p>
-      <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem; margin-bottom: 1rem;">
+      <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem; margin-bottom: 1rem; margin-top: 0.8rem;">
         <div>입금 계좌:
           <button id="charge-guide-account-copy-btn" onclick="copyAccountNumber(this)" title="눌러서 계좌번호 복사"
             style="display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0.1rem 0.3rem; margin-left: 0.1rem; cursor: pointer; font: inherit; font-weight: 700; color: var(--text-main); border-radius: 6px; vertical-align: middle;">
@@ -175,6 +181,13 @@
           </div>
         </div>
 
+        <!-- 입금 확인/충전 완료 시 앱을 꺼둔 상태에서도 알림을 받을지 여부(Web Push, #push).
+             지원 안 하는 브라우저에서는 버튼이 비활성화된 채 "미지원 브라우저"로 표시된다. -->
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+          <span style="font-size: 0.92rem; color: var(--text-main);">푸시 알림</span>
+          <button id="u-push-toggle-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.85rem; margin-left: auto;" onclick="togglePushNotifications()">🔕 꺼짐</button>
+        </div>
+
         <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 내용을 아무것도
              그리지 않아 라벨만 덩그러니 남는다(#17) - 그 경우 update-widget.js가 이 행
              자체를 감춘다. -->
@@ -211,9 +224,9 @@
     </div>
   </div>
 
-  <script src="src/update-widget.js?v=20260818_0002"></script>
+  <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/user.html,/src/user.js"></script>
   <script src="src/qrcode-generator.js"></script>
-  <script src="src/user.js?v=20260818_0008"></script>
+  <script src="src/user.js?v=20260824_0004"></script>
 </body>
 </html>

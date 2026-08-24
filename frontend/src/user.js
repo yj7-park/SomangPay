@@ -240,10 +240,116 @@ function closeUserQrModal() {
 // ============ 설정 모달(내 정보/테마/로그아웃) ============
 function openUserSettingsModal() {
   showModal("user-settings-modal");
+  refreshPushButtonUI();
 }
 
 function closeUserSettingsModal() {
   hideModal("user-settings-modal");
+}
+
+// ============ 푸시 알림 구독 ============
+// 서비스워커의 PushManager를 통해 구독하고, 서버(app/services/push.py)가 이후
+// 잔액이 바뀌는 시점(입금 확인/충전 완료)에 이 구독으로 알림을 보낸다.
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window;
+}
+
+// VAPID 공개키를 서비스워커가 요구하는 Uint8Array 형태로 변환 (표준 스니펫).
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+async function getCurrentPushSubscription() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+async function refreshPushButtonUI() {
+  const btn = document.getElementById("u-push-toggle-btn");
+  if (!btn) return;
+  if (!pushSupported()) {
+    btn.innerText = "🔕 미지원 브라우저";
+    btn.disabled = true;
+    return;
+  }
+  const sub = await getCurrentPushSubscription();
+  btn.disabled = false;
+  btn.innerText = sub ? "🔔 켜짐" : "🔕 꺼짐";
+}
+
+async function togglePushNotifications() {
+  const btn = document.getElementById("u-push-toggle-btn");
+  if (btn) { btn.disabled = true; btn.innerText = "⏳ 처리 중..."; }
+  try {
+    const sub = await getCurrentPushSubscription();
+    if (sub) {
+      await unsubscribeFromPush(sub);
+    } else {
+      await subscribeToPush();
+    }
+  } catch (err) {
+    // subscribeToPush/unsubscribeFromPush 내부에서 이미 처리 못한 예기치 못한 예외 방지용 - 여기서
+    // 놓치면 버튼이 "처리 중..."에 멈춘 채로 남아 클릭해도 아무 반응 없는 것처럼 보이게 된다.
+    console.error("푸시 알림 토글 오류:", err);
+    await showAlertModal(`푸시 알림 처리 중 오류가 발생했습니다.\n(${err && err.message ? err.message : err})`);
+  }
+  refreshPushButtonUI();
+}
+
+async function subscribeToPush() {
+  if (!pushSupported()) {
+    await showAlertModal("이 브라우저는 푸시 알림을 지원하지 않습니다.");
+    return;
+  }
+  // 브라우저에서 이미 한 번 "차단"을 눌렀으면 requestPermission()이 브라우저 UI 없이 조용히
+  // "denied"만 반환한다 - 이 경우를 구분해서 안내해야 사용자가 "눌러도 반응 없음"으로 오해하지 않는다.
+  if (Notification.permission === "denied") {
+    await showAlertModal("알림이 차단되어 있습니다. 브라우저 주소창 왼쪽 아이콘(사이트 설정)에서 알림 권한을 허용으로 바꾼 뒤 다시 시도해주세요.");
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      await showAlertModal("알림 권한이 허용되지 않았습니다. 다시 켜기를 눌러 권한을 허용해주세요.");
+      return;
+    }
+    const keyRes = await fetch(`${API_BASE}/push/vapid-public-key`);
+    if (!keyRes.ok) throw new Error(`vapid-public-key ${keyRes.status}`);
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) throw new Error("서버에 VAPID 공개키가 설정되어 있지 않습니다.");
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    const subJson = sub.toJSON();
+    const res = await authFetch(`${API_BASE}/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+    });
+    if (!res.ok) throw new Error(`push/subscribe ${res.status}`);
+  } catch (err) {
+    console.error("푸시 구독 오류:", err);
+    await showAlertModal(`푸시 알림 등록에 실패했습니다.\n(${err && err.message ? err.message : err})`);
+  }
+}
+
+async function unsubscribeFromPush(sub) {
+  try {
+    await authFetch(`${API_BASE}/push/subscribe`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+    await sub.unsubscribe();
+  } catch (err) {
+    console.error("푸시 구독 해지 오류:", err);
+  }
 }
 
 // ============ 실시간 갱신 (WebSocket) ============
@@ -327,12 +433,12 @@ async function loadChargeGuide() {
     const res = await authFetch(`${API_BASE}/settings/charge-guide`);
     if (!res.ok) return;
     const guide = await res.json();
-    document.getElementById("charge-guide-account").innerText = `${guide.bank_name} ${guide.account_number} (예금주: ${guide.account_holder})`;
+    // 표시/복사 문구 모두 "NH농협"처럼 통신사/제휴 접두어가 붙은 은행명이어도 접두어를
+    // 떼고 "농협 <번호>"만 쓴다(#33) - 예금주는 라벨 없이 괄호 안에만 표기.
+    const displayBankName = guide.bank_name.replace(/^NH\s*/, "");
+    document.getElementById("charge-guide-account").innerText = `${displayBankName} ${guide.account_number} (${guide.account_holder})`;
     document.getElementById("charge-guide-depositor-name").innerText = guide.depositor_name;
-    // 복사 문구는 "NH농협"처럼 통신사/제휴 접두어가 붙은 은행명이어도 접두어를 떼고
-    // "농협 <번호>"만 담는다(#18) - 표시용 텍스트는 원래 은행명을 그대로 유지.
-    const copyBankName = guide.bank_name.replace(/^NH\s*/, "");
-    _chargeGuideAccountCopyText = `${copyBankName} ${guide.account_number}`;
+    _chargeGuideAccountCopyText = `${displayBankName} ${guide.account_number}`;
   } catch (err) {
     console.error("loadChargeGuide error:", err);
   }
@@ -358,138 +464,125 @@ async function copyAccountNumber(btn) {
   }, 1500);
 }
 
-// 회원 본인 이름으로 자동 매칭된 입금 내역(대기 중 + 과거 처리분 히스토리 포함).
-// PENDING 건은 "이용 내역" 목록이 아니라 메인 카드 바로 아래 별도 강조 카드
-// (#pending-deposit-card, renderPendingDepositCard)로 분리해서 보여준다(#18) -
-// 처리해야 할 일과 지난 기록이 한 목록에 섞이면 뭘 눌러야 하는지 구분이 안 됐다(#14).
-// 좌상단 종류 배지 - 실제 크레딧 반영 여부와 무관하게 "충전"으로 뭉뚱그리면 미반영건(OTHER)이
-// 충전된 것처럼 보이므로 그 경우만 "보류"로 따로 표시한다(#19).
-function depositTypeInfo(d) {
-  if (d.status === "OTHER") return { text: "보류", cls: "status-rejected" };
-  return { text: "금액 충전", cls: "status-done" };
-}
-
-// 좌하단 사유 - 백엔드가 DepositHistory.memo에 남기는 문구와 맞춰 자기 확인/관리자 대신
-// 처리/보류 사유를 구분한다(main.py의 claim_bank_transaction / admin_resolve_bank_transaction 참고).
-function depositReason(d) {
-  if (d.status === "CREDITED") return "본인 확인 후 충전";
-  if (d.status === "CREDITED_MANUAL") return d.resolution_memo || "관리자가 대신 충전 처리";
-  if (d.status === "OTHER") return d.resolution_memo || "처리 보류(관리자 문의)";
-  return "-";
-}
-
 let _myDeposits = [];
-let _myPayments = [];
-let _myAdminDeposits = [];
 
+// 회원 본인 이름으로 자동 매칭된 입금 내역(대기 중인 것 포함) - 대기중(PENDING) 카드용으로만
+// 쓰인다. 지난 이용내역은 /api/history/me(백엔드가 계좌이체/결제/관리자충전을 통일된 형태로
+// 병합해서 커서 페이지네이션으로 내려줌 - app/services/history.py)를 스크롤 시 이어서
+// 불러온다(#history) - admin 회원상세(admin.js)와 완전히 같은 API/로직을 쓰므로 두 화면이
+// 서로 다른 이력을 보여주는 일이 구조적으로 없다.
 async function loadMyDeposits() {
-  const box = document.getElementById("my-deposits-list");
-  if (!box) return;
   try {
-    const [depRes, payRes, adminDepRes] = await Promise.all([
-      authFetch(`${API_BASE}/bank-transactions/me`),
-      authFetch(`${API_BASE}/payments/me`),
-      authFetch(`${API_BASE}/deposit-histories/me`),
-    ]);
+    const depRes = await authFetch(`${API_BASE}/bank-transactions/me`);
     _myDeposits = depRes.ok ? await depRes.json() : [];
-    _myPayments = payRes.ok ? await payRes.json() : [];
-    _myAdminDeposits = adminDepRes.ok ? await adminDepRes.json() : [];
     renderPendingDepositCard();
-    renderMyDeposits();
   } catch (err) {
     console.error("loadMyDeposits error:", err);
   }
+  setupHistoryInfiniteScroll();
+  loadMoreHistory(true);
 }
 
-// 이력 카드 레이아웃(#19): 좌상단 종류 배지 + 날짜, 좌하단 사유, 우상단 금액, 우하단 잔액.
-// 어드민 회원상세의 renderDetailHistory()와 동일한 마크업/클래스(.history-item*)를 쓴다.
-function depositRowHtml(d) {
-  const type = depositTypeInfo(d);
-  const amountCls = type.text === "보류" ? "amount-neutral" : "amount-positive";
-  const amountText = type.text === "보류" ? `${d.amount.toLocaleString()}원` : `+${d.amount.toLocaleString()}원`;
-  return `
+// ============ 이용 내역 (계좌이체/결제/관리자충전 통합, 스크롤 지연 로딩) ============
+let _historyCursor = null;
+let _historyHasMore = true;
+let _historyLoading = false;
+let _historyLastDateKey = null;
+
+// 카드에 찍히는 시간 표기 - "오전/오후 h:mm" (날짜는 별도 구분선으로 뺀다, #33).
+function formatHistoryTime(date) {
+  let h = date.getHours();
+  const m = String(date.getMinutes()).padStart(2, "0");
+  const ampm = h < 12 ? "오전" : "오후";
+  h = h % 12 || 12;
+  return `${ampm} ${h}:${m}`;
+}
+
+function formatHistoryDateDivider(date) {
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 ${weekday}요일`;
+}
+
+function historyDateKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+// 이력 카드 레이아웃(#19): 좌상단 종류 배지 + 시간, 좌하단 사유, 우상단 금액, 우하단 잔액.
+// 어드민 회원상세(admin.js의 historyItemHtml)와 동일한 마크업/클래스를 쓴다 - 백엔드가
+// label/badge_class/amount_text/amount_class를 이미 계산해서 내려주므로 여기선 그대로 꽂기만 한다.
+// 날짜별로 카드를 묶어 구분선(.history-date-divider)을 넣고, 카드 자체에는 시간만 표시한다(#33) -
+// 페이지네이션으로 이어 불러올 때도 날짜가 바뀔 때만 구분선이 새로 찍히도록 _historyLastDateKey로
+// 마지막에 찍은 날짜를 기억해 둔다.
+function historyItemHtml(item) {
+  const date = new Date(item.event_time);
+  const dateKey = historyDateKey(date);
+  let html = "";
+  if (dateKey !== _historyLastDateKey) {
+    html += `<div class="history-date-divider">${formatHistoryDateDivider(date)}</div>`;
+    _historyLastDateKey = dateKey;
+  }
+  html += `
     <div class="history-item">
       <div class="history-item-left">
         <div class="history-item-top">
-          <span class="activity-status ${type.cls}">${type.text}</span>
-          <span class="history-item-date">${new Date(d.created_at).toLocaleString()}</span>
+          <span class="activity-status ${item.badge_class}">${item.label}</span>
+          <span class="history-item-date">${formatHistoryTime(date)}</span>
         </div>
-        <div class="history-item-reason">${escapeHtml(depositReason(d))}</div>
+        <div class="history-item-reason">${escapeHtml(item.reason)}</div>
       </div>
       <div class="history-item-right">
-        <div class="history-item-amount ${amountCls}">${amountText}</div>
-        ${d.balance_after != null ? `<div class="history-item-balance">잔액 ${d.balance_after.toLocaleString()}원</div>` : ""}
+        <div class="history-item-amount ${item.amount_class}">${item.amount_text}</div>
+        ${item.balance_after != null ? `<div class="history-item-balance">잔액 ${item.balance_after.toLocaleString()}원</div>` : ""}
       </div>
     </div>
   `;
+  return html;
 }
 
-// 관리자 직권 충전/차감(#19 후속) - 계좌이체가 아니라 bank-transactions/me에 안 잡히므로
-// deposit-histories/me로 따로 받아온다. 안 보여줬더니 차감 내역이 이용 내역에서 통째로
-// 빠져 보이는 문제가 있었다.
-function adminDepositRowHtml(h) {
-  const isDeduct = h.deposit_type === "ADMIN_MANUAL_DEDUCT";
-  const type = isDeduct ? { text: "금액 차감", cls: "status-rejected" } : { text: "금액 충전", cls: "status-done" };
-  return `
-    <div class="history-item">
-      <div class="history-item-left">
-        <div class="history-item-top">
-          <span class="activity-status ${type.cls}">${type.text}</span>
-          <span class="history-item-date">${new Date(h.created_at).toLocaleString()}</span>
-        </div>
-        <div class="history-item-reason">${escapeHtml(h.memo || (isDeduct ? "관리자 직권 차감" : "관리자 직권 충전"))}</div>
-      </div>
-      <div class="history-item-right">
-        <div class="history-item-amount ${isDeduct ? "amount-negative" : "amount-positive"}">${h.amount >= 0 ? "+" : ""}${h.amount.toLocaleString()}원</div>
-        ${h.balance_after != null ? `<div class="history-item-balance">잔액 ${h.balance_after.toLocaleString()}원</div>` : ""}
-      </div>
-    </div>
-  `;
-}
-
-// 회원 본인의 키오스크 결제 내역(#15) - 충전과 반대로 잔액이 빠져나간 건이라 지난 내역
-// 안에서 금액을 빨간색 마이너스로 표시해 충전(+)과 한눈에 구분되게 한다. SUCCESS는
-// status-done(초록, 충전 완료와 동일)이 아니라 status-payment(파랑)를 써서 충전 완료와도
-// 구분되고(#17), FAILED는 실제 차감이 없었던 시도이므로 별도의 "실패" 종류로 나눈다(#19).
-function paymentRowHtml(p) {
-  const isFailed = p.status === "FAILED";
-  const type = isFailed ? { text: "결제 실패", cls: "status-rejected" } : { text: "결제 성공", cls: "status-payment" };
-  const reason = isFailed
-    ? (p.failure_reason || "결제 실패")
-    : ([p.kiosk_name, p.product_details].filter(Boolean).join(" · ") || "-");
-  return `
-    <div class="history-item">
-      <div class="history-item-left">
-        <div class="history-item-top">
-          <span class="activity-status ${type.cls}">${type.text}</span>
-          <span class="history-item-date">${new Date(p.created_at).toLocaleString()}</span>
-        </div>
-        <div class="history-item-reason">${escapeHtml(reason)}</div>
-      </div>
-      <div class="history-item-right">
-        <div class="history-item-amount ${isFailed ? "amount-neutral" : "amount-negative"}">-${p.amount.toLocaleString()}원</div>
-        <div class="history-item-balance">잔액 ${p.balance_after.toLocaleString()}원</div>
-      </div>
-    </div>
-  `;
-}
-
-// 이미 끝난 과거 내역(충전 완료 + 결제)만 시간순으로 함께 보여준다(#15). 대기 중인 건은
-// #pending-deposit-card가 따로 담당한다(#18).
-function renderMyDeposits() {
+async function loadMoreHistory(reset) {
   const box = document.getElementById("my-deposits-list");
   if (!box) return;
-  const history = [
-    ..._myDeposits.filter(d => d.status !== "PENDING").map(d => ({ at: d.created_at, html: depositRowHtml(d) })),
-    ..._myPayments.map(p => ({ at: p.created_at, html: paymentRowHtml(p) })),
-    ..._myAdminDeposits.map(h => ({ at: h.created_at, html: adminDepositRowHtml(h) })),
-  ].sort((a, b) => new Date(b.at) - new Date(a.at));
-
-  if (history.length === 0) {
-    box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 이용 내역이 없습니다.</p>`;
-    return;
+  if (reset) {
+    _historyCursor = null;
+    _historyHasMore = true;
+    _historyLastDateKey = null;
+    box.innerHTML = "";
   }
-  box.innerHTML = history.map(h => h.html).join("");
+  if (!_historyHasMore || _historyLoading) return;
+  _historyLoading = true;
+  try {
+    const url = `${API_BASE}/history/me?limit=20` + (_historyCursor ? `&before=${encodeURIComponent(_historyCursor)}` : "");
+    const res = await authFetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.items.length === 0) {
+      _historyHasMore = false;
+      if (box.children.length === 0) {
+        box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 이용 내역이 없습니다.</p>`;
+      }
+      return;
+    }
+    box.insertAdjacentHTML("beforeend", data.items.map(historyItemHtml).join(""));
+    _historyCursor = data.next_cursor;
+  } catch (err) {
+    console.error("loadMoreHistory error:", err);
+  } finally {
+    _historyLoading = false;
+  }
+}
+
+// 이 페이지는 목록 전용 스크롤 박스가 따로 없이 페이지 전체(window)가 스크롤된다 - 하단
+// 80px 이내로 들어오면 다음 페이지를 이어서 불러온다(admin.js 인박스 탭의 무한스크롤과
+// 같은 임계값, 대상만 전용 스크롤 박스 대신 window로 다름).
+function setupHistoryInfiniteScroll() {
+  if (window._historyScrollWired) return;
+  window._historyScrollWired = true;
+  window.addEventListener("scroll", () => {
+    if (!_historyHasMore || _historyLoading) return;
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80) {
+      loadMoreHistory(false);
+    }
+  });
 }
 
 // ============ 충전 대기 카드 - 행을 누르면 확정 버튼이 그 행 안에 오버레이된다(#18) ============

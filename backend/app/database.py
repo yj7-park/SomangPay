@@ -142,6 +142,11 @@ def init_db():
         # 어드민 회원상세 이력 카드에도 동일하게 "처리 후 잔액" 표시(#19)
         _run_migration_step(db, "ALTER TABLE deposit_histories ADD COLUMN IF NOT EXISTS balance_after INTEGER;", "deposit_histories.balance_after")
 
+        # 관리자 푸시 알림 항목별 on/off (#push-admin)
+        _run_migration_step(db, "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS notify_deposit_error BOOLEAN NOT NULL DEFAULT TRUE;", "push_subscriptions.notify_deposit_error")
+        _run_migration_step(db, "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS notify_deposit_credited BOOLEAN NOT NULL DEFAULT TRUE;", "push_subscriptions.notify_deposit_credited")
+        _run_migration_step(db, "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS notify_payment BOOLEAN NOT NULL DEFAULT TRUE;", "push_subscriptions.notify_payment")
+
         try:
             _backfill_balance_snapshots(db)
         except Exception as e:

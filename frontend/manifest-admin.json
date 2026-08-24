@@ -1,14 +1,14 @@
 {
-  "name": "소망페이 무인 결제 단말기 & 회원 앱",
-  "short_name": "소망페이",
-  "description": "NFC 및 교인증 QR 코드 기반 무인 결제 PWA 웹앱",
-  "start_url": "/kiosk",
-  "scope": "/kiosk",
-  "id": "/kiosk",
-  "display": "fullscreen",
+  "name": "소망페이 - 관리자 대시보드",
+  "short_name": "소망페이 Admin",
+  "description": "소망페이 시스템 통합 관리자 대시보드",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "id": "/admin",
+  "display": "standalone",
   "orientation": "any",
   "background_color": "#090d16",
-  "theme_color": "#06b6d4",
+  "theme_color": "#000000",
   "icons": [
     {
       "src": "/favicon.ico",

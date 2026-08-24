@@ -15,6 +15,8 @@ COPY kiosk.html /usr/share/nginx/html/
 COPY user.html /usr/share/nginx/html/
 COPY admin.html /usr/share/nginx/html/
 COPY manifest.json /usr/share/nginx/html/
+COPY manifest-user.json /usr/share/nginx/html/
+COPY manifest-admin.json /usr/share/nginx/html/
 COPY favicon.ico /usr/share/nginx/html/
 COPY sw.js /usr/share/nginx/html/
 COPY jsQR.min.js /usr/share/nginx/html/

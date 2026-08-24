@@ -201,11 +201,21 @@
     setStatusText(message || "업데이트 중 오류가 발생했습니다.", true);
   };
 
-  // admin.html "앱 버전" 행의 새로고침 버튼 - 모달을 열지 않고 바로 업데이트를 확인한다.
+  // admin.html "앱 버전" 행의 새로고침 버튼 - 모달을 열지 않고 바로 업데이트를 확인하고,
+  // 브라우저/WebView 캐시를 건너뛰고 페이지 자체도 강제로 새로 받아온다(#관리자 화면이
+  // 네이티브 앱 없이 일반 브라우저로 열리는 경우 native 업데이트 확인만으로는 아무 반응이
+  // 없어 보이는 문제 대응).
   window.triggerAppVersionRefresh = function () {
-    if (!hasAndroidUpdateBridge()) return;
-    refreshVersionInfoFromNative();
-    triggerManualCheck();
+    if (hasAndroidUpdateBridge()) {
+      try {
+        refreshVersionInfoFromNative();
+        triggerManualCheck();
+      } catch (e) {
+        console.warn("[업데이트 위젯] 네이티브 업데이트 확인 실패:", e);
+      }
+    }
+    var bustUrl = window.location.pathname + "?_r=" + Date.now();
+    window.location.replace(bustUrl);
   };
 
   document.addEventListener("DOMContentLoaded", initUpdateWidget);

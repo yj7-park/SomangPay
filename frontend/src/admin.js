@@ -57,7 +57,6 @@ function renderTruncatedName(name) {
 let users = [];
 let products = [];
 let cards = [];
-let depositHistories = [];
 let bankTransactions = [];
 let isAdminAuthenticated = false;
 let adminToken = null;
@@ -233,6 +232,149 @@ function updateAdminThemeButtonsUI(activePref) {
   });
 }
 
+// ============ 푸시 알림 구독 (항목별 on/off) ============
+// user.js의 푸시 구독 로직과 거의 같지만, 관리자는 3가지 카테고리를 개별로 켜고 끌 수 있다
+// (app/services/push.py의 ADMIN_CATEGORY_COLUMNS와 이름을 맞춤).
+const ADMIN_PUSH_CATEGORIES = ["deposit_error", "deposit_credited", "payment"];
+
+function adminPushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window;
+}
+
+function urlBase64ToUint8ArrayAdmin(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+function readAdminPushCategoryCheckboxes() {
+  const result = {};
+  ADMIN_PUSH_CATEGORIES.forEach((cat) => {
+    const el = document.getElementById(`a-push-cat-${cat}`);
+    result[`notify_${cat}`] = el ? el.checked : true;
+  });
+  return result;
+}
+
+function setAdminPushCategoryCheckboxesEnabled(enabled) {
+  const wrap = document.getElementById("a-push-categories");
+  if (wrap) wrap.style.opacity = enabled ? "1" : "0.5";
+  ADMIN_PUSH_CATEGORIES.forEach((cat) => {
+    const el = document.getElementById(`a-push-cat-${cat}`);
+    if (el) el.disabled = !enabled;
+  });
+}
+
+async function getCurrentAdminPushSubscription() {
+  if (!adminPushSupported()) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+async function refreshAdminPushButtonUI() {
+  const btn = document.getElementById("a-push-toggle-btn");
+  if (!btn) return;
+  if (!adminPushSupported()) {
+    btn.innerText = "🔕 미지원 브라우저";
+    btn.disabled = true;
+    setAdminPushCategoryCheckboxesEnabled(false);
+    return;
+  }
+  const sub = await getCurrentAdminPushSubscription();
+  btn.disabled = false;
+  btn.innerText = sub ? "🔔 켜짐" : "🔕 꺼짐";
+  setAdminPushCategoryCheckboxesEnabled(!!sub);
+}
+
+async function toggleAdminPushNotifications() {
+  const btn = document.getElementById("a-push-toggle-btn");
+  if (btn) { btn.disabled = true; btn.innerText = "⏳ 처리 중..."; }
+  try {
+    const sub = await getCurrentAdminPushSubscription();
+    if (sub) {
+      await unsubscribeAdminPush(sub);
+    } else {
+      await subscribeAdminPush();
+    }
+  } catch (err) {
+    console.error("관리자 푸시 알림 토글 오류:", err);
+    await showAlertModal(`푸시 알림 처리 중 오류가 발생했습니다.\n(${err && err.message ? err.message : err})`);
+  }
+  refreshAdminPushButtonUI();
+}
+
+async function subscribeAdminPush() {
+  if (!adminPushSupported()) {
+    await showAlertModal("이 브라우저는 푸시 알림을 지원하지 않습니다.");
+    return;
+  }
+  if (Notification.permission === "denied") {
+    await showAlertModal("알림이 차단되어 있습니다. 브라우저 주소창 왼쪽 아이콘(사이트 설정)에서 알림 권한을 허용으로 바꾼 뒤 다시 시도해주세요.");
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      await showAlertModal("알림 권한이 허용되지 않았습니다. 다시 켜기를 눌러 권한을 허용해주세요.");
+      return;
+    }
+    const keyRes = await fetch(`${API_BASE}/push/vapid-public-key`);
+    if (!keyRes.ok) throw new Error(`vapid-public-key ${keyRes.status}`);
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) throw new Error("서버에 VAPID 공개키가 설정되어 있지 않습니다.");
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8ArrayAdmin(publicKey),
+    });
+    const subJson = sub.toJSON();
+    const res = await adminFetch(`${API_BASE}/admin/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign(
+        { endpoint: subJson.endpoint, keys: subJson.keys },
+        readAdminPushCategoryCheckboxes(),
+      )),
+    });
+    if (!res.ok) throw new Error(`admin/push/subscribe ${res.status}`);
+  } catch (err) {
+    console.error("관리자 푸시 구독 오류:", err);
+    await showAlertModal(`푸시 알림 등록에 실패했습니다.\n(${err && err.message ? err.message : err})`);
+  }
+}
+
+async function unsubscribeAdminPush(sub) {
+  try {
+    await adminFetch(`${API_BASE}/admin/push/subscribe`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+    await sub.unsubscribe();
+  } catch (err) {
+    console.error("관리자 푸시 구독 해지 오류:", err);
+  }
+}
+
+// 체크박스 하나 바꿀 때마다 - 아직 구독 전이면(체크박스가 비활성 상태라 사실 못 누르지만
+// 방어적으로) 아무것도 안 하고, 구독 중이면 서버에 항목별 on/off만 갱신한다(재구독 불필요).
+async function updateAdminPushCategories() {
+  const sub = await getCurrentAdminPushSubscription();
+  if (!sub) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/push/subscribe/categories`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ endpoint: sub.endpoint }, readAdminPushCategoryCheckboxes())),
+    });
+    if (!res.ok) throw new Error(`categories update ${res.status}`);
+  } catch (err) {
+    console.error("관리자 푸시 항목 설정 오류:", err);
+    await showAlertModal("알림 항목 설정 저장에 실패했습니다.");
+  }
+}
+
 // 네이티브 앱 안(DepositAutoDetector)이 웹뷰 없이도 입금을 직접 등록할 수 있도록 로그인 토큰을
 // SharedPreferences로도 미러링한다 - 로그인 직후와, 저장돼 있던 토큰으로 자동 로그인됐을 때
 // (위 DOMContentLoaded) 둘 다 호출한다. 일반 브라우저에서는 AndroidInterface가 없어 아무 일도
@@ -284,7 +426,6 @@ function initAdminDashboard() {
   updateFixedViewLayoutMetrics(); // 첫 로드 시 기본 활성 뷰(홈)는 switchAdminView를 안 거치므로 직접 호출
   loadAdminUsers();
   loadAdminProducts();
-  loadDepositHistories();
   loadAdminCards();
   loadBankTransactions();
   loadStatsSummary();
@@ -352,7 +493,6 @@ async function handleAdminRefreshEvent(scopes) {
   if (scopes.includes("cards")) tasks.push(loadAdminCards());
   if (scopes.includes("deposit_queue")) tasks.push(loadBankTransactions());
   if (scopes.includes("stats")) { tasks.push(loadStatsSummary()); tasks.push(loadBankTransactions()); tasks.push(loadKiosks()); }
-  if (scopes.includes("deposits")) tasks.push(loadDepositHistories());
   await Promise.all(tasks);
 
   // 지금 열려 있는 회원 상세도 최신 데이터(users/cards/deposits)로 다시 그린다.
@@ -377,6 +517,7 @@ function switchAdminView(viewName, inboxFilter) {
     });
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") renderKioskList();
+    if (viewName === "settings") refreshAdminPushButtonUI();
     if (viewName === "inbox") {
       if (inboxFilter) {
         inboxDepositFilter = inboxFilter;
@@ -975,16 +1116,6 @@ async function loadAdminProducts() {
   }
 }
 
-async function loadDepositHistories() {
-  try {
-    const res = await adminFetch(`${API_BASE}/histories/deposits`);
-    if (!res.ok) return;
-    depositHistories = await res.json();
-  } catch (err) {
-    console.error("Failed to load deposit histories:", err);
-  }
-}
-
 async function loadAdminCards() {
   try {
     const res = await adminFetch(`${API_BASE}/admin/cards`);
@@ -1427,7 +1558,6 @@ async function submitDetailRecharge(btn) {
         closeDetailRechargeModal();
         await showAlertModal(data.message);
         await loadAdminUsers();
-        await loadDepositHistories();
         await loadStatsSummary();
         renderMemberDetail();
       } else {
@@ -1475,7 +1605,6 @@ async function submitDetailDeduct(btn) {
         closeDetailDeductModal();
         await showAlertModal(data.message);
         await loadAdminUsers();
-        await loadDepositHistories();
         await loadStatsSummary();
         renderMemberDetail();
       } else {
@@ -1489,68 +1618,84 @@ async function submitDetailDeduct(btn) {
 }
 
 // 이력 카드 레이아웃(#19): 좌상단 종류 배지(충전/결제/실패) + 날짜, 좌하단 사유(충전 메모 /
-// 결제 목록 / 실패 사유), 우상단 금액(+/-), 우하단 잔액. 유저 앱 이용 내역(user.js의
-// depositRowHtml/paymentRowHtml)과 동일한 .history-item* 마크업/클래스를 쓴다.
-async function renderDetailHistory() {
-  const box = document.getElementById("detail-history-list");
-  if (!box) return;
-  box.innerHTML = `<p style="color: var(--text-muted);">불러오는 중...</p>`;
+// 결제 목록 / 실패 사유), 우상단 금액(+/-), 우하단 잔액. /api/admin/history(계좌이체/결제/
+// 관리자충전을 통일된 형태로 병합해서 커서 페이지네이션으로 내려줌 - app/services/history.py)를
+// 스크롤 시 이어서 불러온다(#history) - user 앱(user.js)과 완전히 같은 API/로직을 쓰므로
+// 두 화면이 서로 다른 이력을 보여주는 일이 구조적으로 없다.
+let _detailHistoryCursor = null;
+let _detailHistoryHasMore = true;
+let _detailHistoryLoading = false;
 
-  const deposits = depositHistories
-    .filter(h => h.user_id === currentDetailUserId)
-    .map(h => {
-      const isDeduct = h.deposit_type === "ADMIN_MANUAL_DEDUCT";
-      return {
-        type: isDeduct ? "금액 차감" : "금액 충전", cls: isDeduct ? "status-rejected" : "status-done",
-        amount: h.amount, balance_after: h.balance_after,
-        reason: h.memo || (isDeduct ? "관리자 직권 차감" : "관리자 직권 충전"), created_at: h.created_at,
-      };
-    });
-
-  let payments = [];
-  try {
-    const res = await adminFetch(`${API_BASE}/payments?user_id=${currentDetailUserId}&limit=20`);
-    if (res.ok) {
-      const txs = await res.json();
-      payments = txs.map(t => {
-        const isFailed = t.status === "FAILED";
-        return {
-          type: isFailed ? "결제 실패" : "결제 성공", cls: isFailed ? "status-rejected" : "status-payment",
-          amount: -t.amount, balance_after: t.balance_after,
-          reason: isFailed ? (t.failure_reason || "결제 실패") : (t.product_details || "-"),
-          created_at: t.created_at,
-        };
-      });
-    }
-  } catch (err) {
-    console.error("Failed to load payment history:", err);
-  }
-
-  const combined = [...deposits, ...payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-  if (combined.length === 0) {
-    box.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem 0;">이력이 없습니다.</p>`;
-    return;
-  }
-
-  box.innerHTML = combined.slice(0, 30).map(h => {
-    const amountCls = h.type === "결제 실패" ? "amount-neutral" : (h.amount >= 0 ? "amount-positive" : "amount-negative");
-    return `
+function historyItemHtml(item) {
+  return `
     <div class="history-item">
       <div class="history-item-left">
         <div class="history-item-top">
-          <span class="activity-status ${h.cls}">${h.type}</span>
-          <span class="history-item-date">${new Date(h.created_at).toLocaleString()}</span>
+          <span class="activity-status ${item.badge_class}">${item.label}</span>
+          <span class="history-item-date">${new Date(item.event_time).toLocaleString()}</span>
         </div>
-        <div class="history-item-reason">${escapeHtml(h.reason)}</div>
+        <div class="history-item-reason">${escapeHtml(item.reason)}</div>
       </div>
       <div class="history-item-right">
-        <div class="history-item-amount ${amountCls}">${h.amount >= 0 ? '+' : ''}${h.amount.toLocaleString()}원</div>
-        ${h.balance_after != null ? `<div class="history-item-balance">잔액 ${h.balance_after.toLocaleString()}원</div>` : ""}
+        <div class="history-item-amount ${item.amount_class}">${item.amount_text}</div>
+        ${item.balance_after != null ? `<div class="history-item-balance">잔액 ${item.balance_after.toLocaleString()}원</div>` : ""}
       </div>
     </div>
   `;
-  }).join("");
+}
+
+// 회원상세를 새로 열거나(renderMemberDetail) 잔액이 바뀌는 조작 직후 다시 그릴 때마다
+// 첫 페이지부터 새로 불러온다.
+function renderDetailHistory() {
+  const box = document.getElementById("detail-history-list");
+  if (!box) return;
+  _detailHistoryCursor = null;
+  _detailHistoryHasMore = true;
+  box.innerHTML = "";
+  setupDetailHistoryInfiniteScroll();
+  loadMoreDetailHistory();
+}
+
+async function loadMoreDetailHistory() {
+  const box = document.getElementById("detail-history-list");
+  if (!box) return;
+  if (!_detailHistoryHasMore || _detailHistoryLoading) return;
+  _detailHistoryLoading = true;
+  try {
+    const url = `${API_BASE}/admin/history?user_id=${currentDetailUserId}&limit=20`
+      + (_detailHistoryCursor ? `&before=${encodeURIComponent(_detailHistoryCursor)}` : "");
+    const res = await adminFetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.items.length === 0) {
+      _detailHistoryHasMore = false;
+      if (box.children.length === 0) {
+        box.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem 0;">이력이 없습니다.</p>`;
+      }
+      return;
+    }
+    box.insertAdjacentHTML("beforeend", data.items.map(historyItemHtml).join(""));
+    _detailHistoryCursor = data.next_cursor;
+  } catch (err) {
+    console.error("loadMoreDetailHistory error:", err);
+  } finally {
+    _detailHistoryLoading = false;
+  }
+}
+
+// 회원상세 뷰는 전용 스크롤 박스가 없이 다른 탭들처럼 window가 스크롤된다(FIXED_HEIGHT_VIEWS는
+// search/inbox 전용) - 하단 80px 이내 진입 시 다음 페이지, 단 회원상세 뷰가 활성 상태일 때만.
+function setupDetailHistoryInfiniteScroll() {
+  if (window._detailHistoryScrollWired) return;
+  window._detailHistoryScrollWired = true;
+  window.addEventListener("scroll", () => {
+    const view = document.getElementById("admin-view-member-detail");
+    if (!view || !view.classList.contains("active")) return;
+    if (!_detailHistoryHasMore || _detailHistoryLoading) return;
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80) {
+      loadMoreDetailHistory();
+    }
+  });
 }
 
 // ============ 계좌 입금 목록 (충전함 - 전체) ============
@@ -1684,9 +1829,11 @@ function renderDepositUserOptions() {
   box.innerHTML = matches.map(u => {
     const selected = u.id === _depositDetailSelectedUserId;
     return `
-      <div onclick="selectDepositUser(${u.id})" style="display:flex; justify-content:space-between; align-items:center; padding: 0.5rem 0.7rem; border-radius: 8px; cursor:pointer; background: ${selected ? "rgba(16,185,129,0.15)" : "var(--surface-2)"}; border: 1px solid ${selected ? "var(--accent-emerald)" : "transparent"};">
-        <span>${renderTruncatedName(u.name)} <span style="color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.phone || "")}</span></span>
-        ${selected ? `<span data-icon="check" style="color: var(--accent-emerald);"></span>` : ""}
+      <div onclick="selectDepositUser(${u.id})" style="display:flex; align-items:center; gap: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 8px; cursor:pointer; background: ${selected ? "rgba(16,185,129,0.15)" : "var(--surface-2)"}; border: 1px solid ${selected ? "var(--accent-emerald)" : "transparent"};">
+        <span title="${escapeHtml(u.name || "")}" style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(u.name || "")}</span>
+        <span style="flex: 0 0 auto; width: 100px; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.phone || "")}</span>
+        <span style="flex: 0 0 auto; width: 80px; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.birth_date || "-")}</span>
+        <span style="flex: 0 0 auto; width: 1rem; text-align: right;">${selected ? `<span data-icon="check" style="color: var(--accent-emerald);"></span>` : ""}</span>
       </div>
     `;
   }).join("");
@@ -1721,7 +1868,6 @@ async function submitDepositResolve(btn) {
       closeDepositDetailModal();
       showToast(`✅ ${data.matched_user_name || ''}님에게 ${data.amount.toLocaleString()}원 충전 처리했습니다.`);
       loadAdminUsers();
-      loadDepositHistories();
       loadBankTransactions();
       loadStatsSummary();
     } catch (err) {
@@ -2148,7 +2294,6 @@ window.onNativeDetectionLogged = function (entryJson) {
   if (entry.outcome === "success") {
     showToast(`✅ ${entry.detail || "입금이 자동 등록되었습니다."}`);
     loadAdminUsers();
-    loadDepositHistories();
     loadBankTransactions();
     loadStatsSummary();
   }

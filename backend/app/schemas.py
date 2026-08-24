@@ -201,22 +201,6 @@ class PaymentResponse(BaseModel):
     message: str
     created_at: Optional[UTCDatetime] = None
 
-class PaymentTransactionResponse(BaseModel):
-    id: int
-    transaction_code: str
-    user_id: int
-    user_name: Optional[str] = None
-    amount: int
-    balance_after: int
-    status: str
-    failure_reason: Optional[str] = None
-    product_details: Optional[str] = None
-    kiosk_name: Optional[str] = None
-    created_at: UTCDatetime
-
-    class Config:
-        from_attributes = True
-
 # Deposit History (충전이 실제로 반영된 통합 이력)
 class DepositHistoryResponse(BaseModel):
     id: int
@@ -244,6 +228,45 @@ class ChargeGuideResponse(BaseModel):
     account_number: str
     account_holder: str
     depositor_name: str  # 이 회원이 입금 시 입력해야 할 고유 이름 (= User.name)
+
+# ================= 이용내역 (계좌이체/결제/관리자충전 통합, 커서 페이지네이션) =================
+
+class HistoryItemResponse(BaseModel):
+    label: str  # "금액 충전" / "금액 차감" / "결제 성공" / "결제 실패" / "보류"
+    badge_class: str  # "status-done" | "status-rejected" | "status-payment"
+    amount: int  # 부호 있는 원래 금액값 (참고용 - 화면 표시는 amount_text/amount_class 사용)
+    amount_text: str  # 화면에 그대로 넣을 문자열(부호/천단위 콤마 포함, 예: "+10,000원")
+    amount_class: str  # "amount-positive" | "amount-negative" | "amount-neutral"
+    balance_after: Optional[int] = None
+    reason: str
+    event_time: UTCDatetime  # 실제 반영 시각(계좌이체는 resolved_at, 그 외는 created_at)
+
+class HistoryPageResponse(BaseModel):
+    items: List[HistoryItemResponse]
+    next_cursor: Optional[str] = None  # items가 비어있으면 None - 클라이언트는 이걸로 "더 없음" 판단
+
+# ================= Web Push 구독 =================
+
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    keys: PushSubscriptionKeys
+    # 관리자 쪽 항목별 on/off - 회원 구독 요청에는 안 실려오지만 스키마 기본값(True)으로 채워짐
+    notify_deposit_error: bool = True
+    notify_deposit_credited: bool = True
+    notify_payment: bool = True
+
+class PushSubscriptionDelete(BaseModel):
+    endpoint: str
+
+class PushCategoriesUpdate(BaseModel):
+    endpoint: str
+    notify_deposit_error: bool = True
+    notify_deposit_credited: bool = True
+    notify_payment: bool = True
 
 # ================= 은행거래 원장 (모킹 - 나중에 실제 NH API 연동) =================
 

@@ -13,6 +13,8 @@ from app import models, schemas, security
 from app.database import engine, get_db, init_db
 from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
+from app.services.history import get_history_page
+from app.services.push import send_push_to_user, send_push_to_admins
 from app.ws_manager import manager, notify_admins, notify_user
 
 app = FastAPI(
@@ -33,6 +35,8 @@ app.add_middleware(
 CHURCH_BANK_NAME = os.getenv("CHURCH_BANK_NAME", "NH농협")
 CHURCH_ACCOUNT_NUMBER = os.getenv("CHURCH_ACCOUNT_NUMBER", "302-1234-5678-01")
 CHURCH_ACCOUNT_HOLDER = os.getenv("CHURCH_ACCOUNT_HOLDER", "소망교회")
+
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -193,6 +197,116 @@ def change_my_password(
     db.commit()
     return {"success": True, "message": "비밀번호가 변경되었습니다."}
 
+# ================= Web Push 구독 =================
+
+@app.get("/api/push/vapid-public-key")
+def get_vapid_public_key():
+    """구독 생성 시 브라우저에 넘겨줄 VAPID 공개키 - 공개키라 인증 불필요."""
+    return {"publicKey": VAPID_PUBLIC_KEY}
+
+@app.post("/api/push/subscribe")
+def subscribe_push(
+    req: schemas.PushSubscriptionCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_user_auth),
+):
+    """기기의 Web Push 구독을 등록/갱신한다(endpoint 기준 upsert - 같은 기기에서 재구독해도
+    행이 늘어나지 않고, 다른 계정으로 로그인해 재구독하면 소유자만 갱신된다)."""
+    existing = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.endpoint
+    ).first()
+    if existing:
+        existing.user_id = user.id
+        existing.p256dh = req.keys.p256dh
+        existing.auth = req.keys.auth
+    else:
+        db.add(models.PushSubscription(
+            user_id=user.id,
+            endpoint=req.endpoint,
+            p256dh=req.keys.p256dh,
+            auth=req.keys.auth,
+        ))
+    db.commit()
+    return {"success": True}
+
+@app.delete("/api/push/subscribe")
+def unsubscribe_push(
+    req: schemas.PushSubscriptionDelete,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_user_auth),
+):
+    """본인 기기의 Web Push 구독을 해지한다."""
+    db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.endpoint,
+        models.PushSubscription.user_id == user.id,
+    ).delete()
+    db.commit()
+    return {"success": True}
+
+@app.post("/api/admin/push/subscribe")
+def subscribe_admin_push(
+    req: schemas.PushSubscriptionCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 기기의 Web Push 구독을 등록/갱신한다(endpoint 기준 upsert). 요청에 담긴
+    항목별 on/off 값도 함께 저장한다."""
+    existing = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.endpoint
+    ).first()
+    if existing:
+        existing.user_id = admin.id
+        existing.p256dh = req.keys.p256dh
+        existing.auth = req.keys.auth
+        existing.notify_deposit_error = req.notify_deposit_error
+        existing.notify_deposit_credited = req.notify_deposit_credited
+        existing.notify_payment = req.notify_payment
+    else:
+        db.add(models.PushSubscription(
+            user_id=admin.id,
+            endpoint=req.endpoint,
+            p256dh=req.keys.p256dh,
+            auth=req.keys.auth,
+            notify_deposit_error=req.notify_deposit_error,
+            notify_deposit_credited=req.notify_deposit_credited,
+            notify_payment=req.notify_payment,
+        ))
+    db.commit()
+    return {"success": True}
+
+@app.delete("/api/admin/push/subscribe")
+def unsubscribe_admin_push(
+    req: schemas.PushSubscriptionDelete,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    """본인(관리자) 기기의 Web Push 구독을 해지한다."""
+    db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.endpoint,
+        models.PushSubscription.user_id == admin.id,
+    ).delete()
+    db.commit()
+    return {"success": True}
+
+@app.put("/api/admin/push/subscribe/categories")
+def update_admin_push_categories(
+    req: schemas.PushCategoriesUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    """이미 구독 중인 관리자 기기의 항목별 on/off만 갱신한다(재구독 불필요)."""
+    sub = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.endpoint,
+        models.PushSubscription.user_id == admin.id,
+    ).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="구독 정보를 찾을 수 없습니다. 먼저 푸시 알림을 켜주세요.")
+    sub.notify_deposit_error = req.notify_deposit_error
+    sub.notify_deposit_credited = req.notify_deposit_credited
+    sub.notify_payment = req.notify_payment
+    db.commit()
+    return {"success": True}
+
 # ================= 관리자 - 회원 CRUD =================
 
 @app.get("/api/users", response_model=List[schemas.UserResponse])
@@ -327,6 +441,7 @@ async def admin_recharge_credit(
 
     await notify_admins(["users", "stats", "deposits"])
     await notify_user(user.id, ["me"])
+    send_push_to_user(db, user.id, "충전 완료", f"{req.amount:,}원이 충전되었습니다 (잔액 {user.credit_balance:,}원)")
     return {
         "success": True,
         "message": f"{user.name}님에게 {req.amount:,}원이 충전되었습니다.",
@@ -758,6 +873,7 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
     # 결제로 잔액이 바뀌었으므로 관리자 대시보드와 결제한 회원 본인 화면을 갱신
     await notify_admins(["users", "stats"])
     await notify_user(user.id, ["me"])
+    send_push_to_admins(db, "결제 발생", f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment")
 
     user_type_label = "시니어" if user.user_type == "SENIOR" else "일반"
 
@@ -772,57 +888,39 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
         created_at=tx_success.created_at
     )
 
-def _payment_tx_response(db: Session, tx: "models.PaymentTransaction", user_name: Optional[str] = None) -> schemas.PaymentTransactionResponse:
-    """PaymentTransaction을 응답 스키마로 변환하며 회원명/결제된 키오스크명을 조인해 채운다."""
-    res = schemas.PaymentTransactionResponse.from_orm(tx)
-    res.user_name = user_name
-    if tx.kiosk_device_id:
-        kiosk = db.query(models.KioskDevice).filter(models.KioskDevice.id == tx.kiosk_device_id).first()
-        res.kiosk_name = kiosk.device_name if kiosk else None
-    return res
+# ================= 이용내역 (계좌이체/결제/관리자충전 통합, 커서 페이지네이션) =================
+# 세 소스를 병합해서 시간순으로 보여줘야 하는데, admin/user가 각자 따로 병합·정렬하다가
+# 정렬 기준이 어긋나 두 화면에 다른 이력이 보이는 버그가 있었다(#history) - 이제 양쪽 다
+# get_history_page() 하나만 호출해서 항상 같은 결과를 보게 한다.
 
-@app.get("/api/payments", response_model=List[schemas.PaymentTransactionResponse])
-def get_payment_transactions(
-    user_id: Optional[int] = None,
-    limit: int = 50,
-    offset: int = 0,
+def _parse_history_cursor(before: Optional[str]) -> Optional[datetime.datetime]:
+    if not before:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(before)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="잘못된 cursor 형식입니다.")
+
+@app.get("/api/history/me", response_model=schemas.HistoryPageResponse)
+def get_my_history(
+    before: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_user_auth),
+):
+    """본인 이용내역(계좌이체 충전/결제/관리자 직권충전·차감 통합) - 커서 기반 페이지네이션."""
+    return get_history_page(db, user.id, _parse_history_cursor(before), min(limit, 100))
+
+@app.get("/api/admin/history", response_model=schemas.HistoryPageResponse)
+def get_admin_history(
+    user_id: int,
+    before: Optional[str] = None,
+    limit: int = 20,
     db: Session = Depends(get_db),
     _admin: models.User = Depends(require_admin_auth),
 ):
-    """결제 내역 조회 (관리자 전용) - 통계 및 회원 상세 화면에서 사용."""
-    query = db.query(models.PaymentTransaction)
-    if user_id is not None:
-        query = query.filter(models.PaymentTransaction.user_id == user_id)
-    txs = query.order_by(models.PaymentTransaction.id.desc()).offset(offset).limit(min(limit, 200)).all()
-
-    result = []
-    for tx in txs:
-        user = db.query(models.User).filter(models.User.id == tx.user_id).first()
-        result.append(_payment_tx_response(db, tx, user.name if user else "Unknown"))
-    return result
-
-@app.get("/api/payments/me", response_model=List[schemas.PaymentTransactionResponse])
-def get_my_payment_transactions(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
-    """본인 결제 내역(성공/실패 포함) - 회원 PWA에서 충전 내역과 함께 이용 내역으로 표시."""
-    txs = db.query(models.PaymentTransaction).filter(
-        models.PaymentTransaction.user_id == user.id
-    ).order_by(models.PaymentTransaction.id.desc()).limit(100).all()
-    return [_payment_tx_response(db, t, user.name) for t in txs]
-
-@app.get("/api/deposit-histories/me", response_model=List[schemas.DepositHistoryResponse])
-def get_my_deposit_histories(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
-    """관리자가 직권으로 충전/차감한 내역(계좌이체 충전은 bank-transactions/me에 이미
-    포함되므로 여기서는 제외) - 회원 PWA 이용 내역에서 결제/계좌이체 충전과 함께 표시."""
-    histories = db.query(models.DepositHistory).filter(
-        models.DepositHistory.user_id == user.id,
-        models.DepositHistory.deposit_type != "BANK_TRANSFER",
-    ).order_by(models.DepositHistory.id.desc()).limit(100).all()
-    result = []
-    for h in histories:
-        res = schemas.DepositHistoryResponse.from_orm(h)
-        res.user_name = user.name
-        result.append(res)
-    return result
+    """관리자 회원상세 화면의 이용내역 - get_my_history와 동일 로직(user_id만 다름)."""
+    return get_history_page(db, user_id, _parse_history_cursor(before), min(limit, 100))
 
 # ================= 계좌이체 충전 (회원) =================
 
@@ -885,6 +983,7 @@ async def claim_bank_transaction(
 
     await notify_admins(["deposit_queue", "stats", "deposits", "users"])
     await notify_user(user.id, ["me"])
+    send_push_to_admins(db, "충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다", category="deposit_credited")
     return schemas.DepositClaimResult(
         success=True,
         message=f"{txn.amount:,}원이 충전되었습니다.",
@@ -918,6 +1017,9 @@ async def admin_add_bank_transaction(
     await notify_admins(["deposit_queue", "stats"])
     if txn.status == "PENDING":
         await notify_user(txn.matched_user_id, ["me", "deposits"])
+        send_push_to_user(db, txn.matched_user_id, "입금이 확인됐어요", f"{txn.amount:,}원 입금 확인 - 앱에서 충전을 완료해주세요")
+    elif txn.status == "ERROR":
+        send_push_to_admins(db, "미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다", category="deposit_error")
     return _bank_txn_response(db, txn)
 
 @app.get("/api/admin/bank-transactions", response_model=List[schemas.BankTransactionResponse])
@@ -992,6 +1094,7 @@ async def admin_resolve_bank_transaction(
 
     await notify_admins(["deposit_queue", "stats", "deposits", "users"])
     await notify_user(user.id, ["me"])
+    send_push_to_user(db, user.id, "충전 완료", f"{txn.amount:,}원이 충전되었습니다 (잔액 {user.credit_balance:,}원)")
     return _bank_txn_response(db, txn)
 
 @app.post("/api/admin/bank-transactions/{txn_id}/mark-other", response_model=schemas.BankTransactionResponse)

@@ -1109,6 +1109,28 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .history-item-amount.amount-neutral {
   color: var(--text-muted);
 }
+/* 이용내역 날짜 구분선(#33) - 카드를 날짜별로 묶어 이 줄로 나누고, 카드 자체에는
+   시간만 남긴다(historyItemHtml 참고). */
+.history-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 1rem 0 0.6rem;
+}
+.history-date-divider:first-child {
+  margin-top: 0;
+}
+.history-date-divider::before,
+.history-date-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-glass);
+}
+
 .history-item-balance {
   font-size: 0.78rem;
   color: var(--text-muted);

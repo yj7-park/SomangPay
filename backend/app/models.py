@@ -141,6 +141,22 @@ class PaymentTransaction(Base):
 
     user = relationship("User", back_populates="payments")
 
+class PushSubscription(Base):
+    """회원/관리자 기기의 Web Push 구독 정보 (기기/브라우저별로 별도 행 - 다중 기기 허용).
+    notify_* 플래그는 관리자 쪽 항목별 on/off용 - 회원 쪽 발송(send_push_to_user)은
+    카테고리 구분 없이 항상 보내므로 회원 구독 행에서는 사실상 안 쓰이고 기본값(True)로 남는다."""
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    endpoint = Column(Text, unique=True, nullable=False)
+    p256dh = Column(String(200), nullable=False)
+    auth = Column(String(100), nullable=False)
+    notify_deposit_error = Column(Boolean, default=True, nullable=False)  # 미매칭 입금 발생(관리자 확인 필요)
+    notify_deposit_credited = Column(Boolean, default=True, nullable=False)  # 회원 셀프클레임으로 충전 반영됨
+    notify_payment = Column(Boolean, default=True, nullable=False)  # 키오스크 결제 발생
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class PaymentLineItem(Base):
     """결제 1건에 포함된 메뉴별 상세 - 메뉴별/키오스크별 매출 집계용 (product_details는 텍스트 요약이라 집계 불가).
     이 테이블 도입 이전 결제 건에는 라인아이템이 없으므로, 집계는 이후 결제부터만 반영된다."""
