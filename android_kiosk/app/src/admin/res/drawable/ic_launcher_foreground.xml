@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 소망교회 로고 마크 + 관리자 구분용 톱니 뱃지(우측 하단). kiosk 플레이버의 카드 뱃지와
-     마크/뱃지 배경은 동일하고 글리프만 다르다. -->
+<!-- 소망교회 로고 마크 + 관리자 구분용 톱니 뱃지(우측 하단). 세 플레이버가 마크/뱃지 배경은
+     동일하고 글리프만 다르다 (kiosk=단말기, user=카드). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"

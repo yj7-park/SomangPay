@@ -29,7 +29,7 @@ android {
         kiosk {
             dimension "target"
             applicationId "com.somangpay.kiosk"
-            resValue "string", "app_name", "소망페이 무인 결제기"
+            resValue "string", "app_name", "소망페이 키오스크"
             buildConfigField "String", "TARGET_URL", '"https://125.248.31.132/kiosk"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "true"
             buildConfigField "boolean", "SMS_DETECT_ENABLED", "false"
@@ -52,7 +52,7 @@ android {
         user {
             dimension "target"
             applicationId "com.somangpay.user"
-            resValue "string", "app_name", "소망페이 회원"
+            resValue "string", "app_name", "소망페이"
             buildConfigField "String", "TARGET_URL", '"http://125.248.31.132:8080/user"'
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
             buildConfigField "boolean", "SMS_DETECT_ENABLED", "false"

@@ -1,5 +1,5 @@
 {
-  "name": "소망페이 - 회원 마이페이지",
+  "name": "소망페이",
   "short_name": "소망페이",
   "description": "소망페이 회원 잔액 조회 및 충전 신청 앱",
   "start_url": "/user",
@@ -11,30 +11,30 @@
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "/favicon.ico",
+      "src": "/favicon-user.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/icon-192-user.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512-user.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192-maskable.png",
+      "src": "/icons/icon-192-user-maskable.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512-maskable.png",
+      "src": "/icons/icon-512-user-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

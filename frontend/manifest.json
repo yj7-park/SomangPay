@@ -1,6 +1,6 @@
 {
-  "name": "소망페이 무인 결제 단말기 & 회원 앱",
-  "short_name": "소망페이",
+  "name": "소망페이 키오스크",
+  "short_name": "소망페이 키오스크",
   "description": "NFC 및 교인증 QR 코드 기반 무인 결제 PWA 웹앱",
   "start_url": "/kiosk",
   "scope": "/kiosk",
@@ -11,30 +11,30 @@
   "theme_color": "#06b6d4",
   "icons": [
     {
-      "src": "/favicon.ico",
+      "src": "/favicon-kiosk.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/icon-192-kiosk.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512-kiosk.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192-maskable.png",
+      "src": "/icons/icon-192-kiosk-maskable.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512-maskable.png",
+      "src": "/icons/icon-512-kiosk-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

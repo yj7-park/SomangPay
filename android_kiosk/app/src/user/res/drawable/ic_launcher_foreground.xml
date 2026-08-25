@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 소망교회 로고 마크 + 회원 구분용 사람 뱃지(우측 하단). kiosk 플레이버의 카드 뱃지와
-     마크/뱃지 배경은 동일하고 글리프만 다르다. -->
+<!-- 소망교회 로고 마크 + 회원 구분용 카드 뱃지(우측 하단). kiosk 플레이버는 이제 단말기(모니터
+     +스탠드) 뱃지를 쓰고, 회원 잔액/결제 수단을 표현하는 카드 뱃지는 user 플레이버로 옮겨왔다
+     - 마크/뱃지 배경은 세 플레이버가 동일하고 글리프만 다르다(admin=톱니). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -40,13 +41,16 @@
             android:fillColor="#1f1e59"
             android:pathData="M65.880,84.240 a18.360,18.360 0 1,0 36.720,0 a18.360,18.360 0 1,0 -36.720,0 Z" />
 
-        <!-- 사람(회원=User) 글리프: 머리 원 + 어깨 반원 -->
+        <!-- 카드(회원=결제 수단) 글리프: 사각 테두리 + 마그네틱 스트라이프 -->
         <path
             android:fillColor="#ffffff"
-            android:pathData="M78.732,76.529 a5.508,5.508 0 1,0 11.016,0 a5.508,5.508 0 1,0 -11.016,0 Z" />
+            android:pathData="M73.683,76.896 L94.797,76.896 L94.797,91.584 L73.683,91.584 Z" />
+        <path
+            android:fillColor="#1f1e59"
+            android:pathData="M74.979,78.192 L93.501,78.192 L93.501,90.288 L74.979,90.288 Z" />
         <path
             android:fillColor="#ffffff"
-            android:pathData="M74.601,92.043 a9.639,10.144 0 0,0 19.278,0 Z" />
+            android:pathData="M73.683,80.127 L94.797,80.127 L94.797,84.240 L73.683,84.240 Z" />
     </group>
 
 </vector>
