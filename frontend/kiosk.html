@@ -44,6 +44,13 @@
   </script>
 
   <div class="kiosk-wrapper">
+    <!-- 결제 결과 테두리 글로우(success/error/warning-glow-active, kiosk.js의
+         triggerXEdgeGlow() 참고) 전용 오버레이 - 예전엔 이 글로우를 .kiosk-wrapper 자체에
+         inset box-shadow로 그렸는데, .kiosk-header가 position:sticky + z-index:100 + 불투명
+         배경이라 헤더 영역만 글로우가 안 보였다. position:fixed + 헤더보다 훨씬 높은 z-index로
+         뷰포트 전체(타이틀바 포함) 위에 그리도록 별도 레이어로 뺐다 - pointer-events:none이라
+         클릭은 그대로 밑으로 통과한다. -->
+    <div id="kiosk-edge-glow-overlay" style="position: fixed; inset: 0; z-index: 1500; pointer-events: none;"></div>
     <!-- Top Header -->
     <header class="kiosk-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; width: 100%; max-width: 100%; box-sizing: border-box;">
       <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
@@ -319,6 +326,6 @@
 
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
-  <script src="src/kiosk.js?v=20260825_0008"></script>
+  <script src="src/kiosk.js?v=20260825_0009"></script>
 </body>
 </html>

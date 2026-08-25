@@ -816,31 +816,34 @@ function closeNoMenuModal() {
 
 // ================= SUCCESS GLOW & RECENT PAYMENTS =================
 
+// 헤더까지 포함해 화면 전체 맨 위에 그려지도록 #kiosk-edge-glow-overlay 전용 레이어에
+// 토글한다 (.kiosk-wrapper에 직접 걸면 sticky+불투명 배경인 헤더에 가려 타이틀바 쪽만
+// 글로우가 안 보였다).
 function triggerSuccessEdgeGlow() {
-  const wrapper = document.querySelector(".kiosk-wrapper");
-  if (!wrapper) return;
-  wrapper.classList.remove("success-glow-active", "error-glow-active", "warning-glow-active");
-  void wrapper.offsetWidth;
-  wrapper.classList.add("success-glow-active");
-  setTimeout(() => wrapper.classList.remove("success-glow-active"), 1500);
+  const overlay = document.getElementById("kiosk-edge-glow-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("success-glow-active", "error-glow-active", "warning-glow-active");
+  void overlay.offsetWidth;
+  overlay.classList.add("success-glow-active");
+  setTimeout(() => overlay.classList.remove("success-glow-active"), 1500);
 }
 
 function triggerErrorEdgeGlow() {
-  const wrapper = document.querySelector(".kiosk-wrapper");
-  if (!wrapper) return;
-  wrapper.classList.remove("success-glow-active", "error-glow-active", "warning-glow-active");
-  void wrapper.offsetWidth;
-  wrapper.classList.add("error-glow-active");
-  setTimeout(() => wrapper.classList.remove("error-glow-active"), 1500);
+  const overlay = document.getElementById("kiosk-edge-glow-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("success-glow-active", "error-glow-active", "warning-glow-active");
+  void overlay.offsetWidth;
+  overlay.classList.add("error-glow-active");
+  setTimeout(() => overlay.classList.remove("error-glow-active"), 1500);
 }
 
 function triggerWarningEdgeGlow() {
-  const wrapper = document.querySelector(".kiosk-wrapper");
-  if (!wrapper) return;
-  wrapper.classList.remove("success-glow-active", "error-glow-active", "warning-glow-active");
-  void wrapper.offsetWidth;
-  wrapper.classList.add("warning-glow-active");
-  setTimeout(() => wrapper.classList.remove("warning-glow-active"), 1500);
+  const overlay = document.getElementById("kiosk-edge-glow-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("success-glow-active", "error-glow-active", "warning-glow-active");
+  void overlay.offsetWidth;
+  overlay.classList.add("warning-glow-active");
+  setTimeout(() => overlay.classList.remove("warning-glow-active"), 1500);
 }
 
 let recentPaymentsList = [];
