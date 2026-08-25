@@ -1529,6 +1529,46 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   .kiosk-checkout-section .section-title {
     margin-bottom: 0 !important;
   }
+
+  /* 결제 금액 / 최근 결제 내역 블록이 각자 콘텐츠 높이만큼만 차지하고 남는 공간을 그냥
+     비워두던 것을, 아래 min-height:700px 블록과 동일한 방식(2분할 flex)으로 바꾼다 -
+     이 저해상도 가로 모드는 세로 공간이 워낙 빠듯해서(#35) 콘텐츠 실높이 합이 섹션 높이에
+     거의 딱 맞아떨어져 "최근 결제 내역" 카드 아래 여백이 사실상 0으로 보였다. flex:1로
+     each 블록에 남는 공간을 나눠주고 내부 리스트가 스크롤되게 하면 카드 자체는 항상 여유
+     있는 높이를 유지한다. */
+  .kiosk-checkout-section > #kiosk-checkout-amount-block,
+  .kiosk-checkout-section > #kiosk-checkout-recent-block {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  #kiosk-checkout-amount-grid {
+    flex: 1;
+    min-height: 0;
+  }
+  #cart-items-container {
+    max-height: none !important;
+    flex: 1;
+    min-height: 0;
+  }
+  #kiosk-checkout-recent-block {
+    display: flex !important;
+  }
+  #recent-payments-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #recent-payments-list {
+    max-height: none !important;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
 }
 
 /* Payment Success Screen Edge Green Glow Animation */
@@ -1939,8 +1979,13 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   gap: 1.2rem;
   /* min/max가 아니라 고정 height - 메뉴 개수가 적어서 그리드에 남는 공간이 있어도(위
      align-content: start와 함께) 카드가 늘어나지 않고, 많아서 스크롤이 생겨도 줄어들지
-     않는다. */
+     않는다. 위쪽 bare .menu-card 규칙(admin의 2열 카드 그리드용)이 min-height: 145px
+     !important / max-height: 200px !important를 걸어두는데, height만 덮어쓰고 이 둘을
+     그대로 두면 min-height가 height보다 커서 실제로는 145px로 렌더링된다(#35) - 여기서도
+     같이 초기화해야 의도한 88px 고정 높이가 실제로 적용된다. */
   height: 88px !important;
+  min-height: 88px !important;
+  max-height: none !important;
 }
 .menu-grid .menu-card .menu-name {
   flex: 1 1 auto;
