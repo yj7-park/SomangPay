@@ -485,11 +485,18 @@ public class CardReaderManager {
     }
 
     // 카메라 사용 중에는 기기 내장 NFC만 잠시 멈춘다 (외부 USB 리더는 카메라와 상시 동시 사용 가능하므로 그대로 둠).
-    // JS가 카메라를 닫을 때는 기존 evaluateAndActivate() 재평가 경로(reevaluateCardReaders)로 다시 켜진다.
+    // JS가 카메라를 닫을 때는 기존 evaluateAndActivate() 재평가 경로(reevaluateCardReaders)로 다시 켜진다
+    // - activateBuiltinNfc()가 그때 currentMode를 BUILTIN_NFC로 되돌리고 notifyModeChange("BUILTIN_NFC")로
+    // 알려주므로, 여기서 currentMode를 NONE으로 내려도 재활성화 로직과 어긋나지 않는다(웹 브라우저 쪽
+    // Web NFC 경로와 달리, 재활성화가 "이전에 뭐였는지" 기억이 아니라 하드웨어 재스캔으로 판단되기 때문).
+    // 이전엔 currentMode/JS 알림을 안 남겨서 kiosk.js의 nfc-activate-btn 배지가 카메라 사용 중에도
+    // 계속 "NFC 스캔 활성화"로 남아있었다 - notifyModeChange를 호출해 실제로 안 잡히는 중이라는 걸 반영한다.
     public void pauseBuiltinNfcForCamera() {
         if (currentMode == ActiveMode.BUILTIN_NFC) {
             nfcController.disable();
+            currentMode = ActiveMode.NONE;
             Log.d(TAG, "Built-in NFC paused for camera use");
+            notifyModeChange("NONE");
         }
     }
 
