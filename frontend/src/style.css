@@ -1533,10 +1533,17 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   /* 결제 금액 / 최근 결제 내역 블록이 각자 콘텐츠 높이만큼만 차지하고 남는 공간을 그냥
      비워두던 것을, 아래 min-height:700px 블록과 동일한 방식(2분할 flex)으로 바꾼다 -
      이 저해상도 가로 모드는 세로 공간이 워낙 빠듯해서(#35) 콘텐츠 실높이 합이 섹션 높이에
-     거의 딱 맞아떨어져 "최근 결제 내역" 카드 아래 여백이 사실상 0으로 보였다. flex:1로
-     each 블록에 남는 공간을 나눠주고 내부 리스트가 스크롤되게 하면 카드 자체는 항상 여유
-     있는 높이를 유지한다. */
-  .kiosk-checkout-section > #kiosk-checkout-amount-block,
+     거의 딱 맞아떨어져 "최근 결제 내역" 카드 아래 여백이 사실상 0으로 보였다. flex로
+     남는 공간을 나눠주고 내부 리스트가 스크롤되게 하면 카드 자체는 항상 여유 있는 높이를
+     유지한다. 1:1로 반씩 나눴더니 최근 결제 내역은 항목이 몇 줄 없어도 늘 크게 비어 보이고
+     정작 "선택된 메뉴" 목록은 좁아 보인다는 피드백이 있어, 결제 금액 쪽에 더 많은 비중을 줌. */
+  .kiosk-checkout-section > #kiosk-checkout-amount-block {
+    flex: 2 1 0 !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
   .kiosk-checkout-section > #kiosk-checkout-recent-block {
     flex: 1 1 0 !important;
     min-height: 0 !important;
@@ -1547,11 +1554,21 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   #kiosk-checkout-amount-grid {
     flex: 1;
     min-height: 0;
+    padding: 0.5rem !important;
+    gap: 0.4rem !important;
+  }
+  /* "선택된 메뉴" 라벨 + 카트 목록을 담은 위쪽 서브패널 - 예전 HTML의 justify-content:center는
+     카트가 비었을 때 안내 문구를 세로 중앙에 두려던 의도인데, flex:1 min-height:0인 이
+     서브패널 자체가 grid 안에서 남는 공간을 받아도 justify-content:center 때문에 카트 목록이
+     그 공간을 채우지 못하고 라벨 바로 아래 붙어버린다. flex-start로 바꿔 카트 목록이 남는
+     세로 공간을 실제로 차지하게 한다. */
+  #kiosk-checkout-amount-grid > div:first-child {
+    justify-content: flex-start !important;
   }
   #cart-items-container {
     max-height: none !important;
     flex: 1;
-    min-height: 0;
+    min-height: 2.4rem;
   }
   #kiosk-checkout-recent-block {
     display: flex !important;
