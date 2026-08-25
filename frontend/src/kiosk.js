@@ -1393,9 +1393,20 @@ function triggerKioskDetectionFeedback() {
   }
 }
 
-// 실제 NFC 스캔 가동 핵심 함수 - 스캐너 연결/권한 상태에 따라 자동으로만 호출됨 (사용자 조작 불필요)
+// 실제 NFC 스캔 가동 핵심 함수 - initWebNFC()의 자동 재시도, toggleKioskNfcReader()의 수동 탭
+// 양쪽에서 호출된다.
 async function startKioskNfcScan() {
   if (kioskNdefReader) return; // 이미 실행 중
+
+  // 내장 NFC(폰 자체 NFC)와 카메라(QR)는 실기기 테스트로 동시 사용이 안 되는 게 확인됐다(#34
+  // 후속). QR 켤 때 내장 NFC를 끄는 반대 방향은 이미 있었으니(shouldPauseReaderForCamera()),
+  // 이 방향도 대칭으로 처리 - NFC를 켜기 직전에 QR이 돌고 있으면 먼저 끈다. initWebNFC()의
+  // 자동 재시도 경로(페이지 로드 시 "QR 스캐너 켜기" 상시모드가 먼저 카메라를 켠 경우 포함)와
+  // 수동 탭 양쪽 모두 이 함수를 거치므로 여기 한 곳에서 처리하면 충분하다.
+  if (isCameraScanning) {
+    stopCameraScanner();
+    appendDebugLog("[Web NFC] QR 스캐너가 켜져 있어 먼저 껐습니다 (내장 NFC와 동시 사용 불가).", "INFO");
+  }
 
   let scanTimeoutId = null;
 
