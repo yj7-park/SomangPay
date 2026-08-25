@@ -2,7 +2,7 @@
 // 네트워크 우선(Network-First) 전략: 항상 최신 콘텐츠를 먼저 시도하고,
 // 오프라인 등으로 네트워크 요청이 실패할 때만 캐시로 대체 응답한다.
 // (캐시 우선 전략은 배포 후 새 코드가 기기에 반영되지 않는 문제를 일으킬 수 있어 사용하지 않음)
-const CACHE_NAME = "somangpay-pwa-v8";
+const CACHE_NAME = "somangpay-pwa-v9";
 const PRECACHE_URLS = [
   "/kiosk",
   "/user",
@@ -10,8 +10,12 @@ const PRECACHE_URLS = [
   "/manifest.json",
   "/manifest-user.json",
   "/manifest-admin.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png"
+  "/icons/icon-192-kiosk.png",
+  "/icons/icon-512-kiosk.png",
+  "/icons/icon-192-admin.png",
+  "/icons/icon-512-admin.png",
+  "/icons/icon-192-user.png",
+  "/icons/icon-512-user.png"
 ];
 
 self.addEventListener("install", (event) => {

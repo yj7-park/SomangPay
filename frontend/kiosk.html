@@ -4,7 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>소망페이 무인 결제 단말기 (Kiosk PWA)</title>
-  <link rel="manifest" href="/manifest.json">
+  <!-- 크롬은 "홈 화면에 추가" 배너용으로 매니페스트를 fetch한 결과를 매니페스트 URL 기준으로
+       따로 캐싱해두고, 내용이 바뀌어도 잘 재조회하지 않는 경우가 있다(#34 후속 - 몇 달째 떠있던
+       manifest.json이라 예전 이름/무배지 아이콘으로 설치 대화상자가 뜨는 게 재현됨, 페이지
+       자체는 sw.js가 network-first라 최신인데 설치 배너만 낡은 상태). style.css처럼 쿼리
+       버전을 붙여 URL 자체를 바꿔서 강제로 새로 fetch하게 한다 - 이후 이 매니페스트가 다시
+       바뀔 때마다 이 버전도 올려야 한다. -->
+  <link rel="manifest" href="/manifest.json?v=20260825_0002">
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark-kiosk.svg">
   <link rel="alternate icon" href="/favicon-kiosk.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-kiosk.png">

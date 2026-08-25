@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>소망페이 - 회원 마이페이지 (User PWA)</title>
-  <link rel="manifest" href="/manifest-user.json">
+  <!-- kiosk.html과 동일한 이유로 매니페스트 URL에 쿼리 버전을 붙인다(#34 후속) - 크롬이
+       "홈 화면에 추가" 배너용 매니페스트 fetch 결과를 URL 기준으로 캐싱해서 내용이 바뀌어도
+       재조회하지 않는 경우가 있다. 이 매니페스트가 바뀔 때마다 버전도 올려야 한다. -->
+  <link rel="manifest" href="/manifest-user.json?v=20260825_0002">
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark-user.svg">
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">

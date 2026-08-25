@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>소망페이 - 시스템 통합 관리자 대시보드</title>
-  <link rel="manifest" href="/manifest-admin.json">
+  <!-- kiosk.html과 동일한 이유로 매니페스트 URL에 쿼리 버전을 붙인다(#34 후속) - 크롬이
+       "홈 화면에 추가" 배너용 매니페스트 fetch 결과를 URL 기준으로 캐싱해서 내용이 바뀌어도
+       재조회하지 않는 경우가 있다. 이 매니페스트가 바뀔 때마다 버전도 올려야 한다. -->
+  <link rel="manifest" href="/manifest-admin.json?v=20260825_0002">
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark-admin.svg">
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
