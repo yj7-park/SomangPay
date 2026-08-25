@@ -43,13 +43,11 @@ function isExternalReaderActive() {
 }
 
 // 카메라를 켤 때 리더를 잠시 멈춰야 하는지 여부.
-// 원래는 내장 센서(Web NFC/기기 자체 NFC)는 관리자 설정과 무관하게 항상 배제했었다 - OS/브라우저
-// 레벨에서 카메라+내장 NFC 동시 사용이 안 될 거라는 가정 때문이었는데, 실제 기기에서 그 가정이
-// 맞는지 확인해보기 위해 "QR 스캐너 켜기"(allowCameraReaderConcurrent) 설정을 내장 센서에도
-// 동일하게 적용해본다 - 여전히 안 되면(카메라 프레임이 멈추거나 NFC 인식이 죽는 등) 이 함수를
-// isInternalReaderActive() || !allowCameraReaderConcurrent로 되돌리면 된다.
+// 내장 센서(Web NFC/기기 자체 NFC)는 항상 배제, 외부 리더는 관리자가 "동시 사용"을 켠 경우에만
+// 예외 - 실기기에서 카메라+내장 NFC 동시 사용을 시도해봤으나 실제로 안 돼서(#34 후속) 원래대로
+// 되돌렸다.
 function shouldPauseReaderForCamera() {
-  return !allowCameraReaderConcurrent;
+  return isInternalReaderActive() || !allowCameraReaderConcurrent;
 }
 
 // "QR 스캐너 켜기" 설정 On/Off에 맞춰 카메라 구동 상태를 즉시 반영 (수동 버튼 없이 이 설정이 유일한 스위치)
@@ -221,8 +219,12 @@ function startTestModeCameraView() {
   if (shouldPauseReaderForCamera()) {
     if (currentReaderMode === "WEB_NFC") {
       stopKioskNfcScan();
+      // currentReaderMode 자체는 안 건드린다 - 카메라가 꺼지면 stopCameraScanner()가 이 값을
+      // 보고 NFC를 다시 켜야 하는지 판단한다. 배지만 "지금은 실제로 안 잡히는 중"으로 갱신한다.
+      updateNfcReaderStatusUI("NONE");
     } else if (window.AndroidInterface && typeof window.AndroidInterface.pauseReaderForCamera === "function") {
       window.AndroidInterface.pauseReaderForCamera();
+      updateNfcReaderStatusUI("NONE");
     }
   }
 }
@@ -261,15 +263,19 @@ async function startCameraScanner(silent = false, facingMode) {
     video.setAttribute("playsinline", true);
     await video.play();
 
-    // "QR 스캐너 켜기"(동시 사용) 설정이 꺼져 있으면 내장/외장 리더 모두 카메라 사용 중엔 멈춘다
-    // (shouldPauseReaderForCamera() 참고 - 내장 센서 예외 취급은 실기기 테스트를 위해 뺐다).
+    // 내장 리더(Web NFC/기기 자체 NFC)는 카메라와 상시 배제, 외부 리더는 관리자가 동시사용을
+    // 허용한 경우에만 예외 — 그 외 경우엔 카메라 사용 중 리더 인식도 함께 멈춘다.
     if (shouldPauseReaderForCamera()) {
       if (currentReaderMode === "WEB_NFC") {
         stopKioskNfcScan();
         appendDebugLog("📷 [카메라] 내장 NFC 스캔을 일시 중단했습니다.", "INFO");
+        // currentReaderMode는 안 건드린다(카메라 꺼지면 stopCameraScanner()가 이 값으로 재가동
+        // 여부를 판단) - 배지만 지금 실제로는 안 잡히는 중이라는 걸 반영해 "비활성"으로 갱신.
+        updateNfcReaderStatusUI("NONE");
       } else if (window.AndroidInterface && typeof window.AndroidInterface.pauseReaderForCamera === "function") {
         window.AndroidInterface.pauseReaderForCamera();
         appendDebugLog("📷 [카메라] Android 내장 리더 일시 중단을 요청했습니다.", "INFO");
+        updateNfcReaderStatusUI("NONE");
       }
     }
 

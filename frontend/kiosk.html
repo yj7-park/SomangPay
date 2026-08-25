@@ -262,12 +262,9 @@
             </div>
           </div>
 
-          <div style="margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <input type="checkbox" id="k-allow-camera-concurrent-input" onchange="saveKioskDeviceSettings()" style="width: 18px; height: 18px; cursor: pointer;">
-              <label for="k-allow-camera-concurrent-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">QR 스캐너 켜기 (NFC와 동시 사용 허용, 실기기 테스트용)</label>
-            </div>
-            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.3rem 0 0 26px;">QR을 상시 백그라운드로 켜두고, 내장/외장 NFC 리더도 카메라 사용 중 멈추지 않도록 시도합니다. 실기기에서 오작동하면 꺼주세요.</p>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+            <input type="checkbox" id="k-allow-camera-concurrent-input" onchange="saveKioskDeviceSettings()" style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="k-allow-camera-concurrent-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">QR 스캐너 켜기</label>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
@@ -321,6 +318,6 @@
 
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
-  <script src="src/kiosk.js?v=20260825_0003"></script>
+  <script src="src/kiosk.js?v=20260825_0004"></script>
 </body>
 </html>
