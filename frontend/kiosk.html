@@ -97,7 +97,12 @@
         <!-- QR 코드 인식용 카메라 - 화면에는 표시하지 않고 백그라운드에서만 프레임을 읽는다.
              (상단 헤더의 QR 상태 배지가 켜짐/꺼짐을 보여줌). 테스트 모드에서만 예외적으로
              아래 시뮬레이션 오버레이가 이 컨테이너 안에 표시된다. -->
-        <div id="kiosk-camera-viewport-container" style="display: none; flex-direction: column; position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 14px; overflow: hidden; background: #000; z-index: 10; border: 2px solid var(--accent-cyan);">
+        <!-- z-index: 25 - style.css의 전역 버튼 보호 규칙(button { z-index: 20 !important })이
+             메뉴 카드의 +/- 수량 버튼에도 걸리는데, 그 버튼들의 조상(.menu-card/.menu-grid 등)이
+             전부 position:static이라 z-index가 이 컨테이너와 같은 .kiosk-menu-section 스태킹
+             컨텍스트에서 직접 경쟁한다 - 예전엔 여기가 10이라 테스트 모드 시뮬레이션 화면 위로
+             그 버튼들이 뚫고 나와 보였다(#34 후속, 실기기 테스트로 발견). -->
+        <div id="kiosk-camera-viewport-container" style="display: none; flex-direction: column; position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 14px; overflow: hidden; background: #000; z-index: 25; border: 2px solid var(--accent-cyan);">
           <video id="qr-video" autoplay muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
           <canvas id="qr-canvas" style="display: none;"></canvas>
 
@@ -142,11 +147,12 @@
           </div>
         </div>
 
-        <!-- QR 스캐너는 관리자 설정("QR 스캐너 켜기")으로 상시 켜둘 수도 있고, 상단 헤더의 QR
-             상태 배지를 탭해 즉석으로 켜고 끌 수도 있다(toggleKioskQrScanner()) - 화면에 카메라
-             미리보기를 표시하지 않고 백그라운드에서 인식하며, 그 배지가 현재 켜짐/꺼짐을 보여준다.
-             테스트 모드 시뮬레이션 뷰(#kiosk-camera-viewport-container)는 이 레이아웃과 무관하게
-             메뉴 영역 위에 전체 오버레이로 뜨므로 여기엔 전용 슬롯이 필요 없다. -->
+        <!-- QR 스캐너는 상단 헤더의 QR 상태 배지를 탭해서만 켜고 끈다(toggleKioskQrScanner()) -
+             예전엔 관리자 설정("QR 스캐너 켜기")으로 상시 켜두는 모드도 있었으나 이 배지 하나로
+             충분해 제거했다(#34 후속). 화면에 카메라 미리보기를 표시하지 않고 백그라운드에서
+             인식하며, 그 배지가 현재 켜짐/꺼짐을 보여준다. 테스트 모드 시뮬레이션 뷰
+             (#kiosk-camera-viewport-container)는 이 레이아웃과 무관하게 메뉴 영역 위에 전체
+             오버레이로 뜨므로 여기엔 전용 슬롯이 필요 없다. -->
 
         <!-- Bottom: Recent Payments History Feed -->
         <div id="kiosk-checkout-recent-block" style="margin-top: 0.5rem;">
@@ -263,11 +269,6 @@
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
-            <input type="checkbox" id="k-allow-camera-concurrent-input" onchange="saveKioskDeviceSettings()" style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="k-allow-camera-concurrent-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">QR 스캐너 켜기</label>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
             <input type="checkbox" id="k-test-mode-input" onchange="toggleKioskTestMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
             <label for="k-test-mode-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">테스트 모드</label>
           </div>
@@ -318,6 +319,6 @@
 
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
-  <script src="src/kiosk.js?v=20260825_0005"></script>
+  <script src="src/kiosk.js?v=20260825_0006"></script>
 </body>
 </html>

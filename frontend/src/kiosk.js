@@ -29,10 +29,6 @@ window.isKioskIdleForReload = function () {
 // 현재 활성화된 카드 리더 종류: "WEB_NFC" | "BUILTIN_NFC" | "USB_CCID" | "USB_HID_KEYBOARD" | "NONE" | "UNKNOWN"
 // Android 래퍼 안에서는 window.onCardReaderModeChanged가, 일반 브라우저에서는 Web NFC 성공 시 직접 갱신한다.
 let currentReaderMode = "UNKNOWN";
-// 관리자 설정 "QR 스캐너 켜기" - QR 인식 기능 자체의 유일한 on/off 스위치.
-// 켜지면 화면 표시 없이 백그라운드에서 카메라가 계속 QR을 읽고, 꺼지면 QR 인식을 하지 않는다.
-// (서버에서 로드, 기본값 false)
-let allowCameraReaderConcurrent = false;
 
 function isInternalReaderActive() {
   return currentReaderMode === "WEB_NFC" || currentReaderMode === "BUILTIN_NFC";
@@ -43,21 +39,12 @@ function isExternalReaderActive() {
 }
 
 // 카메라를 켤 때 리더를 잠시 멈춰야 하는지 여부.
-// 내장 센서(Web NFC/기기 자체 NFC)는 항상 배제, 외부 리더는 관리자가 "동시 사용"을 켠 경우에만
-// 예외 - 실기기에서 카메라+내장 NFC 동시 사용을 시도해봤으나 실제로 안 돼서(#34 후속) 원래대로
-// 되돌렸다.
+// 내장 센서(Web NFC/기기 자체 NFC)는 실기기 테스트로 카메라와 동시 사용이 안 되는 게 확인되어
+// (#34 후속) 항상 배제한다. 외부 USB 리더는 카메라와 상시 동시 사용 가능하므로 그대로 둔다 -
+// 예전엔 이걸 관리자 설정("QR 스캐너 켜기")으로 껐다 켰다 했지만, QR 자체가 헤더 배지 탭 하나로
+// 켜고 끄는 방식으로 단순화되면서 그 설정을 없앴다.
 function shouldPauseReaderForCamera() {
-  return isInternalReaderActive() || !allowCameraReaderConcurrent;
-}
-
-// "QR 스캐너 켜기" 설정 On/Off에 맞춰 카메라 구동 상태를 즉시 반영 (수동 버튼 없이 이 설정이 유일한 스위치)
-function applyAlwaysOnCameraMode() {
-  updateQrScanStatusUI();
-  if (allowCameraReaderConcurrent) {
-    maybeAutoStartAlwaysOnCamera();
-  } else if (isCameraScanning) {
-    stopCameraScanner();
-  }
+  return isInternalReaderActive();
 }
 
 // 상단 헤더의 QR 상태 배지 갱신 - 화면에 카메라 미리보기를 띄우지 않으므로 이 배지가
@@ -80,17 +67,6 @@ function updateQrScanStatusUI() {
   }
 }
 
-// 상시 켜기 모드에서 결제/모달 처리로 잠시 꺼졌던 카메라를 다시 구동 (다른 모달이 열려있으면 대기)
-function maybeAutoStartAlwaysOnCamera() {
-  if (!allowCameraReaderConcurrent || isCameraScanning || isKioskPaymentProcessing) return;
-  const blockingModalIds = ["repeat-pay-modal", "kiosk-admin-modal", "kiosk-pin-modal"];
-  for (const id of blockingModalIds) {
-    const el = document.getElementById(id);
-    if (el && (el.style.display === "flex" || el.classList.contains("active"))) return;
-  }
-  startCameraScanner(true);
-}
-
 // 테스트 모드: 카메라/리더 하드웨어 없이 결제 흐름을 시연/테스트하기 위한 기기 로컬 설정
 // (서버에 저장하지 않음 - 이 브라우저/기기에서만 유지되는 localStorage 값)
 let kioskTestMode = false;
@@ -104,7 +80,6 @@ function toggleKioskTestMode(enabled) {
   kioskTestMode = !!enabled;
   localStorage.setItem("somang_kiosk_test_mode", kioskTestMode ? "true" : "false");
   updateKioskTestModeUI();
-  updateCameraConcurrentToggleAvailability();
   appendDebugLog(`🧪 [테스트 모드] ${kioskTestMode ? "활성화" : "비활성화"}됨`, kioskTestMode ? "WARN" : "INFO");
 }
 
@@ -140,7 +115,6 @@ function updateNfcReaderStatusUI(mode) {
 window.onCardReaderModeChanged = function (mode) {
   currentReaderMode = mode;
   appendDebugLog(`🔧 [카드 리더] 활성 모드 변경: ${mode}`, "INFO");
-  updateCameraConcurrentToggleAvailability();
   updateNfcReaderStatusUI(mode);
 };
 
@@ -415,22 +389,12 @@ async function initDeviceUUID() {
       currentDeviceName = data.device_name || "무인 결제 단말기";
       currentDefaultProductId = data.default_product_id;
       currentAssignedProducts = data.assigned_products || [];
-      allowCameraReaderConcurrent = !!data.allow_camera_reader_concurrent;
       updateDeviceHeaderUI();
-      updateCameraConcurrentToggleAvailability();
-      applyAlwaysOnCameraMode();
       appendDebugLog(`[DEVICE] 단말기 설정 복원 완료: "${currentDeviceName}" (기본 결제 상품 ID: ${currentDefaultProductId || "없음"})`, "SUCCESS");
     }
   } catch (err) {
     console.error("Device sync restore error:", err);
   }
-}
-
-// "QR 스캐너 항상 켜기" 체크박스의 현재 상태 표시값을 갱신 (하드웨어 리더 유무와 무관하게 항상 선택 가능)
-function updateCameraConcurrentToggleAvailability() {
-  const checkbox = document.getElementById("k-allow-camera-concurrent-input");
-  if (!checkbox) return;
-  checkbox.checked = allowCameraReaderConcurrent;
 }
 
 function updateDeviceHeaderUI() {
@@ -459,8 +423,6 @@ async function saveKioskDeviceSettings() {
 
   const defaultProductSelect = document.getElementById("k-default-product-select");
   const defaultProductId = defaultProductSelect ? defaultProductSelect.value : "";
-  const concurrentCheckbox = document.getElementById("k-allow-camera-concurrent-input");
-  const concurrentValue = concurrentCheckbox ? concurrentCheckbox.checked : allowCameraReaderConcurrent;
   const assignedChecklist = document.getElementById("k-assigned-products-checklist");
   const assignedProducts = assignedChecklist
     ? Array.from(assignedChecklist.querySelectorAll(".menu-card.assigned")).map(card => parseInt(card.dataset.productId))
@@ -474,7 +436,6 @@ async function saveKioskDeviceSettings() {
         device_uuid: currentDeviceUuid,
         device_name: newName,
         default_product_id: defaultProductId ? parseInt(defaultProductId) : null,
-        allow_camera_reader_concurrent: concurrentValue,
         assigned_products: assignedProducts
       })
     });
@@ -482,13 +443,10 @@ async function saveKioskDeviceSettings() {
     if (res.ok) {
       currentDeviceName = newName;
       currentDefaultProductId = defaultProductId ? parseInt(defaultProductId) : null;
-      allowCameraReaderConcurrent = concurrentValue;
       currentAssignedProducts = assignedProducts;
       updateDeviceHeaderUI();
-      updateCameraConcurrentToggleAvailability();
-      applyAlwaysOnCameraMode();
       resetCart(); // 새로운 기본 결제 상품/노출 메뉴로 화면 및 선택 메뉴 즉시 동기화
-      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, QR 스캐너 켜기: ${allowCameraReaderConcurrent}, 노출 메뉴: ${assignedProducts.length || "전체"})`, "SUCCESS");
+      appendDebugLog(`[DEVICE] 단말기 설정 자동 저장: "${newName}" (기본 상품 ID: ${currentDefaultProductId || "없음"}, 노출 메뉴: ${assignedProducts.length || "전체"})`, "SUCCESS");
       flashDeviceSaveStatus(true);
     } else {
       flashDeviceSaveStatus(false);
@@ -655,11 +613,9 @@ function updateCheckoutSummary() {
 
 // 테스트 모드 결제 시뮬레이션 - 실제 서버 API를 호출하지 않고 성공/실패 UI만 재현한다.
 function simulateKioskPayment(outcome) {
-  // 상시 켜기 모드에서는 시뮬레이션 후에도 카메라(테스트) 화면을 계속 띄워둔다.
-  // 수동 모드에서는 기존처럼 오버레이를 닫고 리더 재활성화까지 기존 로직 재사용.
-  if (!allowCameraReaderConcurrent) {
-    stopCameraScanner();
-  }
+  // 시뮬레이션 결과를 확인했으면 테스트 오버레이(=QR 스캐너)를 닫는다 - 다시 보려면
+  // QR 배지를 다시 탭하면 된다.
+  stopCameraScanner();
 
   let total = 0;
   for (const [pid, qty] of Object.entries(cart)) {
@@ -691,15 +647,9 @@ function simulateKioskPayment(outcome) {
     triggerErrorEdgeGlow();
     playSpeech("등록되지 않은 카드입니다.");
   }
-
-  maybeAutoStartAlwaysOnCamera();
 }
 
 async function triggerKioskPayment(cardUid, forceConfirm = false) {
-  // 재결제 확인 팝업으로 넘어간 경우엔 그 팝업이 닫힐 때 카메라를 재개해야 하므로,
-  // 이 함수 종료 시 상시 켜기 모드의 카메라 자동 재개를 건너뛴다.
-  let deferCameraResume = false;
-
   // 1. 이미 결제 요청이 처리 중이거나 결과 팝업창이 열려 있으면 추가적인 태깅/스캔 무시
   if (isKioskPaymentProcessing) {
     console.log("Payment already in progress. Ignoring duplicate tag.");
@@ -753,7 +703,6 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     // ─── 200 OK 이지만 재결제 확인 필요 (30초 이내 동일 회원) ───
     if (res.ok && data.status === "CONFIRM_REQUIRED") {
       isKioskPaymentProcessing = false;
-      deferCameraResume = true;
       appendDebugLog(`[30초 재결제 감지] ${data.user_name} — 커스텀 확인 팝업 표시`, "WARN");
       showRepeatPayModal(data.user_name, cardUid);
       return;
@@ -811,8 +760,6 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     playSpeech("서버 연결에 실패했습니다.");
   } finally {
     isKioskPaymentProcessing = false;
-    // 상시 켜기 모드면 결제 처리로 잠시 꺼졌던 카메라를 다음 고객을 위해 다시 켠다
-    if (!deferCameraResume) maybeAutoStartAlwaysOnCamera();
   }
 }
 
@@ -843,7 +790,6 @@ function closeRepeatPayModal(confirmed) {
     triggerKioskPayment(capturedUid, true);
   } else {
     appendDebugLog(`[재결제 취소]`, "WARN");
-    maybeAutoStartAlwaysOnCamera();
   }
 }
 
@@ -1058,7 +1004,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function openKioskAdminPinModal() {
-  // 설정 화면으로 들어가는 동안엔 상시 켜기 카메라를 잠시 꺼둔다 (모달 닫을 때 다시 켜짐)
+  // 설정 화면으로 들어가는 동안엔 QR이 켜져 있으면 꺼둔다 (다시 쓰려면 닫은 뒤 QR 배지를 다시 탭)
   if (isCameraScanning) stopCameraScanner();
 
   // 설정 화면은 매번 PIN을 다시 입력해야 한다 - 이전엔 sessionStorage에 인증 여부를
@@ -1072,7 +1018,6 @@ function openKioskAdminPinModal() {
 
 function closeKioskPinModal() {
   kioskHideModal("kiosk-pin-modal");
-  maybeAutoStartAlwaysOnCamera();
 }
 
 async function verifyKioskAdminPin() {
@@ -1152,14 +1097,12 @@ function updateKioskOrientationButtonsUI(activeMode) {
 
 function openKioskAdminModal() {
   kioskShowModal("kiosk-admin-modal");
-  updateCameraConcurrentToggleAvailability();
   updateKioskTestModeUI();
   updateKioskOrientationButtonsUI(screen.orientation ? screen.orientation.type.split("-")[0] : null);
 }
 
 function closeKioskAdminModal() {
   kioskHideModal("kiosk-admin-modal");
-  maybeAutoStartAlwaysOnCamera();
 }
 
 function switchKioskAdminTab(tabName) {
@@ -1497,7 +1440,6 @@ async function startKioskNfcScan() {
     clearTimeout(scanTimeoutId);
 
     currentReaderMode = "WEB_NFC";
-    updateCameraConcurrentToggleAvailability();
     appendDebugLog("🎉 [Web NFC] 안드로이드 NFC 센서 권한 허용 및 스캔 가동 성공!", "SUCCESS");
     updateNfcReaderStatusUI("WEB_NFC");
   } catch (err) {
@@ -1595,11 +1537,8 @@ function toggleKioskNfcReader() {
   }
 }
 
-// qr-status-indicator 탭 핸들러 - 켜져 있으면 끄고, 꺼져 있으면 켠다.
-// 관리자 설정("QR 스캐너 켜기"/allowCameraReaderConcurrent)이 켜져 있으면 결제 종료·모달 닫힘
-// 등의 시점마다 maybeAutoStartAlwaysOnCamera()가 카메라를 다시 켜려고 시도하므로, 그 모드가
-// 켜진 상태에서 수동으로 끈 건 다음 트리거 시점에 다시 켜질 수 있다 - 관리자 설정이 최종
-// 권한을 갖는 기존 동작 그대로 두고, 이 배지는 그 사이 구간에서의 즉석 on/off만 담당한다.
+// qr-status-indicator 탭 핸들러 - 켜져 있으면 끄고, 꺼져 있으면 켠다. QR을 켜고 끄는 유일한
+// 방법이라 결제/모달 흐름이 끝나도 자동으로 다시 켜지지 않는다 - 다음에도 쓰려면 다시 탭한다.
 function toggleKioskQrScanner() {
   if (isCameraScanning) {
     stopCameraScanner();
