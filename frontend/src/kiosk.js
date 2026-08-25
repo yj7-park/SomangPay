@@ -622,9 +622,9 @@ function updateCheckoutSummary() {
 
 // 테스트 모드 결제 시뮬레이션 - 실제 서버 API를 호출하지 않고 성공/실패 UI만 재현한다.
 function simulateKioskPayment(outcome) {
-  // 시뮬레이션 결과를 확인했으면 테스트 오버레이(=QR 스캐너)를 닫는다 - 다시 보려면
-  // QR 배지를 다시 탭하면 된다.
-  stopCameraScanner();
+  // 결과 하나 확인하자고 오버레이를 매번 닫아버리면 다음 시나리오를 테스트할 때마다
+  // QR 배지를 다시 탭해야 해서 번거롭다 - 열어둔 채로 두고 계속 눌러볼 수 있게 한다.
+  // 완전히 닫고 싶으면 QR 배지를 탭하거나 테스트 모드 자체를 끄면 된다.
 
   let total = 0;
   for (const [pid, qty] of Object.entries(cart)) {
