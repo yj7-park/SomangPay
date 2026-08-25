@@ -81,6 +81,15 @@ function toggleKioskTestMode(enabled) {
   localStorage.setItem("somang_kiosk_test_mode", kioskTestMode ? "true" : "false");
   updateKioskTestModeUI();
   appendDebugLog(`🧪 [테스트 모드] ${kioskTestMode ? "활성화" : "비활성화"}됨`, kioskTestMode ? "WARN" : "INFO");
+
+  // 테스트 모드를 켜자마자 시뮬레이션 화면을 바로 보여준다 - QR 배지를 따로 탭해야만 보이면
+  // "설정에서 켰는데 버튼이 안 보인다"는 혼란을 준다. 끄면 떠 있던 시뮬레이션 화면도 같이 닫는다
+  // (더 이상 유효하지 않으므로).
+  if (kioskTestMode) {
+    if (!isCameraScanning) startCameraScanner();
+  } else if (isCameraScanning) {
+    stopCameraScanner();
+  }
 }
 
 function updateKioskTestModeUI() {
@@ -1018,6 +1027,10 @@ function openKioskAdminPinModal() {
 
 function closeKioskPinModal() {
   kioskHideModal("kiosk-pin-modal");
+  // 테스트 모드가 켜진 채로 설정에 들어왔다 나가는 거면(openKioskAdminPinModal()이 진입 시
+  // 꺼뒀던 것) 시뮬레이션 화면을 다시 보여준다 - QR 자체를 수동으로 켠 상태였다면 그건 그대로
+  // 꺼진 채 둔다(테스트 모드가 아닐 때는 예전처럼 다시 켜지지 않는 게 맞다).
+  if (kioskTestMode && !isCameraScanning) startCameraScanner();
 }
 
 async function verifyKioskAdminPin() {
@@ -1103,6 +1116,8 @@ function openKioskAdminModal() {
 
 function closeKioskAdminModal() {
   kioskHideModal("kiosk-admin-modal");
+  // closeKioskPinModal()과 동일한 이유 - 테스트 모드면 시뮬레이션 화면을 다시 보여준다.
+  if (kioskTestMode && !isCameraScanning) startCameraScanner();
 }
 
 function switchKioskAdminTab(tabName) {
