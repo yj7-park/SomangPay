@@ -1540,26 +1540,53 @@ function initWebNFC() {
     return;
   }
 
-  // 권한이 "이미" 허용된 상태라면(과거에 아래 requestKioskNfcPermission()으로 한 번 허용받은
+  // 권한이 "이미" 허용된 상태라면(과거에 아래 toggleKioskNfcReader()로 한 번 허용받은
   // 뒤 재방문한 경우) scan()이 사용자 제스처 없이도 조용히 성공한다 - 자동 재가동 시도.
   // 아직 한 번도 허용받은 적 없다면 브라우저가 permission prompt 자체를 띄우지 않고
   // NotAllowedError로 즉시 실패한다(#34 후속 - Web NFC scan()은 스펙상 최초 권한 요청 시
   // "user gesture(transient activation)" 안에서 호출돼야만 브라우저가 프롬프트를 띄운다;
   // DOMContentLoaded 같은 자동 실행 컨텍스트에서는 절대 권한 창이 뜨지 않는다). 최초 허용은
-  // 아래 nfc-activate-btn 탭 → requestKioskNfcPermission()에서만 가능하다.
+  // 아래 nfc-activate-btn 탭 → toggleKioskNfcReader()에서만 가능하다.
   appendDebugLog("[Web NFC] NFC 센서 자동 가동 시도 중... (이미 허용된 경우에만 성공)", "INFO");
   startKioskNfcScan();
 }
 
-// nfc-activate-btn 탭 핸들러 - Web NFC의 최초 권한 프롬프트는 user gesture 안에서 호출된
-// scan()에서만 뜨므로, initWebNFC()의 자동 시도만으로는 최초 허용이 불가능하다. 이 배지를
-// 탭하면 그 클릭 이벤트 자체가 user gesture가 되어 scan()이 실제 권한 대화상자를 띄운다.
-function requestKioskNfcPermission() {
-  if (window.AndroidInterface) return; // 네이티브 앱은 하드웨어 리더 전용 - 이 배지는 상태 표시만
+// nfc-activate-btn 탭 핸들러 - 켜져 있으면 끄고, 꺼져 있으면 켠다.
+// 켤 때: Web NFC의 최초 권한 프롬프트는 user gesture 안에서 호출된 scan()에서만 뜨므로,
+// initWebNFC()의 자동 시도만으로는 최초 허용이 불가능하다 - 이 클릭 이벤트 자체가 user
+// gesture가 되어 scan()이 실제 권한 대화상자를 띄운다.
+// 끌 때: currentReaderMode를 명시적으로 "NONE"으로 남겨야 한다 - startCameraScanner()가
+// 카메라 사용 중 리더를 일시정지시킬 때는 mode를 안 건드리고 kioskNdefReader만 비우는데
+// (카메라 종료 후 "원래 켜져 있었으니 재가동" 판단 기준이 mode이므로), 여기서도 mode를
+// 안 건드리면 사용자가 수동으로 껐어도 다음 카메라 온/오프 사이클에서 되살아나 버린다.
+function toggleKioskNfcReader() {
+  if (window.AndroidInterface) return; // 네이티브 앱은 하드웨어 리더 자동 관리 - 이 배지는 상태 표시만
   if (!('NDEFReader' in window)) return; // 브라우저가 Web NFC 자체를 미지원
-  if (kioskNdefReader) return; // 이미 가동 중
-  appendDebugLog("[Web NFC] 탭으로 NFC 권한 요청 시작...", "INFO");
-  startKioskNfcScan();
+
+  if (kioskNdefReader) {
+    stopKioskNfcScan();
+    currentReaderMode = "NONE";
+    updateNfcReaderStatusUI("NONE");
+    appendDebugLog("[Web NFC] 탭으로 NFC 스캔을 껐습니다.", "INFO");
+  } else {
+    appendDebugLog("[Web NFC] 탭으로 NFC 권한 요청 시작...", "INFO");
+    startKioskNfcScan();
+  }
+}
+
+// qr-status-indicator 탭 핸들러 - 켜져 있으면 끄고, 꺼져 있으면 켠다.
+// 관리자 설정("QR 스캐너 켜기"/allowCameraReaderConcurrent)이 켜져 있으면 결제 종료·모달 닫힘
+// 등의 시점마다 maybeAutoStartAlwaysOnCamera()가 카메라를 다시 켜려고 시도하므로, 그 모드가
+// 켜진 상태에서 수동으로 끈 건 다음 트리거 시점에 다시 켜질 수 있다 - 관리자 설정이 최종
+// 권한을 갖는 기존 동작 그대로 두고, 이 배지는 그 사이 구간에서의 즉석 on/off만 담당한다.
+function toggleKioskQrScanner() {
+  if (isCameraScanning) {
+    stopCameraScanner();
+    appendDebugLog("[QR 스캐너] 탭으로 카메라를 껐습니다.", "INFO");
+  } else {
+    appendDebugLog("[QR 스캐너] 탭으로 카메라 권한 요청 시작...", "INFO");
+    startCameraScanner();
+  }
 }
 
 // Android Native App Hardware ReaderMode Direct Receiver

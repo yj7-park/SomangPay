@@ -57,13 +57,15 @@
         </div>
       </div>
       <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; max-width: 100%;">
-        <!-- 일반 브라우저(PWA)에서는 Web NFC scan()의 최초 권한 프롬프트가 user gesture
-             안에서만 뜬다(kiosk.js requestKioskNfcPermission() 참고) - 탭 가능하게 만든다.
-             네이티브 앱(AndroidInterface)에서는 하드웨어 리더 상태 표시로만 쓰이고 탭은 무시된다. -->
-        <span id="nfc-activate-btn" onclick="requestKioskNfcPermission()" title="탭하여 NFC 권한 요청" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
+        <!-- 탭해서 켜고/끄기 (kiosk.js toggleKioskNfcReader()/toggleKioskQrScanner() 참고).
+             일반 브라우저(PWA)에서는 Web NFC scan()의 최초 권한 프롬프트가 user gesture 안에서만
+             뜨므로 탭이 필수고, 네이티브 앱(AndroidInterface)에서는 NFC 배지 탭은 무시되고
+             상태 표시로만 쓰인다(하드웨어 리더는 앱이 자동 관리) - QR은 두 환경 모두 탭으로
+             켜고 끌 수 있다. -->
+        <span id="nfc-activate-btn" onclick="toggleKioskNfcReader()" title="탭하여 NFC 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
         </span>
-        <span id="qr-status-indicator" style="background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
+        <span id="qr-status-indicator" onclick="toggleKioskQrScanner()" title="탭하여 QR 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="qr-status-text">QR 스캔 비활성</span>
         </span>
         <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
@@ -315,6 +317,6 @@
 
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
-  <script src="src/kiosk.js?v=20260825_0001"></script>
+  <script src="src/kiosk.js?v=20260825_0002"></script>
 </body>
 </html>
