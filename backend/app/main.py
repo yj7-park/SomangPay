@@ -9,13 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+from anyio import to_thread
+from fastapi.concurrency import run_in_threadpool
+
 from app import models, schemas, security
 from app.database import engine, get_db, init_db
 from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
 from app.services.history import get_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
-from app.ws_manager import manager, notify_admins, notify_user
+from app.ws_manager import manager, notify_admins, notify_user, notify_kiosk, notify_all_kiosks
 
 app = FastAPI(
     title="SomangPay API Server",
@@ -105,6 +108,15 @@ def require_user_auth(
     if not user:
         raise HTTPException(status_code=401, detail="유효하지 않은 회원입니다.")
     return user
+
+
+# FastAPI의 동기(sync def) 엔드포인트와 threadpool-오프로딩된 코드는 anyio의 기본
+# 스레드풀(기본 40개 토큰)을 공유한다. 부하 테스트(동시 300명)에서 이 기본값이 지연시간의
+# 주 원인 중 하나로 확인되어 늘림 - 1 OCPU 환경이라 DB I/O 대기 중 스레드가 대부분이라
+# 늘려도 CPU 경합은 크지 않다.
+@app.on_event("startup")
+async def raise_threadpool_capacity():
+    to_thread.current_default_thread_limiter().total_tokens = 200
 
 
 # 초기 시드 데이터 구축
@@ -637,7 +649,7 @@ def get_products(device_uuid: Optional[str] = None, db: Session = Depends(get_db
     return query.all()
 
 @app.post("/api/products", response_model=schemas.ProductResponse)
-def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+async def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     product = models.Product(
         name=req.name,
         price_general=req.price_general,
@@ -647,10 +659,12 @@ def create_product(req: schemas.ProductCreate, db: Session = Depends(get_db), _a
     db.add(product)
     db.commit()
     db.refresh(product)
+    await notify_admins(["stats"])
+    await notify_all_kiosks(["menu"])
     return product
 
 @app.put("/api/products/{product_id}", response_model=schemas.ProductResponse)
-def update_product(product_id: int, req: schemas.ProductUpdate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+async def update_product(product_id: int, req: schemas.ProductUpdate, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.is_active == True).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -662,15 +676,19 @@ def update_product(product_id: int, req: schemas.ProductUpdate, db: Session = De
         product.price_senior = req.price_senior
     db.commit()
     db.refresh(product)
+    await notify_admins(["stats"])
+    await notify_all_kiosks(["menu"])
     return product
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+async def delete_product(product_id: int, db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     product.is_active = False
     db.commit()
+    await notify_admins(["stats"])
+    await notify_all_kiosks(["menu"])
     return {"success": True, "message": "Product soft deleted successfully"}
 
 class AdminAuthVerifyRequest(schemas.BaseModel):
@@ -717,9 +735,11 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
 
 # ================= UNMANNED KIOSK PAYMENT API =================
 
-@app.post("/api/payments/pay", response_model=schemas.PaymentResponse)
-async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends(get_db)):
-    """UC-01 & UC-08: 무인 단말기 듀얼 결제 승인 및 기본 결제 30초 중복 결제 방지 API"""
+def _process_nfc_payment_sync(db: Session, req: schemas.PaymentRequest):
+    """process_nfc_payment의 DB 바운드 로직 전체. run_in_threadpool로 실행되어
+    (동기 SQLAlchemy 호출이 이벤트루프를 막지 않도록) 별도 스레드에서 돈다 - 부하
+    테스트(동시 300명)에서 이 함수의 동기 DB 호출이 이벤트루프를 통째로 막아 다른
+    요청(결제 아닌 것 포함)까지 초 단위로 지연되는 게 확인되어 분리함."""
     # 1. NFC 카드/교인증 QR 고유 식별자로 회원 계정 조회
     card = db.query(models.NFCCard).filter(models.NFCCard.card_uid == req.card_uid).first()
 
@@ -769,7 +789,7 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
 
         if recent_tx:
             # 30초 이내 재결제 감지 ➔ 추가 결제 하시겠습니까? 모달 요구 응답
-            return schemas.PaymentResponse(
+            return "confirm_required", schemas.PaymentResponse(
                 user_name=user.name,
                 status="CONFIRM_REQUIRED",
                 message="추가 결제 하시겠습니까?",
@@ -870,10 +890,25 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
         ))
     db.commit()
 
+    return "success", tx_success, user, total_amount, item_summaries
+
+
+@app.post("/api/payments/pay", response_model=schemas.PaymentResponse)
+async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends(get_db)):
+    """UC-01 & UC-08: 무인 단말기 듀얼 결제 승인 및 기본 결제 30초 중복 결제 방지 API"""
+    outcome = await run_in_threadpool(_process_nfc_payment_sync, db, req)
+    if outcome[0] == "confirm_required":
+        return outcome[1]
+
+    _, tx_success, user, total_amount, item_summaries = outcome
+
     # 결제로 잔액이 바뀌었으므로 관리자 대시보드와 결제한 회원 본인 화면을 갱신
     await notify_admins(["users", "stats"])
     await notify_user(user.id, ["me"])
-    send_push_to_admins(db, "결제 발생", f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment")
+    await run_in_threadpool(
+        send_push_to_admins, db, "결제 발생",
+        f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment"
+    )
 
     user_type_label = "시니어" if user.user_type == "SENIOR" else "일반"
 
@@ -1223,6 +1258,16 @@ async def ws_user(websocket: WebSocket, token: str = Query(...), db: Session = D
     except Exception:
         manager.disconnect_user(user.id, websocket)
 
+@app.websocket("/ws/kiosk")
+async def ws_kiosk(websocket: WebSocket, device_uuid: str = Query(...)):
+    # 키오스크 메인 화면은 로그인이 없는 공개 화면이므로(GET /api/kiosk/device/{device_uuid}와
+    # 동일한 신뢰 모델) 토큰 검증 없이 device_uuid로만 그룹을 식별한다.
+    await manager.connect_kiosk(device_uuid, websocket)
+    try:
+        await _ws_keepalive_loop(websocket)
+    except Exception:
+        manager.disconnect_kiosk(device_uuid, websocket)
+
 # ================= KIOSK DEVICE PERSISTENCE APIS =================
 
 def _next_kiosk_name(db: Session) -> str:
@@ -1300,6 +1345,7 @@ def sync_kiosk_device(req: dict = Body(...), db: Session = Depends(get_db)):
         "default_product_id": device.default_product_id,
         "default_quantity": device.default_quantity,
         "allow_camera_reader_concurrent": device.allow_camera_reader_concurrent,
+        "is_active": device.is_active,
         "updated_at": device.updated_at
     }
 
@@ -1314,7 +1360,8 @@ def get_kiosk_device(device_uuid: str, db: Session = Depends(get_db)):
             "assigned_products": [],
             "default_product_id": None,
             "default_quantity": 1,
-            "allow_camera_reader_concurrent": False
+            "allow_camera_reader_concurrent": False,
+            "is_active": False
         }
 
     assigned_list = json.loads(device.assigned_products) if device.assigned_products else []
@@ -1325,8 +1372,57 @@ def get_kiosk_device(device_uuid: str, db: Session = Depends(get_db)):
         "default_product_id": device.default_product_id,
         "default_quantity": device.default_quantity,
         "allow_camera_reader_concurrent": device.allow_camera_reader_concurrent,
+        "is_active": device.is_active,
         "updated_at": device.updated_at
     }
+
+class KioskRegisterRequest(schemas.BaseModel):
+    device_uuid: str
+    device_name: Optional[str] = None
+    pin: str
+
+@app.post("/api/kiosk/device/register")
+def register_kiosk_device(req: KioskRegisterRequest, request: Request, db: Session = Depends(get_db)):
+    """미등록 키오스크 단말기를 관리자 PIN으로 활성화한다. 등록 전에는 결제를 포함한 모든
+    키오스크 기능이 프론트엔드(kiosk.js)에서 차단되고 이 화면만 노출된다 - PIN 인증 로직은
+    verify_admin_auth와 동일한 시도횟수 제한을 공유한다."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not security.register_pin_attempt(client_ip):
+        raise HTTPException(status_code=429, detail="PIN 시도 횟수를 초과했습니다. 5분 후 다시 시도해 주세요.")
+
+    if not hmac.compare_digest(req.pin, security.ADMIN_PIN):
+        raise HTTPException(status_code=401, detail="PIN 번호가 올바르지 않습니다.")
+
+    security.clear_pin_attempts(client_ip)
+
+    device = db.query(models.KioskDevice).filter(models.KioskDevice.device_uuid == req.device_uuid).first()
+    if not device:
+        default_merchant = db.query(models.Merchant).first()
+        if not default_merchant:
+            default_merchant = models.Merchant(
+                merchant_name="소망 복지 결제 무인 가맹점",
+                biz_number="123-45-67890"
+            )
+            db.add(default_merchant)
+            db.commit()
+            db.refresh(default_merchant)
+
+        device = models.KioskDevice(
+            device_uuid=req.device_uuid,
+            device_name=req.device_name or _next_kiosk_name(db),
+            merchant_id=default_merchant.id,
+            is_active=True,
+        )
+        db.add(device)
+    else:
+        device.is_active = True
+        if req.device_name:
+            device.device_name = req.device_name
+
+    db.commit()
+    db.refresh(device)
+
+    return {"success": True, "device_name": device.device_name}
 
 # ================= 관리자 - 키오스크 관리 =================
 # 메뉴별 매출 집계는 PaymentLineItem(이 기능 도입 이후의 결제 건)만 대상으로 한다 -
@@ -1408,6 +1504,7 @@ async def admin_update_kiosk(
     db.commit()
     db.refresh(device)
     await notify_admins(["stats"])
+    await notify_kiosk(device.device_uuid, ["menu"])
     return {"success": True, "message": "키오스크 설정을 저장했습니다."}
 
 @app.delete("/api/admin/kiosks/{device_id}")
@@ -1422,7 +1519,9 @@ async def admin_delete_kiosk(
     if not device:
         raise HTTPException(status_code=404, detail="키오스크를 찾을 수 없습니다.")
 
+    device_uuid_to_notify = device.device_uuid
     db.delete(device)
     db.commit()
     await notify_admins(["stats"])
+    await notify_kiosk(device_uuid_to_notify, ["menu"])
     return {"success": True, "message": "키오스크를 삭제했습니다."}

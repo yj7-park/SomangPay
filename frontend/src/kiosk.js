@@ -3,6 +3,8 @@ const API_BASE = "/api";
 let products = [];
 let cart = {};
 let currentDeviceUuid = "";
+let kioskRegistered = false; // 관리자 PIN으로 등록 완료된 단말기인지 - false면 WS resume(pageshow 등)이
+// DOMContentLoaded 게이트를 우회해 메뉴/실시간 갱신을 부르지 못하도록 막는 데 쓰인다.
 let currentDeviceName = "무인 결제 단말기";
 let barcodeBuffer = "";
 let barcodeTimeout = null;
@@ -130,7 +132,15 @@ window.onCardReaderModeChanged = function (mode) {
 document.addEventListener("DOMContentLoaded", async () => {
   appendDebugLog("[SYSTEM] 키오스크 단말기 모듈 초기화 완료.");
   initKioskTestMode();
-  await initDeviceUUID();
+  const isRegistered = await initDeviceUUID();
+  if (!isRegistered) {
+    // 등록 안 된 단말기는 결제/메뉴/실시간 연결 등 나머지 초기화를 전부 건너뛰고
+    // 등록 모달만 띄운다. registerKioskDevice() 성공 시 location.reload()로 재초기화된다.
+    appendDebugLog("[DEVICE] 미등록 단말기 - 등록 화면으로 진입합니다.", "WARN");
+    showKioskRegistrationRequired();
+    return;
+  }
+  kioskRealtime.connect();
   await loadProducts();
   resetCart(); // 기본 결제 상품으로 장바구니 자동 세팅 및 메뉴 UI 갱신
   initWebNFC(); // 권한 상태 확인 후 자동 NFC 활성화 시도
@@ -389,10 +399,17 @@ async function initDeviceUUID() {
     appendDebugLog(`[DEVICE] 기존 단말기 식별자 로드: ${uuid}`, "INFO");
   }
   currentDeviceUuid = uuid;
+  kioskRegistered = await refreshDeviceSettings();
+  return kioskRegistered;
+}
 
-  // Restore Settings from Backend Server
+// 서버에 저장된 단말기 설정(이름/기본결제상품/배정메뉴)만 다시 불러와 반영하고, 이 단말기가
+// 관리자 PIN으로 등록 완료된 상태인지(is_active)를 반환한다.
+// initDeviceUUID()의 최초 1회 복원과, WS로 "menu" scope 갱신을 받았을 때의 재조회가
+// 이 함수를 공유해서 쓴다(device_uuid 발급 로직은 최초 1회만 필요하므로 분리돼 있음).
+async function refreshDeviceSettings() {
   try {
-    const res = await fetch(`${API_BASE}/kiosk/device/${uuid}`);
+    const res = await fetch(`${API_BASE}/kiosk/device/${currentDeviceUuid}`);
     if (res.ok) {
       const data = await res.json();
       currentDeviceName = data.device_name || "무인 결제 단말기";
@@ -400,9 +417,49 @@ async function initDeviceUUID() {
       currentAssignedProducts = data.assigned_products || [];
       updateDeviceHeaderUI();
       appendDebugLog(`[DEVICE] 단말기 설정 복원 완료: "${currentDeviceName}" (기본 결제 상품 ID: ${currentDefaultProductId || "없음"})`, "SUCCESS");
+      return !!data.is_active;
     }
   } catch (err) {
     console.error("Device sync restore error:", err);
+  }
+  return false;
+}
+
+// ================= 키오스크 등록(미등록 단말기 차단) =================
+
+function showKioskRegistrationRequired() {
+  kioskShowModal("kiosk-register-modal");
+  const input = document.getElementById("kiosk-register-pin-input");
+  if (input) { input.value = ""; input.focus(); }
+}
+
+async function registerKioskDevice() {
+  const pinInput = document.getElementById("kiosk-register-pin-input");
+  const pin = pinInput ? pinInput.value.trim() : "";
+  const statusEl = document.getElementById("kiosk-register-status");
+  if (!pin) return;
+  if (statusEl) statusEl.innerText = "";
+
+  try {
+    const res = await fetch(`${API_BASE}/kiosk/device/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_uuid: currentDeviceUuid, pin })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+      appendDebugLog("[DEVICE] 키오스크 등록 완료 - 화면을 새로고침합니다.", "SUCCESS");
+      location.reload();
+    } else if (res.status === 429) {
+      if (statusEl) statusEl.innerText = data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.";
+    } else {
+      if (statusEl) statusEl.innerText = "PIN 번호가 올바르지 않습니다.";
+      if (pinInput) { pinInput.value = ""; pinInput.focus(); }
+    }
+  } catch (err) {
+    console.error("Kiosk register error:", err);
+    if (statusEl) statusEl.innerText = "서버 연결 오류. 잠시 후 다시 시도하세요.";
   }
 }
 
@@ -525,6 +582,37 @@ async function loadProducts() {
     appendDebugLog(`메뉴 데이터 로드 실패: ${err}`, "ERROR");
     console.error("Failed to load products:", err);
   }
+}
+
+// ============ 실시간 갱신 (WebSocket) ============
+// 로그인 없는 공개 화면이므로 토큰이 아니라 device_uuid로 이 단말기를 식별해 연결한다.
+// 관리자가 이 단말기의 메뉴 배정(assigned_products 등)을 바꾸거나 상품 정보(이름/가격) 자체를
+// 바꾸면 서버가 "menu" scope로 신호를 보내고, 이미 켜져 있는 화면이 새로고침 없이 반영한다.
+// 재연결/화면복귀(resume) 로직 자체는 src/ws-client.js에 공유돼 있다(admin.js/user.js와 동일).
+const kioskRealtime = createRealtimeClient({
+  buildUrl: () => {
+    if (!currentDeviceUuid) return null; // 아직 device_uuid가 발급/로드되지 않았으면 연결 보류
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${location.host}/ws/kiosk?device_uuid=${encodeURIComponent(currentDeviceUuid)}`;
+  },
+  shouldReconnect: () => !!currentDeviceUuid && kioskRegistered, // 로그인 개념이 없는 공개 화면이라 device_uuid가
+  // 있는 한 항상 재연결하지만, 미등록 단말기는 pageshow/visibilitychange의 resume()이 DOMContentLoaded
+  // 게이트를 우회해 메뉴를 불러오는 걸 막기 위해 등록 여부도 함께 확인한다.
+  onMessage: (data) => {
+    if (data.type !== "refresh") return;
+    if ((data.scopes || []).includes("menu")) handleKioskMenuRefresh();
+  },
+  onResume: () => {
+    if (currentDeviceUuid) handleKioskMenuRefresh();
+  },
+});
+
+async function handleKioskMenuRefresh() {
+  // 배정 메뉴/기본상품/단말기명은 kiosk/device 쪽에서, 상품명/가격은 products 쪽에서
+  // 바뀔 수 있으므로 두 소스를 늘 함께 다시 불러온다.
+  appendDebugLog("[WS] 메뉴 갱신 신호 수신 - 단말기 설정/상품 목록 재조회", "INFO");
+  await refreshDeviceSettings();
+  await loadProducts();
 }
 
 function resetCart() {

@@ -119,6 +119,7 @@ class KioskDevice(Base):
     default_product_id = Column(Integer, nullable=True) # 기본 결제 상품 ID
     default_quantity = Column(Integer, default=1) # 기본 결제 수량
     allow_camera_reader_concurrent = Column(Boolean, default=False) # 외부 리더 사용 시 카메라와 동시 사용 허용 여부
+    is_active = Column(Boolean, default=False, nullable=False) # 관리자 PIN으로 등록 완료된 단말기만 True - 미등록 단말기는 결제 등 모든 기능 차단
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     merchant = relationship("Merchant", back_populates="kiosk_devices")

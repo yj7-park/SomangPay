@@ -8,10 +8,17 @@ DB_URL = os.getenv("DATABASE_URL", DEFAULT_DB)
 # SQLite일 때만 check_same_thread 적용
 connect_args = {"check_same_thread": False} if "sqlite" in DB_URL else {}
 
+# 부하 테스트(키오스크 5대 + 동시 접속 300명 시나리오)에서 기본 풀 크기(5+10=15)로는
+# 커넥션 대기가 지연시간의 절반 이상을 차지하는 게 확인되어 늘림 - postgres 컨테이너
+# 기본 max_connections(100)보다는 여유 있게 낮춰서 다른 접속(psql 점검 등)에도 여유를 둔다.
+is_sqlite = "sqlite" in DB_URL
+pool_kwargs = {} if is_sqlite else {"pool_size": 30, "max_overflow": 30, "pool_timeout": 10}
+
 engine = create_engine(
     DB_URL,
     connect_args=connect_args,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    **pool_kwargs,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -141,6 +148,24 @@ def init_db():
 
         # 어드민 회원상세 이력 카드에도 동일하게 "처리 후 잔액" 표시(#19)
         _run_migration_step(db, "ALTER TABLE deposit_histories ADD COLUMN IF NOT EXISTS balance_after INTEGER;", "deposit_histories.balance_after")
+
+        # 키오스크 단말기 등록 절차(#kiosk-register) - is_active 컬럼을 이번에 처음 추가하는
+        # 경우에만 기존 단말기를 전부 활성 상태로 간주해 그랜드파더링한다(안 그러면 이미 잘
+        # 쓰이던 단말기가 이 배포 직후 전부 "미등록" 상태로 잠겨버림). DO 블록으로 컬럼이
+        # 이번에 새로 생겼을 때만 백필하도록 감싸서, 이후 재시작 때는 관리자가 등록/해제한
+        # 상태를 건드리지 않는다.
+        _run_migration_step(db, """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='kiosk_devices' AND column_name='is_active'
+                ) THEN
+                    ALTER TABLE kiosk_devices ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT FALSE;
+                    UPDATE kiosk_devices SET is_active = TRUE;
+                END IF;
+            END $$;
+        """, "kiosk_devices.is_active (+ grandfather existing devices)")
 
         # 관리자 푸시 알림 항목별 on/off (#push-admin)
         _run_migration_step(db, "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS notify_deposit_error BOOLEAN NOT NULL DEFAULT TRUE;", "push_subscriptions.notify_deposit_error")

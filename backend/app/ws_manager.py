@@ -12,6 +12,7 @@ class ConnectionManager:
     def __init__(self):
         self.admin_sockets: Set[WebSocket] = set()
         self.user_sockets: Dict[int, Set[WebSocket]] = defaultdict(set)
+        self.kiosk_sockets: Dict[str, Set[WebSocket]] = defaultdict(set)
 
     async def connect_admin(self, ws: WebSocket):
         await ws.accept()
@@ -31,6 +32,18 @@ class ConnectionManager:
         sockets.discard(ws)
         if not sockets:
             del self.user_sockets[user_id]
+
+    async def connect_kiosk(self, device_uuid: str, ws: WebSocket):
+        await ws.accept()
+        self.kiosk_sockets[device_uuid].add(ws)
+
+    def disconnect_kiosk(self, device_uuid: str, ws: WebSocket):
+        sockets = self.kiosk_sockets.get(device_uuid)
+        if not sockets:
+            return
+        sockets.discard(ws)
+        if not sockets:
+            del self.kiosk_sockets[device_uuid]
 
     async def broadcast_admins(self, event: dict):
         dead = []
@@ -55,6 +68,30 @@ class ConnectionManager:
         for ws in dead:
             sockets.discard(ws)
 
+    async def send_to_kiosk(self, device_uuid: str, event: dict):
+        sockets = self.kiosk_sockets.get(device_uuid)
+        if not sockets:
+            return
+        dead = []
+        for ws in sockets:
+            try:
+                await ws.send_json(event)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            sockets.discard(ws)
+
+    async def broadcast_kiosks(self, event: dict):
+        for device_uuid, sockets in list(self.kiosk_sockets.items()):
+            dead = []
+            for ws in sockets:
+                try:
+                    await ws.send_json(event)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                sockets.discard(ws)
+
 
 manager = ConnectionManager()
 
@@ -68,3 +105,14 @@ async def notify_admins(scopes: list):
 async def notify_user(user_id: int, scopes: list):
     """특정 회원(연결돼 있는 모든 탭/기기)에게만 갱신 신호를 보낸다."""
     await manager.send_to_user(user_id, {"type": "refresh", "scopes": scopes})
+
+
+async def notify_kiosk(device_uuid: str, scopes: list):
+    """특정 키오스크 1대(연결된 모든 탭)에게만 갱신 신호를 보낸다."""
+    await manager.send_to_kiosk(device_uuid, {"type": "refresh", "scopes": scopes})
+
+
+async def notify_all_kiosks(scopes: list):
+    """연결된 모든 키오스크에게 갱신 신호를 보낸다 - 상품 카탈로그처럼 모든 단말에
+    공통 영향을 주는 변경용."""
+    await manager.broadcast_kiosks({"type": "refresh", "scopes": scopes})

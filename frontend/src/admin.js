@@ -87,6 +87,7 @@ async function adminFetch(url, options = {}) {
   if (res.status === 401) {
     adminToken = null;
     isAdminAuthenticated = false;
+    disconnectAdminWebSocket();
     localStorage.removeItem("admin_auth");
     localStorage.removeItem("admin_token");
     showAlertModal("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
@@ -438,54 +439,27 @@ function initAdminDashboard() {
 // ============ 실시간 갱신 (WebSocket) ============
 // DB가 바뀌면(다른 관리자 세션, 회원의 충전 신청, 키오스크 결제 등) 서버가 "이 범위가
 // 바뀌었다"는 신호만 보내고, 실제 반영은 이미 있는 REST 로드 함수를 그대로 재사용한다.
-let adminWs = null;
-let adminWsReconnectTimer = null;
-
-function connectAdminWebSocket() {
-  if (!adminToken) return;
-  if (adminWs && adminWs.readyState <= 1) return; // 이미 연결(중)이면 중복 연결 안 함
-
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  adminWs = new WebSocket(`${protocol}//${location.host}/ws/admin?token=${encodeURIComponent(adminToken)}`);
-
-  adminWs.onmessage = (event) => {
-    let data;
-    try { data = JSON.parse(event.data); } catch (e) { return; }
+// 재연결/화면복귀(resume) 로직 자체는 src/ws-client.js에 공유돼 있고(user.js/kiosk.js와
+// 동일), 여기서는 admin 전용 설정(URL/인증 상태/메시지 처리/강제 재조회)만 주입한다.
+const adminRealtime = createRealtimeClient({
+  buildUrl: () => {
+    if (!adminToken) return null;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${location.host}/ws/admin?token=${encodeURIComponent(adminToken)}`;
+  },
+  shouldReconnect: () => isAdminAuthenticated, // 로그아웃/세션만료로 인한 정상 종료면 재연결 안 함
+  onMessage: (data) => {
     if (data.type !== "refresh") return;
     handleAdminRefreshEvent(data.scopes || []).catch(err => console.error("Refresh event error:", err));
-  };
-
-  adminWs.onclose = () => {
-    adminWs = null;
-    if (!isAdminAuthenticated) return; // 로그아웃/세션만료로 인한 정상 종료면 재연결 안 함
-    clearTimeout(adminWsReconnectTimer);
-    adminWsReconnectTimer = setTimeout(connectAdminWebSocket, 3000);
-  };
-
-  adminWs.onerror = () => {
-    if (adminWs) adminWs.close();
-  };
-}
-
-// 모바일 브라우저/WebView는 화면이 꺼지거나 앱이 백그라운드로 가면 WS 연결을 조용히 끊어버리는데,
-// onclose가 늦게(또는 안) 불려서 3초 재연결 타이머가 안 걸리는 경우가 실제로 있다(user.js와 동일한
-// #18 케이스 - 관리자 앱도 android_kiosk의 admin 플레이버로 휴대폰 WebView에서 돈다) - 화면을
-// 다시 보는 시점(visibilitychange/pageshow)에 소켓 상태를 점검해 필요하면 즉시 재연결하고, 그
-// 사이 놓쳤을 수 있는 갱신을 잡기 위해 최신 데이터도 바로 한 번 더 불러온다.
-function resumeAdminRealtime() {
-  if (!isAdminAuthenticated) return;
-  if (!adminWs || adminWs.readyState >= 2) { // CLOSING(2) 또는 CLOSED(3)
-    connectAdminWebSocket();
-  }
-  handleAdminRefreshEvent(["users", "cards", "deposit_queue", "stats", "deposits"])
-    .catch(err => console.error("Resume refresh error:", err));
-}
-
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) resumeAdminRealtime();
+  },
+  onResume: () => {
+    handleAdminRefreshEvent(["users", "cards", "deposit_queue", "stats", "deposits"])
+      .catch(err => console.error("Resume refresh error:", err));
+  },
 });
-window.addEventListener("pageshow", resumeAdminRealtime);
-window.addEventListener("online", resumeAdminRealtime);
+
+function connectAdminWebSocket() { adminRealtime.connect(); }
+function disconnectAdminWebSocket() { adminRealtime.disconnect(); }
 
 async function handleAdminRefreshEvent(scopes) {
   const tasks = [];

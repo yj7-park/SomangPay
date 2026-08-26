@@ -355,64 +355,30 @@ async function unsubscribeFromPush(sub) {
 // ============ 실시간 갱신 (WebSocket) ============
 // 관리자가 대신 충전해주거나, 계좌이체가 뒤늦게 매칭되거나, 키오스크에서 결제하는 등
 // 다른 경로로 내 잔액/신청 상태가 바뀌면 새로고침 없이 반영한다.
-let userWs = null;
-let userWsReconnectTimer = null;
-
-function connectUserWebSocket() {
-  if (!userToken) return;
-  if (userWs && userWs.readyState <= 1) return;
-
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  userWs = new WebSocket(`${protocol}//${location.host}/ws/user?token=${encodeURIComponent(userToken)}`);
-
-  userWs.onmessage = (event) => {
-    let data;
-    try { data = JSON.parse(event.data); } catch (e) { return; }
+// 재연결/화면복귀(resume) 로직 자체는 src/ws-client.js에 공유돼 있고(admin.js/kiosk.js와
+// 동일), 여기서는 user 전용 설정(URL/인증 상태/메시지 처리/강제 재조회)만 주입한다.
+const userRealtime = createRealtimeClient({
+  buildUrl: () => {
+    if (!userToken) return null;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${location.host}/ws/user?token=${encodeURIComponent(userToken)}`;
+  },
+  shouldReconnect: () => !!userToken, // 로그아웃으로 인한 정상 종료면 재연결 안 함
+  onMessage: (data) => {
     if (data.type !== "refresh") return;
     if ((data.scopes || []).includes("me")) {
       refreshMyInfo();
       loadMyDeposits();
     }
-  };
-
-  userWs.onclose = () => {
-    userWs = null;
-    if (!userToken) return; // 로그아웃으로 인한 정상 종료면 재연결 안 함
-    clearTimeout(userWsReconnectTimer);
-    userWsReconnectTimer = setTimeout(connectUserWebSocket, 3000);
-  };
-
-  userWs.onerror = () => {
-    if (userWs) userWs.close();
-  };
-}
-
-function disconnectUserWebSocket() {
-  clearTimeout(userWsReconnectTimer);
-  if (userWs) {
-    userWs.close();
-    userWs = null;
-  }
-}
-
-// 모바일 브라우저는 화면이 꺼지거나 탭이 백그라운드로 가면 WS 연결을 조용히 끊어버리는데,
-// onclose가 늦게(또는 안) 불려서 3초 재연결 타이머가 안 걸리는 경우가 실제로 있다(#18) -
-// 화면을 다시 보는 시점(visibilitychange/pageshow)에 소켓 상태를 점검해 필요하면 즉시
-// 재연결하고, 그 사이 놓쳤을 수 있는 갱신을 잡기 위해 최신 데이터도 바로 한 번 더 불러온다.
-function resumeUserRealtime() {
-  if (!userToken) return;
-  if (!userWs || userWs.readyState >= 2) { // CLOSING(2) 또는 CLOSED(3)
-    connectUserWebSocket();
-  }
-  refreshMyInfo();
-  loadMyDeposits();
-}
-
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) resumeUserRealtime();
+  },
+  onResume: () => {
+    refreshMyInfo();
+    loadMyDeposits();
+  },
 });
-window.addEventListener("pageshow", resumeUserRealtime);
-window.addEventListener("online", resumeUserRealtime);
+
+function connectUserWebSocket() { userRealtime.connect(); }
+function disconnectUserWebSocket() { userRealtime.disconnect(); }
 
 async function refreshMyInfo() {
   const res = await authFetch(`${API_BASE}/users/me`);

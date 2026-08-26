@@ -22,7 +22,7 @@
     // 등록되어 있어야 함 (sw.js는 네트워크 우선 전략이라 최신 코드 반영을 막지 않음) - kiosk.html과 동일한 패턴.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js');
+        navigator.serviceWorker.register('/sw.js', { scope: '/user' });
       });
     }
   </script>
@@ -231,6 +231,7 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/user.html,/src/user.js"></script>
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260825_0001"></script>
+  <script src="src/ws-client.js?v=20260826_0001"></script>
   <script src="src/user.js?v=20260825_0001"></script>
 </body>
 </html>
