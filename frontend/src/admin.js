@@ -750,10 +750,10 @@ async function initAdminNfcReader() {
         document.getElementById("admin-card-uid-input").value = uid;
         triggerDetectionFeedback();
 
-        // 2초 동안 동일 혹은 연속 접촉으로 인한 중복 동작 방지
+        // 1초 동안 동일 혹은 연속 접촉으로 인한 중복 동작 방지
         setTimeout(() => {
           adminNfcCooldown = false;
-        }, 2000);
+        }, 1000);
       }
     });
 
@@ -763,7 +763,7 @@ async function initAdminNfcReader() {
       adminNfcCooldown = true;
       setTimeout(() => {
         adminNfcCooldown = false;
-      }, 2000);
+      }, 1000);
 
       const rawHceToken = `HCE_EVENT_TOKEN_${Math.floor(Date.now())}`;
       document.getElementById("admin-card-uid-input").value = rawHceToken;
@@ -794,7 +794,7 @@ window.onAndroidNfcScanned = function (rawHexUid) {
   if (!modal || !modal.classList.contains("active")) return;
   if (adminNfcCooldown) return;
   adminNfcCooldown = true;
-  setTimeout(() => { adminNfcCooldown = false; }, 2000);
+  setTimeout(() => { adminNfcCooldown = false; }, 1000);
 
   document.getElementById("admin-card-uid-input").value = rawHexUid;
   triggerDetectionFeedback();

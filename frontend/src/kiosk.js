@@ -1470,7 +1470,7 @@ async function startKioskNfcScan() {
     kioskNdefReader.addEventListener("reading", event => {
       if (kioskNfcScanCooldown) return;
       kioskNfcScanCooldown = true;
-      setTimeout(() => { kioskNfcScanCooldown = false; }, 3000);
+      setTimeout(() => { kioskNfcScanCooldown = false; }, 1000);
 
       // admin.js의 Web NFC 카드 등록 경로는 serialNumber를 대문자로 강제하는데(brower 자체는
       // 소문자 콜론 헥스로 내려줌) 여기는 그대로 흘려보내고 있어서, 등록 때와 결제 스캔 때
@@ -1518,7 +1518,7 @@ async function startKioskNfcScan() {
     kioskNdefReader.addEventListener("readingerror", event => {
       if (kioskNfcScanCooldown) return;
       kioskNfcScanCooldown = true;
-      setTimeout(() => { kioskNfcScanCooldown = false; }, 3000);
+      setTimeout(() => { kioskNfcScanCooldown = false; }, 1000);
 
       const rawHceToken = `HCE_EVENT_TOKEN_${Math.floor(event.timeStamp || Date.now())}`;
 
@@ -1667,13 +1667,13 @@ window.onAndroidNfcScanned = function (rawHexUid) {
     return;
   }
 
-  // 3초 하드웨어 쿨다운 (flickering 방지)
+  // 1초 하드웨어 쿨다운 (flickering 방지)
   if (kioskNfcScanCooldown) {
-    appendDebugLog(`⚡ [Android Native NFC] 쿨다운 중 — 태깅 무시됨 (3초 내 중복)`, "WARN");
+    appendDebugLog(`⚡ [Android Native NFC] 쿨다운 중 — 태깅 무시됨 (1초 내 중복)`, "WARN");
     return;
   }
   kioskNfcScanCooldown = true;
-  setTimeout(() => { kioskNfcScanCooldown = false; }, 3000);
+  setTimeout(() => { kioskNfcScanCooldown = false; }, 1000);
 
   // 결제 API 응답(네트워크 왕복)을 기다리지 않고, 태그 인식 즉시 진동+삑 소리로 피드백
   triggerKioskDetectionFeedback();
