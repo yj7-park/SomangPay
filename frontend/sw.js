@@ -2,7 +2,7 @@
 // 네트워크 우선(Network-First) 전략: 항상 최신 콘텐츠를 먼저 시도하고,
 // 오프라인 등으로 네트워크 요청이 실패할 때만 캐시로 대체 응답한다.
 // (캐시 우선 전략은 배포 후 새 코드가 기기에 반영되지 않는 문제를 일으킬 수 있어 사용하지 않음)
-const CACHE_NAME = "somangpay-pwa-v9";
+const CACHE_NAME = "somangpay-pwa-v10";
 const PRECACHE_URLS = [
   "/kiosk",
   "/user",
@@ -67,12 +67,20 @@ self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { /* 페이로드가 JSON이 아니면 빈 알림으로 무시 */ }
 
+  const url = data.url || "/user";
+  // 알림 카드 안쪽 아이콘은 어느 앱(관리자/사용자/키오스크) 알림인지에 맞춰 고른다.
+  const icon = url.startsWith("/admin") ? "/icons/icon-192-admin.png"
+    : url.startsWith("/kiosk") ? "/icons/icon-192-kiosk.png"
+    : "/icons/icon-192-user.png";
+
   event.waitUntil(
     self.registration.showNotification(data.title || "소망페이", {
       body: data.body || "",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      data: { url: data.url || "/user" },
+      icon,
+      // 상태바 아이콘은 Android가 실루엣(흰색+투명 알파)만 읽으므로 일반 컬러 아이콘이 아닌
+      // 전용 단색 마스크 이미지를 써야 한다 - 컬러 아이콘을 쓰면 흰 네모로 뭉개져 보인다.
+      badge: "/icons/badge-96.png",
+      data: { url },
     })
   );
 });
