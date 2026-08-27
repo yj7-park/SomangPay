@@ -1472,7 +1472,10 @@ async function startKioskNfcScan() {
       kioskNfcScanCooldown = true;
       setTimeout(() => { kioskNfcScanCooldown = false; }, 3000);
 
-      const serialNum = event.serialNumber || "RAW_HCE_NO_SERIAL";
+      // admin.js의 Web NFC 카드 등록 경로는 serialNumber를 대문자로 강제하는데(brower 자체는
+      // 소문자 콜론 헥스로 내려줌) 여기는 그대로 흘려보내고 있어서, 등록 때와 결제 스캔 때
+      // 문자열 대소문자가 달라 같은 카드가 "등록되지 않은 식별자"로 오판되는 원인이 됐다.
+      const serialNum = (event.serialNumber || "RAW_HCE_NO_SERIAL").toUpperCase();
 
       // 1. 디버그 로그 및 피드백 최우선 실행 (NDEF 레코드 파싱 예외로 인한 로그 누락 차단)
       appendDebugLog(`📡 [Web NFC] 실물 NFC/스마트폰 스캔 원시 데이터 감지!`, "SUCCESS");

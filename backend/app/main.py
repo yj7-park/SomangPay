@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Body, Header, Reque
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 from anyio import to_thread
 from fastapi.concurrency import run_in_threadpool
@@ -580,7 +581,7 @@ async def upsert_nfc_card(
 
     # 이 UID를 다른 회원/다른 타입으로 이미 쓰고 있었다면 그 행은 제거(재할당).
     # 그 카드를 참조하던 결제 이력은 카드 참조만 해제하고 보존한다.
-    existing_by_uid = db.query(models.NFCCard).filter(models.NFCCard.card_uid == req.card_uid).first()
+    existing_by_uid = db.query(models.NFCCard).filter(func.upper(models.NFCCard.card_uid) == req.card_uid.strip().upper()).first()
     if existing_by_uid and not (existing_by_uid.user_id == req.user_id and existing_by_uid.card_type == req.card_type):
         db.query(models.PaymentTransaction).filter(models.PaymentTransaction.card_id == existing_by_uid.id).update({"card_id": None})
         db.delete(existing_by_uid)
@@ -592,12 +593,12 @@ async def upsert_nfc_card(
     ).first()
 
     if target:
-        target.card_uid = req.card_uid
+        target.card_uid = req.card_uid.strip().upper()
         target.card_name = req.card_name or default_name
         target.issued_at = datetime.datetime.utcnow()
     else:
         target = models.NFCCard(
-            card_uid=req.card_uid,
+            card_uid=req.card_uid.strip().upper(),
             card_name=req.card_name or default_name,
             card_type=req.card_type,
             user_id=req.user_id,
@@ -717,7 +718,7 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
         return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN", "token": token}
 
     if req.card_uid:
-        card = db.query(models.NFCCard).filter(models.NFCCard.card_uid == req.card_uid).first()
+        card = db.query(models.NFCCard).filter(func.upper(models.NFCCard.card_uid) == req.card_uid.strip().upper()).first()
         if card:
             user = db.query(models.User).filter(models.User.id == card.user_id).first()
             if user and user.role == "ADMIN" and user.status == "ACTIVE":
@@ -741,7 +742,12 @@ def _process_nfc_payment_sync(db: Session, req: schemas.PaymentRequest):
     테스트(동시 300명)에서 이 함수의 동기 DB 호출이 이벤트루프를 통째로 막아 다른
     요청(결제 아닌 것 포함)까지 초 단위로 지연되는 게 확인되어 분리함."""
     # 1. NFC 카드/교인증 QR 고유 식별자로 회원 계정 조회
-    card = db.query(models.NFCCard).filter(models.NFCCard.card_uid == req.card_uid).first()
+    # 대소문자 무관 비교 - 물리 NFC UID는 읽는 경로(내장 NFC/외장 CCID·HID 리더/Web NFC)마다
+    # 헥스 문자열의 대소문자 표기가 갈릴 수 있어(예: 등록은 admin.js Web NFC 경로가 강제
+    # 대문자화하는데 결제 스캔 쪽 경로 하나는 원본 그대로 소문자로 내려보냄) 값은 같은 카드인데
+    # 문자열이 달라 "등록되지 않은 식별자"로 오판되는 문제가 있었다. QR 코드는 이 앱이 발급한
+    # 값을 그대로 다시 인코딩/디코딩할 뿐이라 대소문자가 갈릴 일이 없어 안전하게 함께 적용 가능.
+    card = db.query(models.NFCCard).filter(func.upper(models.NFCCard.card_uid) == req.card_uid.strip().upper()).first()
 
     if not card:
         raise HTTPException(
