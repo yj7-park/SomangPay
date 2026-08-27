@@ -186,7 +186,7 @@
 
         <!-- 입금 확인/충전 완료 시 앱을 꺼둔 상태에서도 알림을 받을지 여부(Web Push, #push).
              지원 안 하는 브라우저에서는 버튼이 비활성화된 채 "미지원 브라우저"로 표시된다. -->
-        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+        <div id="u-push-section" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
           <span style="font-size: 0.92rem; color: var(--text-main);">푸시 알림</span>
           <button id="u-push-toggle-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.85rem; margin-left: auto;" onclick="togglePushNotifications()">🔕 꺼짐</button>
         </div>

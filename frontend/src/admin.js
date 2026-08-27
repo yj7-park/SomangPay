@@ -242,6 +242,17 @@ function adminPushSupported() {
   return "serviceWorker" in navigator && "PushManager" in window;
 }
 
+// 네이티브 앱(AndroidInterface 있음)이나 홈 화면에 설치된 PWA(display-mode: standalone)에서만
+// true. 일반 브라우저 탭은 설치된 PWA와 완전히 같은 origin+scope의 서비스워커/푸시 구독을
+// 공유해서, 한쪽에서 알림을 켜고 끄면 다른 쪽 구독까지 같이 흔들리는 충돌이 있었다 - 그래서
+// 일반 브라우저 탭에서는 푸시 알림 UI 자체를 숨겨 애초에 두 곳에서 켤 수 없게 한다.
+function isInstalledAdminAppContext() {
+  if (window.AndroidInterface) return true;
+  if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+  if (window.navigator.standalone === true) return true; // iOS Safari 홈 화면 추가
+  return false;
+}
+
 function urlBase64ToUint8ArrayAdmin(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -274,6 +285,13 @@ async function getCurrentAdminPushSubscription() {
 }
 
 async function refreshAdminPushButtonUI() {
+  const section = document.getElementById("a-push-section");
+  if (!isInstalledAdminAppContext()) {
+    if (section) section.style.display = "none";
+    return;
+  }
+  if (section) section.style.display = "";
+
   const btn = document.getElementById("a-push-toggle-btn");
   if (!btn) return;
   if (!adminPushSupported()) {
