@@ -12,6 +12,12 @@
     <!-- 입금 문자 자동감지(관리자 앱 전용, BuildConfig.SMS_DETECT_ENABLED로 런타임에 게이팅) -
          은행 알림 문자를 가로채 window.onSmsReceived로 넘기기 위해 필요. -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- AdminAlertService(관리자 앱 전용) - 서버 알림을 네이티브 알림으로 띄우는 데 필요.
+         POST_NOTIFICATIONS는 안드로이드 13+, FOREGROUND_SERVICE*는 14+(API 34)부터 포그라운드
+         서비스 시작/타입 선언에 각각 필요하다. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -73,6 +79,15 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- 관리자 앱 전용(BuildConfig.SMS_DETECT_ENABLED로 시작 여부 게이팅) - WebView가
+             Web Push를 지원하지 않아(admin.html 상단 주석) 서버가 보내는 관리자 알림을 받을
+             방법이 없는 것을 우회한다. /ws/admin에 포그라운드 서비스로 계속 붙어 있다가
+             "alert" 메시지가 오면 네이티브 알림으로 띄운다 - MainActivity가 시작한다. -->
+        <service
+            android:name=".AdminAlertService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- 다운로드한 업데이트 APK 파일을 file:// 대신 content:// URI로 시스템 설치
              화면(PackageInstaller)에 안전하게 넘기기 위한 FileProvider - 세 플레이버가

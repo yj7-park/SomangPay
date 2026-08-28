@@ -102,6 +102,15 @@ async def notify_admins(scopes: list):
     await manager.broadcast_admins({"type": "refresh", "scopes": scopes})
 
 
+async def notify_admins_alert(title: str, body: str, category: str = None):
+    """관리자 전원에게 사람이 읽을 수 있는 알림 문구를 WS로도 보낸다 - send_push_to_admins()
+    (Web Push)와 항상 같이 호출된다. 브라우저/PWA의 ws-client.js는 "refresh" 타입만 처리하고
+    이 "alert" 타입은 무시하므로 웹 쪽 동작에는 영향이 없다 - 이건 안드로이드 WebView가 Web
+    Push를 지원하지 않아 웹푸시를 받을 수 없는 관리자 APK(AdminAlertService)가 대신 구독하는
+    경로다(admin.html 상단 주석 참고 - WebView는 PushManager 자체가 없음)."""
+    await manager.broadcast_admins({"type": "alert", "title": title, "body": body, "category": category})
+
+
 async def notify_user(user_id: int, scopes: list):
     """특정 회원(연결돼 있는 모든 탭/기기)에게만 갱신 신호를 보낸다."""
     await manager.send_to_user(user_id, {"type": "refresh", "scopes": scopes})

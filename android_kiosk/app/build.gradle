@@ -103,4 +103,9 @@ dependencies {
     // 동작하지 않는다(비보안 컨텍스트 제약). 그래서 QR 스캔은 네이티브로 대체한다 - Play
     // Services 의존성이 없는 zxing-android-embedded를 사용(ML Kit은 Play Services 필요).
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    // 관리자 앱 전용 AdminAlertService(포그라운드 서비스로 /ws/admin에 계속 붙어 있다가
+    // 서버가 보내는 관리자 알림을 네이티브 알림으로 띄움 - WebView가 Web Push를 지원하지
+    // 않아 우회하는 경로, admin.html 상단 주석 참고)의 WebSocket 클라이언트. 프레임
+    // 마스킹/핑퐁/재연결을 직접 구현하는 대신 검증된 라이브러리를 쓴다.
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }

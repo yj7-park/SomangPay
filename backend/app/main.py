@@ -19,7 +19,7 @@ from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
 from app.services.history import get_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
-from app.ws_manager import manager, notify_admins, notify_user, notify_kiosk, notify_all_kiosks
+from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
 
 app = FastAPI(
     title="SomangPay API Server",
@@ -915,6 +915,7 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
         send_push_to_admins, db, "결제 발생",
         f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment"
     )
+    await notify_admins_alert("결제 발생", f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment")
 
     user_type_label = "시니어" if user.user_type == "SENIOR" else "일반"
 
@@ -1025,6 +1026,7 @@ async def claim_bank_transaction(
     await notify_admins(["deposit_queue", "stats", "deposits", "users"])
     await notify_user(user.id, ["me"])
     send_push_to_admins(db, "충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다", category="deposit_credited")
+    await notify_admins_alert("충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다", category="deposit_credited")
     return schemas.DepositClaimResult(
         success=True,
         message=f"{txn.amount:,}원이 충전되었습니다.",
@@ -1061,6 +1063,7 @@ async def admin_add_bank_transaction(
         send_push_to_user(db, txn.matched_user_id, "입금이 확인됐어요", f"{txn.amount:,}원 입금 확인 - 앱에서 충전을 완료해주세요")
     elif txn.status == "ERROR":
         send_push_to_admins(db, "미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다", category="deposit_error")
+        await notify_admins_alert("미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다", category="deposit_error")
     return _bank_txn_response(db, txn)
 
 @app.get("/api/admin/bank-transactions", response_model=List[schemas.BankTransactionResponse])

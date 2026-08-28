@@ -79,6 +79,12 @@ final class DepositAutoDetector {
         prefs(context).edit().putString(PREF_ADMIN_TOKEN, token).apply();
     }
 
+    // AdminAlertService가 /ws/admin 연결에 쓸 토큰을 읽어간다 - 저장 위치(SharedPreferences)를
+    // 한 곳에만 알게 하려고 여기 getter를 통해서만 꺼내가게 한다.
+    static String getAdminToken(Context context) {
+        return prefs(context).getString(PREF_ADMIN_TOKEN, null);
+    }
+
     static void saveDetectSettings(Context context, String sender, String regex, String pushPackage, String pushTitle) {
         prefs(context).edit()
                 .putString(PREF_SMS_SENDER, sender == null ? "" : sender)

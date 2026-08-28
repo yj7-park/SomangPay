@@ -223,6 +223,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
                         .edit().putBoolean(NOTIF_ACCESS_PROMPTED_KEY, true).apply();
                 mainHandler.postDelayed(this::openNotificationAccessSettings, 1500);
             }
+
+            // 5. 관리자 알림(AdminAlertService) - WebView가 Web Push를 지원하지 않아 서버가
+            // 보내는 관리자 알림(미매칭 입금/결제 발생 등)을 받을 방법이 없는 것을 우회한다.
+            // 포그라운드 서비스로 /ws/admin에 계속 붙어 있다가 알림을 네이티브로 띄운다.
+            if (android.os.Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 106);
+            }
+            AdminAlertService.start(this);
         }
 
         // TTS 엔진 초기화
