@@ -29,12 +29,11 @@ deploy_backend() {
 deploy_frontend() {
   echo "==> frontend 코드 동기화"
   rsync -az -e "ssh -i $SSH_KEY" \
-    --exclude '*.apk' \
     frontend/ "$SERVER:$REMOTE_DIR/frontend/"
 
   echo "==> nginx가 서빙하는 /var/www/somangpay 로 반영"
   ssh_cmd "sudo rsync -a --delete $REMOTE_DIR/frontend/ /var/www/somangpay/ \
-    --exclude '*.apk' --exclude Dockerfile --exclude nginx.conf --exclude package.json \
+    --exclude Dockerfile --exclude nginx.conf --exclude package.json \
     && sudo chown -R www-data:www-data /var/www/somangpay \
     && sudo find /var/www/somangpay -type d -exec chmod 755 {} \; \
     && sudo find /var/www/somangpay -type f -exec chmod 644 {} \;"
