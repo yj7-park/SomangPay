@@ -91,9 +91,9 @@ jobs:
         run: |
           cat > frontend/version.json <<EOF
           {
-            "kiosk": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.0-${{ github.run_number }}", "apkUrl": "/SomangPayKiosk.apk" },
-            "admin": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.0-${{ github.run_number }}", "apkUrl": "/SomangPayAdmin.apk" },
-            "user": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.0-${{ github.run_number }}", "apkUrl": "/SomangPayUser.apk" }
+            "kiosk": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}", "apkUrl": "/SomangPayKiosk.apk" },
+            "admin": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}", "apkUrl": "/SomangPayAdmin.apk" },
+            "user": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}", "apkUrl": "/SomangPayUser.apk" }
           }
           EOF
 
