@@ -135,6 +135,22 @@ class AdminKioskResponse(BaseModel):
     updated_at: UTCDatetime
     sales: KioskSalesSummary
 
+# 키오스크별 결제 이력(영구 보존, 기간 제한 없이 커서 페이지네이션으로 지연 로드) - 키오스크
+# 화면의 "최근 결제 내역" 패널과 관리자 키오스크 상세 화면이 공유하는 응답. HistoryItemResponse
+# (회원 본인 이용내역)는 이미 "누구"인지 알고 있는 화면용이라 user_name/user_type이 없어서
+# 재사용할 수 없다 - 여기서는 어느 회원이 결제했는지가 핵심 정보라 별도 스키마로 둔다.
+class KioskPaymentHistoryItem(BaseModel):
+    user_name: str
+    user_type: str  # "시니어" | "일반"
+    amount: int
+    balance_after: Optional[int] = None
+    product_details: Optional[str] = None
+    event_time: UTCDatetime
+
+class KioskPaymentHistoryPage(BaseModel):
+    items: List[KioskPaymentHistoryItem]
+    next_cursor: Optional[str] = None
+
 class KioskUpdateRequest(BaseModel):
     device_name: Optional[str] = None
     assigned_products: Optional[List[int]] = None
@@ -254,13 +270,22 @@ class PushSubscriptionKeys(BaseModel):
 class PushSubscriptionCreate(BaseModel):
     endpoint: str
     keys: PushSubscriptionKeys
-    # 관리자 쪽 항목별 on/off - 회원 구독 요청에는 안 실려오지만 스키마 기본값(True)으로 채워짐
-    notify_deposit_error: bool = True
-    notify_deposit_credited: bool = True
-    notify_payment: bool = True
+    # 관리자 쪽 항목별 on/off - 회원 구독 요청에는 안 실려오지만 스키마 기본값(True)으로 채워짐.
+    # None(미전송)은 "값을 바꾸지 말라"는 의미 - 만료된 구독을 조용히 갱신만 할 때(재구독) 항목별
+    # 설정을 함께 안 보내도 기존에 저장해둔 on/off가 덮어써지지 않게 하기 위함.
+    notify_deposit_error: Optional[bool] = None
+    notify_deposit_credited: Optional[bool] = None
+    notify_payment: Optional[bool] = None
 
 class PushSubscriptionDelete(BaseModel):
     endpoint: str
+
+class PushResubscribe(BaseModel):
+    # 서비스워커가 pushsubscriptionchange/주기적 갱신 시 로그인 세션 없이(앱이 꺼져있어도) 호출
+    # 하므로 Bearer 토큰이 없다 - old_endpoint를 아는 것 자체를 소유 증명으로 삼는다.
+    old_endpoint: str
+    endpoint: str
+    keys: PushSubscriptionKeys
 
 class PushCategoriesUpdate(BaseModel):
     endpoint: str

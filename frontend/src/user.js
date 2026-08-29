@@ -199,6 +199,8 @@ function onLoginSuccess(user) {
   loadMyDeposits();
   loadUserQrCard();
   connectUserWebSocket();
+  ensurePushSubscriptionFresh();
+  registerPeriodicPushRefresh();
 }
 
 // ============ 등록된 QR 카드(있으면) 표시 ============
@@ -265,6 +267,13 @@ function isInstalledUserAppContext() {
   return false;
 }
 
+// 사용자가 "켜짐"으로 선택했다는 의도를 저장해두는 키. 실제 구독 여부(getSubscription())만
+// 믿으면, 브라우저/푸시서비스가 백그라운드에서 조용히 구독을 만료시켰을 때(디바이스가 오래
+// 꺼져있었거나 등) 다시 켜기 전까지 알림이 안 오는데도 사용자는 알 방법이 없다 - 이 의도
+// 플래그가 켜져 있는 동안은 로그인/화면복귀 시마다 ensurePushSubscriptionFresh()가 조용히
+// 재구독을 시도해서 만료를 스스로 복구한다.
+const USER_PUSH_ENABLED_KEY = "user_push_enabled";
+
 // VAPID 공개키를 서비스워커가 요구하는 Uint8Array 형태로 변환 (표준 스니펫).
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -288,6 +297,11 @@ async function refreshPushButtonUI() {
     return;
   }
   if (section) section.style.display = "flex";
+
+  // ensurePushSubscriptionFresh()가 지금 막 해지→재구독 중이면, 그 사이 순간에
+  // getSubscription()을 읽으면 일시적으로 null이 나와서 실제론 켜져있는데 "꺼짐"으로
+  // 잘못 보인다 - 진행 중인 갱신이 있으면 끝날 때까지 기다렸다가 읽는다.
+  if (_userPushRefreshInFlight) await _userPushRefreshInFlight;
 
   const btn = document.getElementById("u-push-toggle-btn");
   if (!btn) return;
@@ -353,6 +367,7 @@ async function subscribeToPush() {
       body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
     });
     if (!res.ok) throw new Error(`push/subscribe ${res.status}`);
+    localStorage.setItem(USER_PUSH_ENABLED_KEY, "true");
   } catch (err) {
     console.error("푸시 구독 오류:", err);
     await showAlertModal(`푸시 알림 등록에 실패했습니다.\n(${err && err.message ? err.message : err})`);
@@ -360,6 +375,7 @@ async function subscribeToPush() {
 }
 
 async function unsubscribeFromPush(sub) {
+  localStorage.removeItem(USER_PUSH_ENABLED_KEY);
   try {
     await authFetch(`${API_BASE}/push/subscribe`, {
       method: "DELETE",
@@ -369,6 +385,96 @@ async function unsubscribeFromPush(sub) {
     await sub.unsubscribe();
   } catch (err) {
     console.error("푸시 구독 해지 오류:", err);
+  }
+}
+
+// getSubscription()이 뭔가를 돌려준다고 해서 실제로 유효한 건 아니다 - 푸시 서비스(FCM 등)가
+// 서버 쪽에서 조용히 구독을 만료시켜도 브라우저는 실제 발송이 실패하기 전까진 이를 스스로
+// 알아채지 못하고 죽은 구독 객체를 계속 "있음"으로 돌려준다. subscribe()를 다시 불러도
+// applicationServerKey가 같으면 스펙상 기존 구독을 그대로 반환할 뿐이라 이것만으로는
+// 갱신되지 않으므로, 먼저 해지한 뒤 다시 구독해 강제로 새 유효한 구독을 받아온다.
+const USER_PUSH_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6시간 - 매 화면복귀마다 돌릴 필요는 없음
+const USER_PUSH_LAST_REFRESH_KEY = "user_push_last_refresh_at";
+
+// onLoginSuccess와 userRealtime의 onResume(pageshow/visibilitychange/online)이 첫 로드 시
+// 거의 동시에 발화해서 ensurePushSubscriptionFresh()가 겹쳐 호출될 수 있다 - 스로틀 체크가
+// "읽고 나중에 쓰는" 방식이라 두 호출 다 통과해버리면 해지→재구독이 동시에 두 번 돌면서
+// 서로 경쟁하게 되고(한쪽이 해지한 직후를 다른 쪽이 "구독 없음"으로 잘못 보는 등), 실제로
+// 이 때문에 구독이 일시적으로 완전히 사라지거나 중복 행이 쌓이는 게 확인됨. 진행 중인
+// 실행이 있으면 새로 시작하지 않고 그 결과를 그대로 기다리게 해서 항상 한 번에 하나만 돈다.
+let _userPushRefreshInFlight = null;
+
+// 로그인 직후/화면 복귀(resume) 시마다 호출.
+function ensurePushSubscriptionFresh() {
+  if (!_userPushRefreshInFlight) {
+    _userPushRefreshInFlight = _doEnsurePushSubscriptionFresh().finally(() => {
+      _userPushRefreshInFlight = null;
+    });
+  }
+  return _userPushRefreshInFlight;
+}
+
+async function _doEnsurePushSubscriptionFresh() {
+  if (!isInstalledUserAppContext() || !pushSupported()) return;
+  if (Notification.permission !== "granted") return;
+  // USER_PUSH_ENABLED_KEY는 이번 변경으로 새로 생긴 플래그라 예전부터 켜둔 사용자는 저장된
+  // 적이 없다 - 그런 기존 사용자도 놓치지 않도록 "지금 브라우저에 남아있는 구독"도 켜짐
+  // 의도로 간주한다.
+  const existingSub = await getCurrentPushSubscription();
+  if (localStorage.getItem(USER_PUSH_ENABLED_KEY) !== "true" && !existingSub) return;
+
+  const lastRefresh = Number(localStorage.getItem(USER_PUSH_LAST_REFRESH_KEY) || 0);
+  if (Date.now() - lastRefresh < USER_PUSH_REFRESH_INTERVAL_MS) return;
+
+  try {
+    const oldEndpoint = existingSub ? existingSub.endpoint : null;
+    if (existingSub) await existingSub.unsubscribe();
+    const keyRes = await fetch(`${API_BASE}/push/vapid-public-key`);
+    if (!keyRes.ok) return;
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    const subJson = sub.toJSON();
+    await authFetch(`${API_BASE}/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+    });
+    if (oldEndpoint && oldEndpoint !== subJson.endpoint) {
+      // 옛 구독 행이 만료된 채로 DB에 남아있지 않도록 정리 - 실패해도 어차피 다음 발송
+      // 실패(404/410) 시 서버가 알아서 지우므로 best-effort로만 시도한다.
+      authFetch(`${API_BASE}/push/subscribe`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: oldEndpoint }),
+      }).catch(() => {});
+    }
+    localStorage.setItem(USER_PUSH_ENABLED_KEY, "true");
+    localStorage.setItem(USER_PUSH_LAST_REFRESH_KEY, String(Date.now()));
+  } catch (err) {
+    console.error("푸시 구독 갱신 오류:", err);
+  }
+}
+
+// 지원 브라우저(설치된 PWA + 사이트 참여도 조건 충족 시)에서는 앱을 아예 안 열어도 브라우저가
+// 알아서 주기적으로 sw.js를 깨워 구독을 갱신해준다(sw.js의 periodicsync 핸들러 참고). 미지원
+// 브라우저/조건 미충족이면 조용히 무시되는 best-effort라 실패해도 문제 삼지 않는다.
+async function registerPeriodicPushRefresh() {
+  if (!isInstalledUserAppContext() || !pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (!("periodicSync" in reg)) return;
+    const status = await navigator.permissions.query({ name: "periodic-background-sync" });
+    if (status.state !== "granted") return;
+    await reg.periodicSync.register("push-subscription-refresh", {
+      minInterval: 12 * 60 * 60 * 1000, // 12시간 - 실제 주기는 브라우저가 기기 상태 보고 늘릴 수 있음
+    });
+  } catch (err) {
+    console.error("Periodic Background Sync 등록 실패(미지원이거나 조건 미충족):", err);
   }
 }
 
@@ -394,6 +500,7 @@ const userRealtime = createRealtimeClient({
   onResume: () => {
     refreshMyInfo();
     loadMyDeposits();
+    ensurePushSubscriptionFresh();
   },
 });
 

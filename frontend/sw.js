@@ -103,3 +103,58 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+// ============ 앱을 안 열어도 구독을 스스로 갱신 ============
+// 이 시점(pushsubscriptionchange/periodicsync)엔 페이지가 안 열려있을 수 있어 localStorage의
+// 로그인 토큰에 접근할 방법이 없다 - 그래서 인증 없이 옛 endpoint(추측 불가능한 긴 문자열)
+// 자체를 소유 증명으로 삼아 갱신하는 /api/push/resubscribe를 쓴다(backend/app/main.py 참고).
+async function reportResubscribe(oldEndpoint, sub) {
+  if (!oldEndpoint) return; // 옛 endpoint를 모르면 서버 쪽 어느 행을 갱신할지 알 수 없어 포기
+  const subJson = sub.toJSON();
+  try {
+    await fetch("/api/push/resubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old_endpoint: oldEndpoint, endpoint: subJson.endpoint, keys: subJson.keys }),
+    });
+  } catch (e) { /* 실패해도 다음 pushsubscriptionchange/periodicsync/앱 실행 때 다시 시도됨 */ }
+}
+
+// 브라우저가 스스로 구독을 회전(rotate)시켰을 때 오는 이벤트 - push 이벤트처럼 앱이 완전히
+// 꺼져있어도 이 서비스워커가 깨워져서 호출될 수 있다. 여기서 서버에 새 endpoint를 안 알려주면
+// 브라우저 안에서는 이미 새 구독으로 넘어갔는데 서버 DB엔 죽은 옛 endpoint가 남아 발송이
+// 계속 실패한다. (브라우저가 스스로 만료를 알아채지 못하고 조용히 죽이는 경우는 이 이벤트
+// 자체가 안 오므로 아래 periodicsync가 대신 커버한다.)
+self.addEventListener("pushsubscriptionchange", (event) => {
+  const oldEndpoint = event.oldSubscription ? event.oldSubscription.endpoint : null;
+  const options = (event.oldSubscription && event.oldSubscription.options) || undefined;
+  event.waitUntil(
+    (async () => {
+      try {
+        const newSub = event.newSubscription || await self.registration.pushManager.subscribe(options);
+        await reportResubscribe(oldEndpoint, newSub);
+      } catch (e) { /* applicationServerKey를 모르면(options 없음) 재구독 자체가 불가능 - 무시 */ }
+    })()
+  );
+});
+
+// Periodic Background Sync - 지원 브라우저(설치 + 사이트 참여도 조건 충족 시)에서 페이지를
+// 안 열어도 이 서비스워커를 주기적으로 깨워준다(등록은 user.js/admin.js에서 로그인 시 시도).
+// getSubscription()이 "있다"고 돌려줘도 푸시 서비스 쪽에서 조용히 만료됐을 수 있고 브라우저는
+// 이를 스스로 알 방법이 없어서, 매번 해지 후 재구독해 강제로 유효성을 새로 받아온다.
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag !== "push-subscription-refresh") return;
+  event.waitUntil(
+    (async () => {
+      const existing = await self.registration.pushManager.getSubscription();
+      if (!existing) return; // 구독한 적 없으면 할 일 없음 - 권한 요청은 SW 혼자 못 한다
+      const oldEndpoint = existing.endpoint;
+      const options = existing.options;
+      try {
+        await existing.unsubscribe();
+        const fresh = await self.registration.pushManager.subscribe(options);
+        await reportResubscribe(oldEndpoint, fresh);
+      } catch (e) { /* 실패해도 다음 주기나 다음 앱 실행 때 다시 시도됨 */ }
+    })()
+  );
+});

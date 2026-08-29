@@ -94,6 +94,38 @@ def _payment_items(db: Session, user_id: int, before: Optional[datetime.datetime
     return items
 
 
+def get_kiosk_payment_history_page(
+    db: Session, kiosk_device_id: int, before: Optional[datetime.datetime], limit: int = 20
+) -> schemas.KioskPaymentHistoryPage:
+    """단말기 화면의 '최근 결제 내역' 패널(kiosk.js)과 관리자 키오스크 상세 화면이 함께 쓰는
+    커서 페이지네이션. get_history_page와 마찬가지로 조회 범위에 임의의 기간 제한을 두지 않고
+    스크롤할 때만 다음 페이지를 불러온다(지연 로드) - 결제 성공 건만 대상으로 한다(화면에
+    실패 시도를 노출하지 않는 기존 동작 유지). PaymentTransaction 자체는 지우지 않고 영구
+    보존하므로 매출 집계(_kiosk_sales_for)에는 영향이 없다."""
+    q = db.query(models.PaymentTransaction).filter(
+        models.PaymentTransaction.kiosk_device_id == kiosk_device_id,
+        models.PaymentTransaction.status == "SUCCESS",
+    )
+    if before is not None:
+        q = q.filter(models.PaymentTransaction.created_at < before)
+    rows = q.order_by(models.PaymentTransaction.created_at.desc()).limit(limit).all()
+
+    items = []
+    for p in rows:
+        user = db.query(models.User).filter(models.User.id == p.user_id).first()
+        items.append(schemas.KioskPaymentHistoryItem(
+            user_name=user.name if user else "탈퇴한 회원",
+            user_type="시니어" if (user and user.user_type == "SENIOR") else "일반",
+            amount=p.amount,
+            balance_after=p.balance_after,
+            product_details=p.product_details,
+            event_time=p.created_at,
+        ))
+
+    next_cursor = items[-1].event_time.isoformat() if items else None
+    return schemas.KioskPaymentHistoryPage(items=items, next_cursor=next_cursor)
+
+
 def get_history_page(db: Session, user_id: int, before: Optional[datetime.datetime], limit: int = 20) -> schemas.HistoryPageResponse:
     """계좌이체/결제/관리자충전 3개 소스를 시간순으로 병합한 커서 페이지네이션.
     매 호출마다 세 소스 전부를 "before 이전" 조건으로 다시 조회해 각각 최대 limit개씩 가져온 뒤

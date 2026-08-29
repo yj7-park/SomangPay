@@ -17,7 +17,7 @@ from app import models, schemas, security
 from app.database import engine, get_db, init_db
 from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
-from app.services.history import get_history_page
+from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
 
@@ -256,6 +256,36 @@ def unsubscribe_push(
     db.commit()
     return {"success": True}
 
+@app.post("/api/push/resubscribe")
+def resubscribe_push(req: schemas.PushResubscribe, db: Session = Depends(get_db)):
+    """서비스워커가 pushsubscriptionchange 이벤트나 주기적(Periodic Background Sync) 자체
+    갱신에서 호출하는 전용 API - 이 시점엔 앱이 꺼져있을 수 있어 로그인 세션(Bearer 토큰)이
+    없다. 대신 옛 endpoint(추측 불가능한 긴 문자열)를 아는 것 자체를 본인 소유 증명으로
+    삼아 인증 없이 endpoint/키만 갱신한다 - user/admin 구분 없이 동일하게 동작(회원/관리자
+    행 모두 이 테이블 하나를 같이 쓰므로)."""
+    old_sub = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.old_endpoint
+    ).first()
+    if not old_sub:
+        raise HTTPException(status_code=404, detail="구독 정보를 찾을 수 없습니다.")
+
+    # 이미 새 endpoint로 등록된 행이 있다면(재시도로 두 번 불렸거나 하는 경우) 중복 방지 -
+    # 옛 행은 지우고 이미 있는 새 행의 키만 최신화한다.
+    conflicting = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == req.endpoint,
+        models.PushSubscription.id != old_sub.id,
+    ).first()
+    if conflicting:
+        conflicting.p256dh = req.keys.p256dh
+        conflicting.auth = req.keys.auth
+        db.delete(old_sub)
+    else:
+        old_sub.endpoint = req.endpoint
+        old_sub.p256dh = req.keys.p256dh
+        old_sub.auth = req.keys.auth
+    db.commit()
+    return {"success": True}
+
 @app.post("/api/admin/push/subscribe")
 def subscribe_admin_push(
     req: schemas.PushSubscriptionCreate,
@@ -271,18 +301,23 @@ def subscribe_admin_push(
         existing.user_id = admin.id
         existing.p256dh = req.keys.p256dh
         existing.auth = req.keys.auth
-        existing.notify_deposit_error = req.notify_deposit_error
-        existing.notify_deposit_credited = req.notify_deposit_credited
-        existing.notify_payment = req.notify_payment
+        # None으로 온 항목은 건드리지 않는다 - 만료된 구독을 자동으로 조용히 갱신할 때(재구독)
+        # 항목별 on/off까지 같이 보내지 않아도 기존 설정이 기본값(전체 on)으로 되돌아가지 않게.
+        if req.notify_deposit_error is not None:
+            existing.notify_deposit_error = req.notify_deposit_error
+        if req.notify_deposit_credited is not None:
+            existing.notify_deposit_credited = req.notify_deposit_credited
+        if req.notify_payment is not None:
+            existing.notify_payment = req.notify_payment
     else:
         db.add(models.PushSubscription(
             user_id=admin.id,
             endpoint=req.endpoint,
             p256dh=req.keys.p256dh,
             auth=req.keys.auth,
-            notify_deposit_error=req.notify_deposit_error,
-            notify_deposit_credited=req.notify_deposit_credited,
-            notify_payment=req.notify_payment,
+            notify_deposit_error=req.notify_deposit_error if req.notify_deposit_error is not None else True,
+            notify_deposit_credited=req.notify_deposit_credited if req.notify_deposit_credited is not None else True,
+            notify_payment=req.notify_payment if req.notify_payment is not None else True,
         ))
     db.commit()
     return {"success": True}
@@ -300,6 +335,27 @@ def unsubscribe_admin_push(
     ).delete()
     db.commit()
     return {"success": True}
+
+@app.get("/api/admin/push/subscribe/categories")
+def get_admin_push_categories(
+    endpoint: str,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    """설정 화면이 열릴 때 체크박스를 서버에 저장된 실제 값으로 맞추기 위한 조회용
+    (지금까지는 체크박스가 항상 HTML 기본값(전체 체크)으로만 그려져 새로고침하면 이전에
+    꺼둔 항목이 켜진 것처럼 보이는 문제가 있었다)."""
+    sub = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == endpoint,
+        models.PushSubscription.user_id == admin.id,
+    ).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="구독 정보를 찾을 수 없습니다.")
+    return {
+        "notify_deposit_error": sub.notify_deposit_error,
+        "notify_deposit_credited": sub.notify_deposit_credited,
+        "notify_payment": sub.notify_payment,
+    }
 
 @app.put("/api/admin/push/subscribe/categories")
 def update_admin_push_categories(
@@ -1385,6 +1441,21 @@ def get_kiosk_device(device_uuid: str, db: Session = Depends(get_db)):
         "updated_at": device.updated_at
     }
 
+@app.get("/api/kiosk/history", response_model=schemas.KioskPaymentHistoryPage)
+def get_kiosk_history(
+    device_uuid: str,
+    before: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+):
+    """단말기 화면 '최근 결제 내역' 패널용 - 새로고침/앱 재시작으로 화면이 초기화돼도
+    (기존엔 kiosk.js의 메모리 배열이라 휘발성이었음) 서버에 남아있는 이력을 다시 불러온다.
+    get_kiosk_device와 동일한 신뢰 모델(device_uuid만으로 조회, 별도 인증 없음)."""
+    device = db.query(models.KioskDevice).filter(models.KioskDevice.device_uuid == device_uuid).first()
+    if not device:
+        return schemas.KioskPaymentHistoryPage(items=[], next_cursor=None)
+    return get_kiosk_payment_history_page(db, device.id, _parse_history_cursor(before), min(limit, 100))
+
 class KioskRegisterRequest(schemas.BaseModel):
     device_uuid: str
     device_name: Optional[str] = None
@@ -1486,6 +1557,21 @@ def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depen
             ),
         ))
     return result
+
+@app.get("/api/admin/kiosks/{device_id}/history", response_model=schemas.KioskPaymentHistoryPage)
+def admin_get_kiosk_history(
+    device_id: int,
+    before: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 키오스크 상세 화면의 결제 이력 탭 - 키오스크 화면과 동일한 소스(get_kiosk_payment_history_page)를
+    공유해 양쪽이 항상 같은 결과를 보게 한다."""
+    device = db.query(models.KioskDevice).filter(models.KioskDevice.id == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="키오스크를 찾을 수 없습니다.")
+    return get_kiosk_payment_history_page(db, device_id, _parse_history_cursor(before), min(limit, 100))
 
 @app.put("/api/admin/kiosks/{device_id}")
 async def admin_update_kiosk(

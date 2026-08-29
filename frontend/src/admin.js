@@ -253,6 +253,10 @@ function isInstalledAdminAppContext() {
   return false;
 }
 
+// user.js의 USER_PUSH_ENABLED_KEY와 동일한 목적 - "켜짐" 의도를 저장해두고, 로그인/화면복귀
+// 시마다 ensureAdminPushSubscriptionFresh()가 조용히 재구독을 시도해 만료를 스스로 복구한다.
+const ADMIN_PUSH_ENABLED_KEY = "admin_push_enabled";
+
 function urlBase64ToUint8ArrayAdmin(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -278,6 +282,17 @@ function setAdminPushCategoryCheckboxesEnabled(enabled) {
   });
 }
 
+// 체크박스는 HTML에 항상 checked로 박혀 있어서, 서버에 저장된 실제 값으로 동기화해주지
+// 않으면 새로고침할 때마다 이전에 꺼둔 항목이 다시 켜진 것처럼 보인다.
+function writeAdminPushCategoryCheckboxes(categories) {
+  ADMIN_PUSH_CATEGORIES.forEach((cat) => {
+    const el = document.getElementById(`a-push-cat-${cat}`);
+    if (el && categories[`notify_${cat}`] !== undefined) {
+      el.checked = categories[`notify_${cat}`];
+    }
+  });
+}
+
 async function getCurrentAdminPushSubscription() {
   if (!adminPushSupported()) return null;
   const reg = await navigator.serviceWorker.ready;
@@ -292,6 +307,10 @@ async function refreshAdminPushButtonUI() {
   }
   if (section) section.style.display = "";
 
+  // user.js의 refreshPushButtonUI()와 동일 - 진행 중인 갱신(해지→재구독) 도중에 읽으면
+  // 일시적으로 "꺼짐"으로 잘못 보이므로 끝날 때까지 기다린다.
+  if (_adminPushRefreshInFlight) await _adminPushRefreshInFlight;
+
   const btn = document.getElementById("a-push-toggle-btn");
   if (!btn) return;
   if (!adminPushSupported()) {
@@ -304,6 +323,14 @@ async function refreshAdminPushButtonUI() {
   btn.disabled = false;
   btn.innerText = sub ? "🔔 켜짐" : "🔕 꺼짐";
   setAdminPushCategoryCheckboxesEnabled(!!sub);
+  if (sub) {
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/push/subscribe/categories?endpoint=${encodeURIComponent(sub.endpoint)}`);
+      if (res.ok) writeAdminPushCategoryCheckboxes(await res.json());
+    } catch (err) {
+      console.error("관리자 푸시 항목 설정 조회 오류:", err);
+    }
+  }
 }
 
 async function toggleAdminPushNotifications() {
@@ -357,13 +384,99 @@ async function subscribeAdminPush() {
       )),
     });
     if (!res.ok) throw new Error(`admin/push/subscribe ${res.status}`);
+    localStorage.setItem(ADMIN_PUSH_ENABLED_KEY, "true");
   } catch (err) {
     console.error("관리자 푸시 구독 오류:", err);
     await showAlertModal(`푸시 알림 등록에 실패했습니다.\n(${err && err.message ? err.message : err})`);
   }
 }
 
+// getSubscription()이 뭔가를 돌려준다고 해서 실제로 유효한 건 아니다(user.js의
+// ensurePushSubscriptionFresh() 설명 참고) - 먼저 해지한 뒤 다시 구독해 강제로 새 유효한
+// 구독을 받아온다. 항목별 on/off는 여기서 같이 보내지 않는다 - 서버가 None(미전송)을
+// "기존 값 유지"로 처리하므로, 체크박스 DOM 상태가 아직 서버 값과 동기화되기 전이라도
+// 저장된 설정이 실수로 기본값(전체 on)으로 덮어써지지 않는다.
+const ADMIN_PUSH_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6시간
+const ADMIN_PUSH_LAST_REFRESH_KEY = "admin_push_last_refresh_at";
+
+// user.js의 _userPushRefreshInFlight와 동일한 이유 - initAdminDashboard와 adminRealtime의
+// onResume이 첫 로드 시 거의 동시에 발화해서 이 함수가 중복 호출되면 해지→재구독이 서로
+// 경쟁하게 된다. 실제 production에서 이것 때문에 짧게는 몇 초, 운 나쁘면 그보다 길게
+// 관리자 구독이 통째로 사라지는 게 로그로 확인됨(POST/DELETE가 연달아 여러 번 찍히고
+// 마지막이 DELETE로 끝나버림) - 그 사이 결제 알림이 와도 보낼 대상 자체가 없어서 조용히
+// 유실됐던 것. 진행 중인 실행이 있으면 그 결과를 그대로 기다리게 해서 항상 한 번에 하나만.
+let _adminPushRefreshInFlight = null;
+
+// 로그인 직후/화면 복귀(resume) 시마다 호출.
+function ensureAdminPushSubscriptionFresh() {
+  if (!_adminPushRefreshInFlight) {
+    _adminPushRefreshInFlight = _doEnsureAdminPushSubscriptionFresh().finally(() => {
+      _adminPushRefreshInFlight = null;
+    });
+  }
+  return _adminPushRefreshInFlight;
+}
+
+async function _doEnsureAdminPushSubscriptionFresh() {
+  if (!isInstalledAdminAppContext() || !adminPushSupported()) return;
+  if (Notification.permission !== "granted") return;
+  const existingSub = await getCurrentAdminPushSubscription();
+  if (localStorage.getItem(ADMIN_PUSH_ENABLED_KEY) !== "true" && !existingSub) return;
+
+  const lastRefresh = Number(localStorage.getItem(ADMIN_PUSH_LAST_REFRESH_KEY) || 0);
+  if (Date.now() - lastRefresh < ADMIN_PUSH_REFRESH_INTERVAL_MS) return;
+
+  try {
+    const oldEndpoint = existingSub ? existingSub.endpoint : null;
+    if (existingSub) await existingSub.unsubscribe();
+    const keyRes = await fetch(`${API_BASE}/push/vapid-public-key`);
+    if (!keyRes.ok) return;
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8ArrayAdmin(publicKey),
+    });
+    const subJson = sub.toJSON();
+    await adminFetch(`${API_BASE}/admin/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+    });
+    if (oldEndpoint && oldEndpoint !== subJson.endpoint) {
+      adminFetch(`${API_BASE}/admin/push/subscribe`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: oldEndpoint }),
+      }).catch(() => {});
+    }
+    localStorage.setItem(ADMIN_PUSH_ENABLED_KEY, "true");
+    localStorage.setItem(ADMIN_PUSH_LAST_REFRESH_KEY, String(Date.now()));
+  } catch (err) {
+    console.error("관리자 푸시 구독 갱신 오류:", err);
+  }
+}
+
+// user.js의 registerPeriodicPushRefresh()와 동일 - 지원 브라우저에서는 앱을 안 열어도
+// sw.js의 periodicsync 핸들러가 주기적으로 구독을 갱신해준다. best-effort라 실패해도 무시.
+async function registerAdminPeriodicPushRefresh() {
+  if (!isInstalledAdminAppContext() || !adminPushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (!("periodicSync" in reg)) return;
+    const status = await navigator.permissions.query({ name: "periodic-background-sync" });
+    if (status.state !== "granted") return;
+    await reg.periodicSync.register("push-subscription-refresh", {
+      minInterval: 12 * 60 * 60 * 1000,
+    });
+  } catch (err) {
+    console.error("Periodic Background Sync 등록 실패(미지원이거나 조건 미충족):", err);
+  }
+}
+
 async function unsubscribeAdminPush(sub) {
+  localStorage.removeItem(ADMIN_PUSH_ENABLED_KEY);
   try {
     await adminFetch(`${API_BASE}/admin/push/subscribe`, {
       method: "DELETE",
@@ -452,6 +565,8 @@ function initAdminDashboard() {
   loadKiosks();
   connectAdminWebSocket();
   setupActivityFeedInfiniteScroll();
+  ensureAdminPushSubscriptionFresh();
+  registerAdminPeriodicPushRefresh();
 }
 
 // ============ 실시간 갱신 (WebSocket) ============
@@ -473,6 +588,7 @@ const adminRealtime = createRealtimeClient({
   onResume: () => {
     handleAdminRefreshEvent(["users", "cards", "deposit_queue", "stats", "deposits"])
       .catch(err => console.error("Resume refresh error:", err));
+    ensureAdminPushSubscriptionFresh();
   },
 });
 
@@ -2607,7 +2723,7 @@ function renderKioskDetail() {
       </select>
     </div>
 
-    <div class="glass-container" style="padding: 1.5rem; overflow: visible;">
+    <div class="glass-container" style="padding: 1.5rem; overflow: visible; margin-bottom: 1.2rem;">
       <div class="admin-page-title-row kiosk-title-row" style="margin-bottom: 0.8rem;">
         <span style="font-size: 0.85rem; color: var(--text-muted);">메뉴별 매출</span>
         <button type="button" class="kiosk-selector-btn" onclick="toggleKioskSalesPeriodSelector()">
@@ -2623,8 +2739,91 @@ function renderKioskDetail() {
         </table>
       </div>
     </div>
+
+    <div class="glass-container" style="padding: 1.5rem;">
+      <div class="admin-page-title-row kiosk-title-row" style="margin-bottom: 0.8rem;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">결제 이력</span>
+      </div>
+      <div id="kiosk-detail-history-list"></div>
+    </div>
   `;
   hydrateIconPlaceholders(wrap);
+  renderKioskDetailHistory(k.id);
+}
+
+// 키오스크별 결제 이력 - 회원상세 이용내역(renderDetailHistory/loadMoreDetailHistory)과 같은
+// 커서 페이지네이션 패턴이되, 백엔드 응답이 KioskPaymentHistoryItem(누가 결제했는지가 핵심
+// 정보)이라 HistoryItemResponse와 필드가 달라 historyItemHtml이 기대하는 모양으로 직접
+// 매핑해서 넘긴다(카드 모양 자체는 이용내역과 동일하게 재사용).
+let _kioskHistoryDeviceId = null;
+let _kioskHistoryCursor = null;
+let _kioskHistoryHasMore = true;
+let _kioskHistoryLoading = false;
+let _kioskHistoryDateState = { last: null };
+
+function renderKioskDetailHistory(deviceId) {
+  const box = document.getElementById("kiosk-detail-history-list");
+  if (!box) return;
+  _kioskHistoryDeviceId = deviceId;
+  _kioskHistoryCursor = null;
+  _kioskHistoryHasMore = true;
+  _kioskHistoryDateState = { last: null };
+  box.innerHTML = "";
+  setupKioskDetailHistoryInfiniteScroll();
+  loadMoreKioskDetailHistory();
+}
+
+async function loadMoreKioskDetailHistory() {
+  const box = document.getElementById("kiosk-detail-history-list");
+  if (!box) return;
+  if (!_kioskHistoryHasMore || _kioskHistoryLoading) return;
+  const deviceId = _kioskHistoryDeviceId;
+  _kioskHistoryLoading = true;
+  try {
+    const url = `${API_BASE}/admin/kiosks/${deviceId}/history?limit=20`
+      + (_kioskHistoryCursor ? `&before=${encodeURIComponent(_kioskHistoryCursor)}` : "");
+    const res = await adminFetch(url);
+    if (!res.ok) return;
+    if (deviceId !== _kioskHistoryDeviceId) return; // 응답 오는 사이 다른 키오스크로 전환됨
+    const data = await res.json();
+    if (data.items.length === 0) {
+      _kioskHistoryHasMore = false;
+      if (box.children.length === 0) {
+        box.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem 0;">결제 이력이 없습니다.</p>`;
+      }
+      return;
+    }
+    const mapped = data.items.map(item => ({
+      label: "결제",
+      badge_class: "status-payment",
+      reason: `${item.user_name} (${item.user_type})${item.product_details ? " · " + item.product_details : ""}`,
+      amount: -item.amount,
+      amount_text: `-${item.amount.toLocaleString()}원`,
+      amount_class: "amount-negative",
+      balance_after: item.balance_after,
+      event_time: item.event_time,
+    }));
+    box.insertAdjacentHTML("beforeend", mapped.map((item) => historyItemHtml(item, _kioskHistoryDateState)).join(""));
+    _kioskHistoryCursor = data.next_cursor;
+  } catch (err) {
+    console.error("loadMoreKioskDetailHistory error:", err);
+  } finally {
+    _kioskHistoryLoading = false;
+  }
+}
+
+// 키오스크 상세도 회원상세처럼 전용 스크롤 박스가 없이 window가 스크롤된다.
+function setupKioskDetailHistoryInfiniteScroll() {
+  if (window._kioskHistoryScrollWired) return;
+  window._kioskHistoryScrollWired = true;
+  window.addEventListener("scroll", () => {
+    const view = document.getElementById("admin-view-kiosk");
+    if (!view || !view.classList.contains("active")) return;
+    if (!_kioskHistoryHasMore || _kioskHistoryLoading) return;
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80) {
+      loadMoreKioskDetailHistory();
+    }
+  });
 }
 
 // 메뉴 카드를 누르면 체크박스+저장 버튼 없이 즉시 배정 상태를 뒤집고(activate/deactivate

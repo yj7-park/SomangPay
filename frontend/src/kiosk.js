@@ -141,6 +141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
   kioskRealtime.connect();
+  loadRecentPaymentsHistory();
   await loadProducts();
   resetCart(); // 기본 결제 상품으로 장바구니 자동 세팅 및 메뉴 UI 갱신
   initWebNFC(); // 권한 상태 확인 후 자동 NFC 활성화 시도
@@ -935,6 +936,27 @@ function triggerWarningEdgeGlow() {
 }
 
 let recentPaymentsList = [];
+
+// 이전엔 recentPaymentsList가 메모리에만 있어 새로고침/앱 재시작(버전 체크로 자주 발생)마다
+// 비어버렸다 - 서버(PaymentTransaction, 영구 보존)에서 최근 결제 건을 다시 받아와 채워둔
+// 뒤, 이후 결제는 지금처럼 addRecentPayment()가 실시간으로 앞에 추가한다.
+async function loadRecentPaymentsHistory() {
+  try {
+    const res = await fetch(`${API_BASE}/kiosk/history?device_uuid=${encodeURIComponent(currentDeviceUuid)}&limit=5`);
+    if (!res.ok) return;
+    const data = await res.json();
+    recentPaymentsList = data.items.map(item => ({
+      time: new Date(item.event_time).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      userName: item.user_name,
+      userType: item.user_type,
+      amount: item.amount,
+      balance: item.balance_after
+    }));
+    renderRecentPaymentsUI();
+  } catch (err) {
+    console.error("loadRecentPaymentsHistory error:", err);
+  }
+}
 
 function addRecentPayment(data) {
   const now = new Date();
