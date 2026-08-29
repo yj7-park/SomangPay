@@ -118,13 +118,13 @@ final class DepositAutoDetector {
     static void processPush(Context context, String packageName, String title, String text) {
         SharedPreferences p = prefs(context);
         String filterPackage = p.getString(PREF_PUSH_PACKAGE, PUSH_PACKAGE_DEFAULT).trim();
-        String filterTitle = p.getString(PREF_PUSH_TITLE, PUSH_TITLE_DEFAULT).trim();
+        String filterTitle = stripBidiControls(p.getString(PREF_PUSH_TITLE, PUSH_TITLE_DEFAULT));
         String body = isBlank(title) ? text : title + "\n" + text;
 
         if (!isBlank(filterPackage) && !filterPackage.equals(packageName)) {
             return;
         }
-        if (!isBlank(filterTitle) && !filterTitle.equals(title)) {
+        if (!isBlank(filterTitle) && !filterTitle.equals(stripBidiControls(title))) {
             log(context, "PUSH", packageName, packageName, body, "filtered",
                     "감지 대상 알림 제목(\"" + filterTitle + "\")과 달라 무시됨 - 실제 제목: " + title);
             return;
@@ -364,6 +364,15 @@ final class DepositAutoDetector {
 
     private static String safe(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    // 삼성 메시지 등 일부 알림은 제목을 BiDi(양방향 텍스트) 격리 문자(U+2066~U+2069 등)로
+    // 감싸서 넣는다 - 화면엔 안 보이지만 String.equals() 비교에는 걸려, 관리자가 설정에서
+    // 직접 입력한 필터 제목과 눈으로는 똑같은데도 "불일치"로 무시되는 문제가 있었다.
+    // 비교 전에 이 폭 0 서식 문자를 제거해서 시각적으로 같은 문자열은 같게 취급한다.
+    private static String stripBidiControls(String s) {
+        if (s == null) return "";
+        return s.replaceAll("[\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069\\u061C]", "").trim();
     }
 
     interface LogDeliverer {
