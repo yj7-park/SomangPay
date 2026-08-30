@@ -3,6 +3,7 @@ import datetime
 import hmac
 import json
 import os
+import uuid
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status, Body, Header, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -426,6 +427,16 @@ async def admin_register_user(
         raise HTTPException(status_code=400, detail="이미 사용 중인 이름 또는 전화번호입니다.")
     db.refresh(new_user)
 
+    # QR 코드는 더 이상 실물 스티커를 스캔해 등록하지 않고, 가입 시 서버가 임의 UUID를
+    # 발급해 그 값을 그대로 QR 이미지로 그려 쓴다(user.js loadUserQrCard).
+    db.add(models.NFCCard(
+        card_uid=str(uuid.uuid4()),
+        card_name=f"{new_user.name}의 교인증 QR 코드",
+        card_type="QR_CODE",
+        user_id=new_user.id,
+    ))
+    db.commit()
+
     if req.initial_credit > 0:
         db.add(models.DepositHistory(
             user_id=new_user.id,
@@ -627,15 +638,17 @@ async def upsert_nfc_card(
     db: Session = Depends(get_db),
     _admin: models.User = Depends(require_admin_auth),
 ):
-    """NFC/QR 카드 등록·교체. 회원당 타입별 최대 1개 - 이미 있으면 UID를 교체하고,
-    없으면 새로 발급한다. 태그된 UID가 이미 다른 회원 소유였다면 이 회원에게 재할당한다."""
+    """NFC 카드 등록·교체(실물 카드 태그 전용). 회원당 최대 1개 - 이미 있으면 UID를
+    교체하고, 없으면 새로 발급한다. 태그된 UID가 이미 다른 회원 소유였다면 이 회원에게
+    재할당한다. QR 코드는 실물 스캔으로 등록하지 않고 회원가입 시 자동 발급되며, 재발급은
+    /api/admin/cards/qr-reissue/{user_id}를 사용한다."""
     user = db.query(models.User).filter(models.User.id == req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="존재하지 않는 회원입니다.")
-    if req.card_type not in ("NFC", "QR_CODE"):
-        raise HTTPException(status_code=400, detail="card_type은 NFC 또는 QR_CODE만 가능합니다.")
+    if req.card_type != "NFC":
+        raise HTTPException(status_code=400, detail="이 API는 NFC 카드만 등록할 수 있습니다. QR은 자동 발급/재발급 전용 API를 사용하세요.")
 
-    default_name = f"{user.name}의 {'교인증 QR 코드' if req.card_type == 'QR_CODE' else '실물 NFC 카드'}"
+    default_name = f"{user.name}의 실물 NFC 카드"
 
     # 이 UID를 다른 회원/다른 타입으로 이미 쓰고 있었다면 그 행은 제거(재할당).
     # 그 카드를 참조하던 결제 이력은 카드 참조만 해제하고 보존한다.
@@ -691,6 +704,43 @@ async def delete_nfc_card(
     db.commit()
     await notify_admins(["cards"])
     return {"success": True, "message": "카드가 삭제되었습니다."}
+
+@app.post("/api/admin/cards/qr-reissue/{user_id}", response_model=schemas.NFCCardResponse)
+async def reissue_qr_card(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """회원의 QR 코드를 새 UUID로 재발급(없으면 최초 발급)한다. 유출 등으로 기존 QR을
+    무효화해야 할 때 쓰는 용도 - 기존 값은 즉시 결제에 쓸 수 없게 되고, 결제 이력은
+    카드 참조만 해제되어 보존된다."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="존재하지 않는 회원입니다.")
+
+    existing = db.query(models.NFCCard).filter(
+        models.NFCCard.user_id == user_id,
+        models.NFCCard.card_type == "QR_CODE",
+    ).first()
+    if existing:
+        db.query(models.PaymentTransaction).filter(models.PaymentTransaction.card_id == existing.id).update({"card_id": None})
+        db.delete(existing)
+        db.flush()
+
+    card = models.NFCCard(
+        card_uid=str(uuid.uuid4()),
+        card_name=f"{user.name}의 교인증 QR 코드",
+        card_type="QR_CODE",
+        user_id=user_id,
+    )
+    db.add(card)
+    db.commit()
+    db.refresh(card)
+
+    res = schemas.NFCCardResponse.from_orm(card)
+    res.user_name = user.name
+    await notify_admins(["cards"])
+    return res
 
 # ================= PRODUCTS (MENU) APIs =================
 

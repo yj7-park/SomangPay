@@ -105,6 +105,56 @@ def _backfill_balance_snapshots(db):
     print("Balance snapshot backfill complete.")
 
 
+def _backfill_qr_uuids(db):
+    """QR 코드는 예전엔 관리자가 실물 QR 스티커를 카메라로 스캔해 읽은 임의 문자열을
+    등록했지만, 이제는 회원가입 시 서버가 UUID를 발급해 그 값을 그대로 QR로 그려 쓰는
+    방식으로 바뀌었다(admin_register_user). 기존 회원의 QR_CODE 카드는 UUID 형식이
+    아닌 옛 값이므로 전부 새 UUID로 일괄 재발급하고, QR이 아예 없던 회원에게도 새로
+    발급한다. UUID 형식이면 이미 이 마이그레이션을 거친 것이므로 매 재시작마다 반복
+    재발급하지 않는다(재발급 API로 admin이 바꾼 값도 항상 UUID라 안전)."""
+    import re
+    import uuid
+    from . import models
+
+    uuid_re = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+    stale_cards = [
+        c for c in db.query(models.NFCCard).filter(models.NFCCard.card_type == "QR_CODE").all()
+        if not uuid_re.match(c.card_uid or "")
+    ]
+    users_without_qr = db.query(models.User).filter(
+        ~models.User.id.in_(db.query(models.NFCCard.user_id).filter(models.NFCCard.card_type == "QR_CODE"))
+    ).all()
+    if not stale_cards and not users_without_qr:
+        return
+
+    print(f"Reissuing QR UUIDs: {len(stale_cards)} legacy cards, {len(users_without_qr)} users without a QR yet...")
+    for card in stale_cards:
+        db.query(models.PaymentTransaction).filter(models.PaymentTransaction.card_id == card.id).update({"card_id": None})
+        db.delete(card)
+    db.flush()
+
+    for card in stale_cards:
+        user = db.query(models.User).filter(models.User.id == card.user_id).first()
+        if not user:
+            continue
+        db.add(models.NFCCard(
+            card_uid=str(uuid.uuid4()),
+            card_name=f"{user.name}의 교인증 QR 코드",
+            card_type="QR_CODE",
+            user_id=user.id,
+        ))
+    for user in users_without_qr:
+        db.add(models.NFCCard(
+            card_uid=str(uuid.uuid4()),
+            card_name=f"{user.name}의 교인증 QR 코드",
+            card_type="QR_CODE",
+            user_id=user.id,
+        ))
+    db.commit()
+    print("QR UUID reissue complete.")
+
+
 def init_db():
     from . import models
 
@@ -177,6 +227,12 @@ def init_db():
         except Exception as e:
             db.rollback()
             print(f"Balance snapshot backfill error: {e}")
+
+        try:
+            _backfill_qr_uuids(db)
+        except Exception as e:
+            db.rollback()
+            print(f"QR UUID reissue error: {e}")
     finally:
         db.close()
 

@@ -1202,6 +1202,10 @@ function openScannerModal(mode, context) {
   loadAdminAutoDetectPref();
   const autoDetectRow = document.getElementById("admin-auto-detect-row");
   if (autoDetectRow) autoDetectRow.style.display = mode === "SEARCH" ? "flex" : "none";
+  // REGISTER는 이제 NFC 카드 전용(QR은 자동 발급) - 카메라 QR 모드 토글은 회원 검색
+  // 때만 의미가 있으므로 등록 모드에서는 숨긴다.
+  const qrModeBtn = document.getElementById("admin-mode-qr-btn");
+  if (qrModeBtn) qrModeBtn.style.display = mode === "SEARCH" ? "" : "none";
 
   if (mode === "SEARCH") {
     title.innerHTML = `${icon("card")} NFC/QR 태그로 회원 찾기`;
@@ -1209,11 +1213,10 @@ function openScannerModal(mode, context) {
     confirmBtn.innerText = "검색하기";
     switchAdminScanMode("NFC");
   } else {
-    const typeLabel = context.cardType === "QR_CODE" ? "QR 코드" : "NFC 카드";
-    title.innerHTML = `${icon("card")} ${typeLabel} 등록`;
-    desc.innerHTML = `<strong>${typeLabel}</strong>를 스캔하면 이 회원에게 등록(또는 교체)됩니다.`;
+    title.innerHTML = `${icon("card")} NFC 카드 등록`;
+    desc.innerHTML = `<strong>NFC 카드</strong>를 태그하면 이 회원에게 등록(또는 교체)됩니다.`;
     confirmBtn.innerText = "등록하기";
-    switchAdminScanMode(context.cardType === "QR_CODE" ? "QR" : "NFC");
+    switchAdminScanMode("NFC");
   }
 
   showModal("card-scanner-modal");
@@ -1243,20 +1246,20 @@ async function handleScannerConfirm() {
     return;
   }
 
-  // REGISTER 모드
-  const { userId, cardType } = scannerContext;
+  // REGISTER 모드 (NFC 카드 전용 - QR은 회원가입 시 자동 발급되며 유출 시 "재발급" 버튼으로만 교체)
+  const { userId } = scannerContext;
   try {
     const res = await adminFetch(`${API_BASE}/admin/cards`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ card_uid: cardUid, card_type: cardType, user_id: userId })
+      body: JSON.stringify({ card_uid: cardUid, card_type: "NFC", user_id: userId })
     });
 
     if (res.ok) {
       closeScannerModal();
       await loadAdminCards();
       if (currentDetailUserId === userId) renderDetailCardSlots();
-      await showAlertModal(`🎉 ${cardType === "QR_CODE" ? "QR 코드" : "NFC 카드"}가 등록(또는 교체)되었습니다.`);
+      await showAlertModal("🎉 NFC 카드가 등록(또는 교체)되었습니다.");
     } else {
       const errData = await res.json().catch(() => ({}));
       await showAlertModal(`등록 실패: ${errData.detail || "오류 발생"}`);
@@ -1646,7 +1649,7 @@ async function deleteDetailUser() {
 
 function renderDetailCardSlots() {
   renderCardSlot("NFC", "detail-card-nfc-slot", `${icon("card")} NFC 카드`);
-  renderCardSlot("QR_CODE", "detail-card-qr-slot", `${icon("camera")} QR 코드`);
+  renderQrCardSlot("detail-card-qr-slot", `${icon("camera")} QR 코드`);
 }
 
 function renderCardSlot(cardType, containerId, label) {
@@ -1673,6 +1676,42 @@ function renderCardSlot(cardType, containerId, label) {
         <button class="btn-action btn-primary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.82rem;" onclick="openScannerModal('REGISTER', {userId: currentDetailUserId, cardType: '${cardType}'})">발급하기</button>
       </div>
     `;
+  }
+}
+
+// QR은 실물 스캔으로 등록하지 않는다 - 회원가입 시 서버가 UUID를 자동 발급하므로, 여기서는
+// 현재 값을 보여주고 유출 등 문제가 생겼을 때만 "재발급"(새 UUID로 교체)할 수 있게 한다.
+function renderQrCardSlot(containerId, label) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const card = cards.find(c => c.user_id === currentDetailUserId && c.card_type === "QR_CODE");
+
+  container.innerHTML = `
+    <div class="card-slot">
+      <div>
+        <div class="card-slot-type">${label}</div>
+        <div class="card-slot-uid">${card ? card.card_uid : `<span style="color: var(--text-muted);">미발급</span>`}</div>
+      </div>
+      <button class="btn-action btn-primary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.82rem;" onclick="reissueQrCard(currentDetailUserId)">${card ? "재발급" : "발급하기"}</button>
+    </div>
+  `;
+}
+
+async function reissueQrCard(userId) {
+  if (!(await showConfirmModal("QR 코드를 새로 발급하시겠습니까? 기존 QR은 즉시 결제에 사용할 수 없게 됩니다."))) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/cards/qr-reissue/${userId}`, { method: "POST" });
+    if (res.ok) {
+      await loadAdminCards();
+      renderDetailCardSlots();
+      await showAlertModal("🎉 QR 코드가 발급되었습니다.");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`발급 실패: ${data.detail || "오류 발생"}`);
+    }
+  } catch (err) {
+    console.error("reissueQrCard error:", err);
+    await showAlertModal("서버 통신 중 에러가 발생했습니다.");
   }
 }
 

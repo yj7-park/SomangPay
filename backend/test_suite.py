@@ -163,14 +163,22 @@ def run_all_usecase_tests():
         log_test("UC-05", "키오스크 프로비저닝 및 기본 결제 설정", "FAIL", str(e))
 
     # ----------------------------------------------------
-    # UC-03: NFC/QR 카드 등록·교체·삭제 (회원당 타입별 1개)
+    # UC-03: NFC 카드 등록·교체 (회원당 최대 1개) / QR은 가입 시 자동 발급 + 재발급만 허용
     # ----------------------------------------------------
-    test_qr_code = f"CHURCH_QR_{unique_suffix}"
     test_nfc_uid = f"CARD_NFC_{unique_suffix}"
     try:
-        r3a = requests.put(f"{BASE_URL}/admin/cards", headers=admin_headers, json={
-            "user_id": test_user_id, "card_type": "QR_CODE", "card_uid": test_qr_code, "card_name": "박복자 교인증 QR 코드"
+        # 가입 시 QR_CODE 카드가 UUID로 자동 발급되어 있어야 한다 (admin_register_user).
+        r3_list0 = requests.get(f"{BASE_URL}/cards/user/{test_user_id}", headers=admin_headers)
+        cards_at_signup = r3_list0.json() if r3_list0.status_code == 200 else []
+        auto_qr = next((c for c in cards_at_signup if c["card_type"] == "QR_CODE"), None)
+        auto_qr_issued_ok = auto_qr is not None and len(auto_qr["card_uid"]) == 36
+
+        # QR은 더 이상 이 API로 등록할 수 없다 (400 Bad Request여야 함).
+        r3_qr_rejected = requests.put(f"{BASE_URL}/admin/cards", headers=admin_headers, json={
+            "user_id": test_user_id, "card_type": "QR_CODE", "card_uid": f"CHURCH_QR_{unique_suffix}"
         })
+        qr_put_rejected_ok = r3_qr_rejected.status_code == 400
+
         r3b = requests.put(f"{BASE_URL}/admin/cards", headers=admin_headers, json={
             "user_id": test_user_id, "card_type": "NFC", "card_uid": test_nfc_uid
         })
@@ -184,21 +192,23 @@ def run_all_usecase_tests():
         nfc_cards = [c for c in cards_after_replace if c["card_type"] == "NFC"]
         replaced_ok = len(nfc_cards) == 1 and nfc_cards[0]["card_uid"] == replaced_nfc_uid
 
-        # QR 카드 삭제 확인
-        qr_card_id = next((c["id"] for c in cards_after_replace if c["card_type"] == "QR_CODE"), None)
-        r3_del = requests.delete(f"{BASE_URL}/admin/cards/{qr_card_id}", headers=admin_headers) if qr_card_id else None
-        r3_list2 = requests.get(f"{BASE_URL}/cards/user/{test_user_id}", headers=admin_headers)
-        cards_after_delete = r3_list2.json() if r3_list2.status_code == 200 else []
-        delete_ok = qr_card_id is not None and r3_del.status_code == 200 and len(cards_after_delete) == 1
+        # QR 재발급 확인 - 새 UUID로 바뀌고, 기존 값과는 달라야 한다.
+        r3_reissue = requests.post(f"{BASE_URL}/admin/cards/qr-reissue/{test_user_id}", headers=admin_headers)
+        reissued_uid = r3_reissue.json().get("card_uid") if r3_reissue.status_code == 200 else None
+        reissue_ok = (
+            r3_reissue.status_code == 200
+            and r3_reissue.json().get("card_type") == "QR_CODE"
+            and bool(auto_qr) and reissued_uid != auto_qr["card_uid"]
+        )
 
-        if r3a.status_code == 200 and r3b.status_code == 200 and r3c.status_code == 200 and replaced_ok and delete_ok:
-            log_test("UC-03", "NFC/QR 카드 등록·교체(1개 제약)·삭제", "PASS", f"(NFC UID: {replaced_nfc_uid})")
+        if r3b.status_code == 200 and r3c.status_code == 200 and auto_qr_issued_ok and qr_put_rejected_ok and replaced_ok and reissue_ok:
+            log_test("UC-03", "NFC 카드 등록·교체 / QR 자동발급·재발급", "PASS", f"(NFC UID: {replaced_nfc_uid})")
             passed_count += 1
         else:
-            log_test("UC-03", "NFC/QR 카드 등록·교체(1개 제약)·삭제", "FAIL",
-                      f"replace_ok={replaced_ok}, delete_ok={delete_ok}")
+            log_test("UC-03", "NFC 카드 등록·교체 / QR 자동발급·재발급", "FAIL",
+                      f"auto_qr_ok={auto_qr_issued_ok}, qr_put_rejected_ok={qr_put_rejected_ok}, replace_ok={replaced_ok}, reissue_ok={reissue_ok}")
     except Exception as e:
-        log_test("UC-03", "NFC/QR 카드 등록·교체(1개 제약)·삭제", "FAIL", str(e))
+        log_test("UC-03", "NFC 카드 등록·교체 / QR 자동발급·재발급", "FAIL", str(e))
         replaced_nfc_uid = test_nfc_uid  # 실패 시에도 이후 결제 테스트가 쓸 수 있도록 폴백
 
     # ----------------------------------------------------
