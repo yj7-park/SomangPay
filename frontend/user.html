@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="src/style.css?v=20260830_0001">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260830_9001">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_0001">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -49,32 +49,39 @@
     })();
   </script>
 
-  <!-- 로그인 전 화면 - 탭 구조 없이 로그인 폼 하나만 보여준다. -->
-  <div id="user-login-wrapper" class="mobile-wrapper">
-    <div id="user-login-section" class="glass-container" style="padding: 1.5rem;">
-      <h3 style="color: var(--accent-cyan); font-size: 1.2rem; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
-        <span style="display: inline-flex;"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
-        사용자 로그인 (휴대폰 번호 인증)
-      </h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-        가입 시 등록하신 <strong>휴대폰 번호(아이디)</strong>와 비밀번호를 입력해 주세요. (초기 비밀번호: 1234)
-      </p>
-
-      <div class="form-group" style="margin-bottom: 0.8rem;">
-        <label class="form-label">휴대폰 번호 (아이디)</label>
-        <input type="tel" id="login-phone" class="form-control" placeholder="예: 010-1234-5678" maxlength="13" oninput="formatPhoneInput(this)">
-      </div>
-      <div class="form-group" style="margin-bottom: 1.2rem;">
-        <label class="form-label">비밀번호</label>
-        <input type="password" id="login-password" class="form-control" placeholder="비밀번호 입력 (초기 비밀번호: 1234)" onkeyup="if(event.key==='Enter') userLogin();">
+  <!-- 로그인 전 화면 - 인스타그램 로그인 페이지 톤: 좁은 컬럼 가운데 정렬, 로고 +
+       워드마크, 플로팅 라벨 입력, 풀폭 버튼 + "또는" 구분선, 아래에 별도 안내 박스.
+       스타일은 instagram-theme.css의 .ig-login* 규칙. -->
+  <div id="user-login-wrapper" class="ig-login-wrapper">
+    <div class="ig-login">
+      <div class="ig-login-brand">
+        <img src="/icons/logo-mark-user.svg" alt="소망페이" class="ig-login-logo">
+        <h1 class="ig-login-wordmark">소망페이</h1>
       </div>
 
-      <button class="btn-action btn-primary" style="width: 100%; font-weight: bold;" onclick="userLogin()">
-        로그인하기
-      </button>
-      <p style="text-align: center; margin-top: 0.8rem; font-size: 0.8rem; color: var(--text-muted);">
-        계정이 없으신가요? 교회 사무실(관리자)에 문의해 주세요.
+      <form class="ig-login-form" onsubmit="event.preventDefault(); userLogin();">
+        <label class="ig-field">
+          <input type="tel" id="login-phone" class="ig-input" placeholder=" " maxlength="13" autocomplete="username" inputmode="numeric" oninput="formatPhoneInput(this)">
+          <span class="ig-field-label">휴대폰 번호</span>
+        </label>
+        <label class="ig-field">
+          <input type="password" id="login-password" class="ig-input" placeholder=" " autocomplete="current-password" onkeyup="if(event.key==='Enter') userLogin();">
+          <span class="ig-field-label">비밀번호</span>
+        </label>
+        <button type="submit" class="ig-login-btn">로그인</button>
+      </form>
+
+      <div class="ig-login-divider"><span>또는</span></div>
+
+      <p class="ig-login-hint">
+        가입 시 등록한 휴대폰 번호로 로그인하세요.<br>
+        초기 비밀번호는 <strong>1234</strong> 입니다.
       </p>
+    </div>
+
+    <div class="ig-login-footer">
+      계정이 없으신가요?
+      <span>교회 사무실에 문의하세요.</span>
     </div>
   </div>
 
@@ -268,6 +275,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260825_0001"></script>
   <script src="src/ws-client.js?v=20260826_0001"></script>
-  <script src="src/user.js?v=20260830_9001"></script>
+  <script src="src/user.js?v=20260831_0001"></script>
 </body>
 </html>

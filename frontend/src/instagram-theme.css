@@ -546,3 +546,193 @@ button:hover,
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
   }
 }
+
+/* ==========================================================================
+   로그인 화면 (user.html #user-login-wrapper)
+
+   인스타그램 모바일 로그인 화면을 따라간다: 카드/테두리 없이 콘텐츠가 페이지
+   배경 위에 바로 올라가고, 화면 한가운데 max 360px 좁은 컬럼에 로고 마크 +
+   워드마크를 위에 크게, 그 아래 플로팅 라벨 입력 2개와 풀폭 파란 버튼, "또는"
+   구분선, 회색 안내문. 맨 아래 "계정이 없으신가요?"는 얇은 상단 실선 하나로만
+   구분되는 평범한 텍스트(별도 박스 아님).
+   .glass-container/.form-control 같은 공용 컴포넌트를 안 쓰고 전용 클래스를 새로
+   두는 이유: 기존 로그인은 glass 카드 + 라벨이 위에 붙은 폼이라 인스타 톤과 거리가
+   멀었고, 공용 클래스를 덮어쓰면 다른 화면(관리자/키오스크)까지 영향을 준다.
+   ========================================================================== */
+.ig-login-wrapper {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: max(2rem, env(safe-area-inset-top)) clamp(1.25rem, 8vw, 2.5rem)
+           calc(1.5rem + env(safe-area-inset-bottom));
+  background: var(--bg-dark);
+}
+
+.ig-login,
+.ig-login-footer {
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+}
+
+.ig-login {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 브랜드 (로고 + 워드마크) ---- */
+.ig-login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 2.4rem;
+}
+/* 로고 마크는 배경 투명 + 어두운 남색(#1f1e59) 타일이 포함돼 있어 다크 테마의
+   검정 카드 위에서는 절반쯤 묻힌다. 다크에서는 로고 뒤에 흰 라운드 칩을 깔아
+   iOS 앱 아이콘처럼 띄운다(box-sizing: border-box라 76px 사각 자리는 그대로 유지).
+   라이트 테마는 카드가 이미 흰색이라 칩이 필요 없다. */
+.ig-login-logo {
+  width: 80px;
+  height: 80px;
+  box-sizing: border-box;
+  padding: 5px;
+  background: #fff;
+  border-radius: 17px;
+}
+@media (prefers-color-scheme: light) {
+  body:not([data-theme="dark"]) .ig-login-logo {
+    padding: 0;
+    background: none;
+  }
+}
+body[data-theme="light"] .ig-login-logo {
+  padding: 0;
+  background: none;
+}
+.ig-login-wordmark {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--text-main);
+}
+
+/* ---- 폼 ---- */
+.ig-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* 플로팅 라벨: input에 placeholder=" "(공백)을 둬서 :placeholder-shown으로
+   "비어 있음"을 판별한다. 비어 있으면 라벨이 입력칸 세로 가운데, 포커스되거나
+   값이 있으면 위로 올라가며 축소된다. */
+.ig-field {
+  position: relative;
+  display: block;
+}
+.ig-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 2.55rem;
+  padding: 0.85rem 0.7rem 0.25rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  background: var(--surface-1);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.ig-input:focus {
+  border-color: var(--text-dim);
+}
+.ig-field-label {
+  position: absolute;
+  left: 0.75rem;
+  top: 1.28rem;
+  transform: translateY(-50%);
+  transform-origin: left center;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  pointer-events: none;
+  transition: transform 0.12s ease, color 0.12s ease;
+}
+.ig-input:focus + .ig-field-label,
+.ig-input:not(:placeholder-shown) + .ig-field-label {
+  transform: translateY(-1.15rem) scale(0.72);
+}
+
+.ig-login-btn {
+  margin-top: 0.7rem;
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-cyan);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.ig-login-btn:hover {
+  filter: brightness(1.08);
+}
+.ig-login-btn:active {
+  transform: scale(0.99);
+}
+
+/* ---- "또는" 구분선 ---- */
+.ig-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.ig-login-divider::before,
+.ig-login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-glass);
+}
+
+.ig-login-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.ig-login-hint strong {
+  color: var(--text-main);
+}
+
+/* ---- 하단 안내 ("계정이 없으신가요?") - 박스 없이 얇은 상단 실선으로만 구분 ---- */
+.ig-login-footer {
+  margin-top: 2rem;
+  padding: 1.5rem 1rem 0;
+  border-top: 1px solid var(--border-glass);
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+/* "계정이 없으신가요?"는 텍스트 노드 그대로 두고, 안내 문구만 다음 줄 블록으로 */
+.ig-login-footer span {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
