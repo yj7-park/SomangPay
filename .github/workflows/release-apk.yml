@@ -61,31 +61,47 @@ jobs:
       - name: Prepare release metadata
         id: meta
         run: |
+          VERSION_NAME="1.0.${{ github.run_number }}"
           echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           cp android_kiosk/app/build/outputs/apk/kiosk/release/app-kiosk-release.apk "${{ github.workspace }}/SomangPayKiosk.apk"
           cp android_kiosk/app/build/outputs/apk/admin/release/app-admin-release.apk "${{ github.workspace }}/SomangPayAdmin.apk"
           cp android_kiosk/app/build/outputs/apk/user/release/app-user-release.apk "${{ github.workspace }}/SomangPayUser.apk"
+          # GitHub Release에 올라가는 파일명에는 버전을 넣어 릴리스 페이지에서 바로 버전을 구분할 수 있게 한다.
+          # frontend/에 커밋되는 admin 다운로드용 사본은 매 빌드마다 새 파일을 추가하면 저장소가 계속 불어나므로
+          # 그쪽은 고정 파일명을 유지하고(아래 "Publish latest APKs to frontend" 단계), 대신 <a download="..."> 값에
+          # 버전을 넣어 사용자가 내려받을 때 저장되는 파일명에서 버전을 알 수 있게 한다.
+          cp "${{ github.workspace }}/SomangPayKiosk.apk" "${{ github.workspace }}/SomangPayKiosk-$VERSION_NAME.apk"
+          cp "${{ github.workspace }}/SomangPayAdmin.apk" "${{ github.workspace }}/SomangPayAdmin-$VERSION_NAME.apk"
+          cp "${{ github.workspace }}/SomangPayUser.apk" "${{ github.workspace }}/SomangPayUser-$VERSION_NAME.apk"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ steps.meta.outputs.tag }}" \
-            "${{ github.workspace }}/SomangPayKiosk.apk" \
-            "${{ github.workspace }}/SomangPayAdmin.apk" \
-            "${{ github.workspace }}/SomangPayUser.apk" \
+            "${{ github.workspace }}/SomangPayKiosk-${{ steps.meta.outputs.version_name }}.apk" \
+            "${{ github.workspace }}/SomangPayAdmin-${{ steps.meta.outputs.version_name }}.apk" \
+            "${{ github.workspace }}/SomangPayUser-${{ steps.meta.outputs.version_name }}.apk" \
             --title "Kiosk/Admin/User APK build #${{ github.run_number }}" \
             --notes "커밋 ${{ github.sha }} 기준 자동 빌드 (main 머지 트리거)."
 
       - name: Publish latest APKs to frontend (served by admin download links)
         run: |
+          VERSION_NAME="${{ steps.meta.outputs.version_name }}"
           cp "${{ github.workspace }}/SomangPayKiosk.apk" frontend/SomangPayKiosk.apk
           cp "${{ github.workspace }}/SomangPayAdmin.apk" frontend/SomangPayAdmin.apk
           cp "${{ github.workspace }}/SomangPayUser.apk" frontend/SomangPayUser.apk
           sed -i -E "s#(/SomangPayKiosk\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
           sed -i -E "s#(/SomangPayAdmin\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
           sed -i -E "s#(/SomangPayUser\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
+          # 서버 URL/커밋 파일명은 고정이지만, 브라우저가 저장할 때 쓰는 파일명(download 속성)에는
+          # 버전을 넣어 여러 번 받아도 어느 빌드인지 파일명만으로 구분되게 한다.
+          sed -i -E "s#download=\"SomangPayKiosk[^\"]*\"#download=\"SomangPayKiosk-${VERSION_NAME}.apk\"#" frontend/admin.html
+          sed -i -E "s#download=\"SomangPayAdmin[^\"]*\"#download=\"SomangPayAdmin-${VERSION_NAME}.apk\"#" frontend/admin.html
+          sed -i -E "s#download=\"SomangPayUser[^\"]*\"#download=\"SomangPayUser-${VERSION_NAME}.apk\"#" frontend/admin.html
           rm -f "${{ github.workspace }}/SomangPayKiosk.apk" "${{ github.workspace }}/SomangPayAdmin.apk" "${{ github.workspace }}/SomangPayUser.apk"
+          rm -f "${{ github.workspace }}/SomangPayKiosk-${VERSION_NAME}.apk" "${{ github.workspace }}/SomangPayAdmin-${VERSION_NAME}.apk" "${{ github.workspace }}/SomangPayUser-${VERSION_NAME}.apk"
 
       - name: Publish version manifest (앱 인앱 업데이트 체크용)
         run: |
