@@ -175,7 +175,7 @@ public class AdminAlertService extends Service {
         }
         return builder
                 .setContentTitle("소망페이 관리자 알림 대기 중")
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_stat_notify)
                 .setOngoing(true)
                 .build();
     }
@@ -217,7 +217,7 @@ public class AdminAlertService extends Service {
                 this, notifId, contentIntent, piFlags);
 
         Notification notification = builder
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_stat_notify)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setAutoCancel(true)
