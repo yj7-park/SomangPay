@@ -1069,6 +1069,18 @@ function initKioskTheme() {
 function updateKioskThemeColorMeta() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;
+  // 홈 화면에 설치된 PWA(WebAPK)에서는 실제 상태바 배경색이 설치 시점 매니페스트의
+  // theme_color(검정)로 고정돼 이후 여기서 밝은 값을 줘도 안 바뀌는데, OS는 이 메타
+  // 태그 값만 보고 아이콘 밝기(시계/배터리)를 어둡게 골라버려 검정 배경 위 검정
+  // 아이콘이 되어 완전히 안 보이는 버그가 생긴다(admin/user에서 wifi adb로 재현/
+  // 검증 완료). 일반 브라우저 탭(주소창 틴트)에서는 실제로 밝은 배경이 되므로
+  // 거기서만 라이트 테마를 따라간다. 전용 락다운 빌드는 몰입 모드라 상태바 자체가
+  // 안 보이니 영향 없음.
+  const isStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  if (isStandalone) {
+    meta.setAttribute("content", "#000000");
+    return;
+  }
   const pref = localStorage.getItem(KIOSK_THEME_KEY) || "system";
   const isLight = pref === "light" || (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
   meta.setAttribute("content", isLight ? "#eef1f7" : "#000000");
