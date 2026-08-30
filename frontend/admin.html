@@ -229,7 +229,7 @@
 
         <div class="glass-container" style="padding: 1.5rem;">
           <h3 id="dev-mode-toggle-header" style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: pointer;" onclick="toggleDevModeSection()">
-            <span style="display: flex; align-items: center; gap: 0.4rem;"><span data-icon="bell"></span>개발자 모드</span>
+            <span style="display: flex; align-items: center; gap: 0.4rem;"><span data-icon="bell"></span>개발자 메뉴</span>
             <span id="dev-mode-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
           </h3>
 
@@ -310,6 +310,15 @@
               <button class="btn-action" style="width: auto; padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="clearSmsLog()">로그 지우기</button>
             </div>
             <div id="sms-log-list" class="sms-log-scroll"></div>
+          </div>
+
+          <!-- 정지 유저는 사용자 관리 탭 검색 목록에서는 숨기고(#28), 여기 개발자 메뉴
+               안에서만 확인/재진입할 수 있게 한다. -->
+          <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
+            <h4 style="font-size: 0.92rem; margin-bottom: 0.6rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
+              <span data-icon="user"></span>정지 유저 목록 <span id="suspended-user-count"></span>
+            </h4>
+            <div id="suspended-user-list" class="member-feed"></div>
           </div>
           </div>
         </div>
@@ -719,6 +728,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260825_0001"></script>
   <script src="src/ws-client.js?v=20260826_0001"></script>
-  <script src="src/admin.js?v=20260827_0006"></script>
+  <script src="src/admin.js?v=20260829_0001"></script>
 </body>
 </html>

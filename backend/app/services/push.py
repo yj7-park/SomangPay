@@ -57,13 +57,24 @@ def send_push_to_user(db: Session, user_id: int, title: str, body: str, url: str
     _dispatch(db, subs, title, body, url)
 
 
-def send_push_to_admins(db: Session, title: str, body: str, url: str = "/admin", category: str = None) -> None:
+def send_push_to_admins(
+    db: Session, title: str, body: str, url: str = "/admin", category: str = None, entity_id: int = None
+) -> None:
     """관리자(role=ADMIN) 전원의 구독 기기에 푸시를 보낸다. category가 주어지면 해당
-    항목을 꺼둔 구독 기기에는 보내지 않는다(관리자 설정 화면의 항목별 on/off)."""
+    항목을 꺼둔 구독 기기에는 보내지 않는다(관리자 설정 화면의 항목별 on/off).
+    category/entity_id는 알림 클릭 시 처리 화면으로 바로 이동하는 딥링크로도 쓰인다 -
+    sw.js의 notificationclick이 이 url을 그대로 열고, admin.js가 로드 시 쿼리스트링을
+    읽어 라우팅한다(AdminAlertService의 WS 경로와 같은 category/entity_id 의미를 공유 -
+    ws_manager.notify_admins_alert 참고)."""
     query = db.query(models.PushSubscription).join(
         models.User, models.PushSubscription.user_id == models.User.id
     ).filter(models.User.role == "ADMIN")
     if category in ADMIN_CATEGORY_COLUMNS:
         query = query.filter(ADMIN_CATEGORY_COLUMNS[category] == True)  # noqa: E712
     subs = query.all()
+    if category:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}category={category}"
+        if entity_id is not None:
+            url = f"{url}&entity_id={entity_id}"
     _dispatch(db, subs, title, body, url)

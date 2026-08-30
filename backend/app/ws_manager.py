@@ -102,13 +102,18 @@ async def notify_admins(scopes: list):
     await manager.broadcast_admins({"type": "refresh", "scopes": scopes})
 
 
-async def notify_admins_alert(title: str, body: str, category: str = None):
+async def notify_admins_alert(title: str, body: str, category: str = None, entity_id: int = None):
     """관리자 전원에게 사람이 읽을 수 있는 알림 문구를 WS로도 보낸다 - send_push_to_admins()
     (Web Push)와 항상 같이 호출된다. 브라우저/PWA의 ws-client.js는 "refresh" 타입만 처리하고
     이 "alert" 타입은 무시하므로 웹 쪽 동작에는 영향이 없다 - 이건 안드로이드 WebView가 Web
     Push를 지원하지 않아 웹푸시를 받을 수 없는 관리자 APK(AdminAlertService)가 대신 구독하는
-    경로다(admin.html 상단 주석 참고 - WebView는 PushManager 자체가 없음)."""
-    await manager.broadcast_admins({"type": "alert", "title": title, "body": body, "category": category})
+    경로다(admin.html 상단 주석 참고 - WebView는 PushManager 자체가 없음).
+    entity_id는 category별로 가리키는 대상이 다르다 - "payment"는 User.id, "deposit_credited"/
+    "deposit_error"는 BankTransaction.id. AdminAlertService가 알림 탭 시 해당 화면으로 바로
+    이동시키는 딥링크에 쓰인다(admin.js의 checkNativeNotificationDeepLink 참고)."""
+    await manager.broadcast_admins({
+        "type": "alert", "title": title, "body": body, "category": category, "entity_id": entity_id,
+    })
 
 
 async def notify_user(user_id: int, scopes: list):

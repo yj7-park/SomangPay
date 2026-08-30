@@ -85,15 +85,33 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// 알림 클릭 시 이미 열려있는 /user 탭이 있으면 포커스, 없으면 새로 연다.
+// 알림 클릭 시 이미 열려있는 탭이 있으면 포커스, 없으면 새로 연다. url에는 관리자 알림의 경우
+// send_push_to_admins()가 붙여준 ?category=&entity_id= 쿼리스트링이 실려올 수 있는데(어느
+// 처리 화면으로 이동할지 - admin.js 참고), 매 알림마다 값이 달라서 그대로 비교하면 이미 열려있는
+// 탭도 못 찾고 매번 새 창을 열게 된다 - path만 비교해서 탭을 찾는다.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || "/user";
+  const targetPath = targetUrl.split("?")[0];
+
+  let deepLinkCategory = null;
+  let deepLinkEntityId = null;
+  try {
+    const parsed = new URL(targetUrl, self.location.origin);
+    deepLinkCategory = parsed.searchParams.get("category");
+    const rawEntityId = parsed.searchParams.get("entity_id");
+    deepLinkEntityId = rawEntityId != null ? Number(rawEntityId) : null;
+  } catch (e) { /* url이 상대경로가 아니거나 파싱 불가 - 딥링크 없이 그냥 이동만 시킨다 */ }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {
-        if (client.url.includes(targetUrl) && "focus" in client) {
+        if (client.url.includes(targetPath) && "focus" in client) {
+          // 이미 로드/로그인까지 끝나 있는 탭이므로 새로고침 대신 postMessage로 딥링크만 전달한다
+          // (admin.js의 navigator.serviceWorker "message" 리스너 참고).
+          if (deepLinkCategory) {
+            client.postMessage({ type: "admin-notification-deeplink", category: deepLinkCategory, entityId: deepLinkEntityId });
+          }
           return client.focus();
         }
       }

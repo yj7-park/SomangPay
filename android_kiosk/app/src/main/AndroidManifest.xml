@@ -35,10 +35,15 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <!-- 가로 고정은 매니페스트가 아니라 MainActivity.onCreate()에서
                  BuildConfig.KIOSK_LOCKDOWN_ENABLED일 때만 프로그램적으로 적용한다
-                 (admin/user 플레이버는 기기 방향을 자유롭게 따라가야 하므로). -->
+                 (admin/user 플레이버는 기기 방향을 자유롭게 따라가야 하므로).
+                 singleTask: 관리자 알림(AdminAlertService)을 탭했을 때 이미 떠 있는 인스턴스를
+                 재사용해 onNewIntent로 받게 한다 - 기본 launchMode였다면 앱이 백그라운드에
+                 있는 상태에서 알림을 탭할 때마다 새 인스턴스가 쌓여 웹뷰 상태(로그인 등)가
+                 날아간 빈 화면이 위에 겹쳐 뜬다. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

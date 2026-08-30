@@ -577,13 +577,15 @@ async def admin_delete_user(
     db: Session = Depends(get_db),
     _admin: models.User = Depends(require_admin_auth),
 ):
-    """회원 삭제 - 잔액이 남아있어도(관리자가 명시적으로 삭제를 선택한 것이므로) 삭제를
-    막지 않는다. 다만 결제/입금/충전 이력이 하나라도 있으면 그 기록들이 삭제된 회원을
-    참조하는 FK라 하드 삭제 시 정합성이 깨지므로(레코드가 DB 제약에 걸리거나, 제약이 없는
-    환경에서는 이름을 알 수 없는 유령 참조로 남음) 여기서는 막고 "정지"를 대신 안내한다."""
+    """회원 삭제 - 잔액이 남아있으면 삭제할 수 없다(자금 손실 방지). 또한 결제/입금/충전
+    이력이 하나라도 있으면 그 기록들이 삭제된 회원을 참조하는 FK(NOT NULL)라 하드 삭제 시
+    DB 제약 위반이 나므로 여기서는 막고 "정지"를 대신 안내한다."""
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+
+    if user.credit_balance != 0:
+        raise HTTPException(status_code=400, detail=f"잔액이 남아있는 회원은 삭제할 수 없습니다. (현재 잔액 {user.credit_balance:,}원)")
 
     has_history = (
         db.query(models.PaymentTransaction).filter(models.PaymentTransaction.user_id == user_id).first() is not None
@@ -969,9 +971,12 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
     await notify_user(user.id, ["me"])
     await run_in_threadpool(
         send_push_to_admins, db, "결제 발생",
-        f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment"
+        f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment", entity_id=user.id
     )
-    await notify_admins_alert("결제 발생", f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment")
+    await notify_admins_alert(
+        "결제 발생", f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})",
+        category="payment", entity_id=user.id
+    )
 
     user_type_label = "시니어" if user.user_type == "SENIOR" else "일반"
 
@@ -1081,8 +1086,14 @@ async def claim_bank_transaction(
 
     await notify_admins(["deposit_queue", "stats", "deposits", "users"])
     await notify_user(user.id, ["me"])
-    send_push_to_admins(db, "충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다", category="deposit_credited")
-    await notify_admins_alert("충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다", category="deposit_credited")
+    send_push_to_admins(
+        db, "충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다",
+        category="deposit_credited", entity_id=txn.id
+    )
+    await notify_admins_alert(
+        "충전 완료(셀프)", f"{user.name}님이 {txn.amount:,}원 입금건을 셀프 충전 완료했습니다",
+        category="deposit_credited", entity_id=txn.id
+    )
     return schemas.DepositClaimResult(
         success=True,
         message=f"{txn.amount:,}원이 충전되었습니다.",
@@ -1118,8 +1129,14 @@ async def admin_add_bank_transaction(
         await notify_user(txn.matched_user_id, ["me", "deposits"])
         send_push_to_user(db, txn.matched_user_id, "입금이 확인됐어요", f"{txn.amount:,}원 입금 확인 - 앱에서 충전을 완료해주세요")
     elif txn.status == "ERROR":
-        send_push_to_admins(db, "미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다", category="deposit_error")
-        await notify_admins_alert("미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다", category="deposit_error")
+        send_push_to_admins(
+            db, "미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다",
+            category="deposit_error", entity_id=txn.id
+        )
+        await notify_admins_alert(
+            "미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다",
+            category="deposit_error", entity_id=txn.id
+        )
     return _bank_txn_response(db, txn)
 
 @app.get("/api/admin/bank-transactions", response_model=List[schemas.BankTransactionResponse])

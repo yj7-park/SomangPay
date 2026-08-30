@@ -181,6 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
     hideModal("admin-pin-modal");
     initAdminDashboard();
     syncAdminTokenToNative();
+    checkNativeNotificationDeepLink();
   } else {
     showModal("admin-pin-modal");
   }
@@ -517,6 +518,72 @@ function syncAdminTokenToNative() {
   }
 }
 
+// 관리자 알림(AdminAlertService의 네이티브 알림, 또는 PWA/브라우저 웹푸시)을 탭해 앱이 열렸을
+// 때 처리 화면 정보를 가져와 해당 화면으로 이동한다. 세 경로 모두 여기로 모인다:
+//  1) 네이티브 APK 콜드 스타트/이미 켜져 있던 경우 - AndroidInterface.consumePendingDeepLink()
+//     (MainActivity.java 참고, 이미 켜져 있던 경우엔 네이티브가 직접 이 함수를 호출)
+//  2) PWA/브라우저 콜드 스타트 - sw.js가 새 탭을 열 때 실어보낸 URL 쿼리스트링
+//     (?category=&entity_id=, send_push_to_admins()가 붙인다)
+// 로그인 완료 시점(자동 로그인/PIN 성공)에 1)+2)를 확인한다. 일반 브라우저에는 AndroidInterface가
+// 없어 1)은 조용히 건너뛴다.
+// 3) PWA에서 이미 열려있던 탭을 sw.js가 새로고침 없이 포커스만 한 경우는 아래
+//    navigator.serviceWorker "message" 리스너가 별도로 처리한다(로그인 여부와 무관하게 그
+//    시점에 이미 로그인돼 있어야 의미가 있으므로 리스너 안에서 다시 isAdminAuthenticated를 본다).
+window.checkNativeNotificationDeepLink = function () {
+  if (!isAdminAuthenticated) return;
+  const link = consumeNativeDeepLink() || consumeUrlDeepLink();
+  if (link) routeNotificationDeepLink(link.category, link.entityId);
+};
+
+function consumeNativeDeepLink() {
+  if (!window.AndroidInterface || typeof window.AndroidInterface.consumePendingDeepLink !== "function") return null;
+  let raw;
+  try {
+    raw = window.AndroidInterface.consumePendingDeepLink();
+  } catch (err) {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return { category: parsed.category, entityId: parsed.entityId != null ? parsed.entityId : null };
+  } catch (err) {
+    return null;
+  }
+}
+
+function consumeUrlDeepLink() {
+  const params = new URLSearchParams(location.search);
+  const category = params.get("category");
+  if (!category) return null;
+  const rawEntityId = params.get("entity_id");
+  // 새로고침해도 같은 화면으로 계속 되돌아가지 않도록 쿼리스트링은 소비 즉시 지운다.
+  history.replaceState(null, "", location.pathname);
+  return { category, entityId: rawEntityId != null ? Number(rawEntityId) : null };
+}
+
+async function routeNotificationDeepLink(category, entityId) {
+  if (category === "deposit_error" || category === "deposit_credited") {
+    await loadBankTransactions();
+    switchAdminView("inbox", category === "deposit_error" ? "ERROR" : "ALL");
+    if (entityId != null) openDepositDetailModal(entityId);
+  } else if (category === "payment" && entityId != null) {
+    await loadAdminUsers();
+    openMemberDetail(entityId);
+  }
+}
+
+// PWA 탭이 이미 열려있어 sw.js의 notificationclick이 새로 열지 않고 포커스만 한 경우 -
+// 쿼리스트링을 다시 읽을 새로고침이 없으므로 sw.js가 postMessage로 직접 전달해준다.
+if (window.navigator && navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (!isAdminAuthenticated) return;
+    if (event.data && event.data.type === "admin-notification-deeplink") {
+      routeNotificationDeepLink(event.data.category, event.data.entityId);
+    }
+  });
+}
+
 async function submitAdminPin() {
   const pinInput = document.getElementById("admin-pin-input");
   const pin = pinInput ? pinInput.value.trim() : "";
@@ -542,6 +609,7 @@ async function submitAdminPin() {
       hideModal("admin-pin-modal");
       initAdminDashboard();
       syncAdminTokenToNative();
+      checkNativeNotificationDeepLink();
     } else if (res.status === 429) {
       await showAlertModal(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
@@ -1207,6 +1275,7 @@ async function loadAdminUsers() {
     if (!res.ok) return;
     users = await res.json();
     renderMemberFeed();
+    renderSuspendedUserList();
   } catch (err) {
     console.error("Failed to load users:", err);
   }
@@ -1319,6 +1388,7 @@ function clearMemberSearchInput() {
   input.focus();
 }
 
+// 정지 회원은 검색/목록에서 숨긴다(#28) - "개발자 메뉴" 안의 정지 유저 목록에서만 보인다.
 function renderMemberFeed() {
   const feed = document.getElementById("search-member-feed");
   if (!feed) return;
@@ -1326,7 +1396,8 @@ function renderMemberFeed() {
   document.getElementById("member-search-toggle")?.classList.toggle("filter-active", !!query);
   document.getElementById("member-search-input-wrap")?.classList.toggle("has-value", !!query);
 
-  const filtered = !query ? users : users.filter(u => {
+  const activeUsers = users.filter(u => u.status !== "SUSPENDED");
+  const filtered = !query ? activeUsers : activeUsers.filter(u => {
     const haystack = [u.name, u.phone].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(query);
   });
@@ -1343,6 +1414,24 @@ function renderMemberFeed() {
   }
   feed.innerHTML = clearFilterHtml;
   filtered.forEach(u => feed.appendChild(renderMemberFeedCard(u)));
+}
+
+// "개발자 메뉴" 안의 정지 유저 목록 - renderMemberFeed에서 숨긴 정지 회원을 여기서만 보여준다.
+// 카드를 누르면 기존 회원 상세(openMemberDetail)로 그대로 진입해 재활성화/삭제를 할 수 있다.
+function renderSuspendedUserList() {
+  const list = document.getElementById("suspended-user-list");
+  if (!list) return;
+  const suspended = users.filter(u => u.status === "SUSPENDED");
+
+  const countEl = document.getElementById("suspended-user-count");
+  if (countEl) countEl.innerText = suspended.length ? `(${suspended.length}건)` : "";
+
+  if (suspended.length === 0) {
+    list.innerHTML = `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0; font-size: 0.85rem;">정지된 회원이 없습니다.</p>`;
+    return;
+  }
+  list.innerHTML = "";
+  suspended.forEach(u => list.appendChild(renderMemberFeedCard(u)));
 }
 
 // 홈 "최근 처리 내역" - 계좌 입금(bankTransactions) 전체를 시간순으로 보여주는 실시간
@@ -1529,13 +1618,12 @@ function renderEditModalStatusButton(user) {
   statusBtn.title = statusBtn.disabled ? "관리자 계정은 정지할 수 없습니다." : "";
 }
 
-// 잔액이 남아있어도 삭제는 허용한다(관리자의 명시적 선택). 다만 결제/입금/충전 이력이
-// 있는 회원은 그 기록들이 삭제된 회원을 참조하게 되어 정합성이 깨지므로 백엔드가 거부한다
-// (admin_delete_user 참고) - 그런 회원은 "정지"를 대신 안내받는다.
+// 잔액이 남아있거나 결제/입금/충전 이력이 있는 회원은 삭제할 수 없다
+// (자금 손실 방지 및 FK 정합성, admin_delete_user 참고) - 그런 경우 "정지"를 대신 안내받는다.
 async function deleteDetailUser() {
   const user = users.find(u => u.id === currentDetailUserId);
   if (!user) return;
-  if (!(await showConfirmModal(`${user.name}님을 정말 삭제하시겠습니까? 되돌릴 수 없습니다.\n(잔액이 남아있어도 삭제됩니다. 단, 결제/입금/충전 이력이 있는 회원은 삭제할 수 없습니다 - 그런 경우 "정지"를 이용하세요.)`))) return;
+  if (!(await showConfirmModal(`${user.name}님을 정말 삭제하시겠습니까? 되돌릴 수 없습니다.\n(잔액이 남아있거나 결제/입금/충전 이력이 있는 회원은 삭제할 수 없습니다 - 그런 경우 "정지"를 이용하세요.)`))) return;
 
   try {
     const res = await adminFetch(`${API_BASE}/admin/users/${currentDetailUserId}`, { method: "DELETE" });

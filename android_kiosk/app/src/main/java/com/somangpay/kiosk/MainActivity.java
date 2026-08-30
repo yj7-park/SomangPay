@@ -5,6 +5,7 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.hardware.usb.UsbManager;
 import android.nfc.NfcAdapter;
@@ -59,6 +60,15 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     private static final String QR_PREF_FRONT_CAMERA = "qr_front_camera";
     private static final String NOTIF_ACCESS_PREFS_NAME = "somang_notif_access_prefs";
     private static final String NOTIF_ACCESS_PROMPTED_KEY = "notif_access_prompted";
+
+    // AdminAlertService가 알림 탭용 PendingIntent에 실어 보내는 처리 화면 정보(카테고리 + 대상
+    // id) - admin.js가 로그인 완료 시점에(또는 앱이 이미 켜져 있으면 즉시) consumePendingDeepLink()로
+    // 가져가 switchAdminView/openDepositDetailModal/openMemberDetail로 라우팅한다.
+    static final String EXTRA_DEEPLINK_CATEGORY = "deeplink_category";
+    static final String EXTRA_DEEPLINK_ENTITY_ID = "deeplink_entity_id";
+    private String pendingDeepLinkCategory;
+    private int pendingDeepLinkEntityId = -1;
+    private boolean pendingDeepLinkAvailable = false;
 
     // DepositAutoDetector가 입금 문자/알림을 처리(등록/필터링/실패 등)하고 나서, 지금
     // 액티비티/웹뷰가 살아있으면 바로 결과를 웹의 "수신 로그"로 보여줄 수 있도록 약한 참조로
@@ -237,7 +247,52 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         // TTS 엔진 초기화
         tts = new TextToSpeech(this, this);
 
+        // 관리자 알림(AdminAlertService)을 탭해 콜드 스타트로 열린 경우 - 이 시점엔 아직 웹뷰
+        // JS가 로드/로그인 전이라 바로 evaluateJavascript로 못 밀어준다. admin.js가 로그인
+        // 완료 시점에 consumePendingDeepLink()로 가져가도록 값만 쥐고 있는다.
+        applyDeepLinkFromIntent(getIntent());
+
         Log.d(TAG, "Native App Initialized with URL: " + BuildConfig.TARGET_URL);
+    }
+
+    // AndroidManifest.xml에서 MainActivity를 launchMode="singleTask"로 선언해뒀으므로, 앱이
+    // 이미 떠 있는 상태(백그라운드 포함)에서 알림을 탭하면 onCreate가 아니라 이쪽으로 들어온다 -
+    // 이 경우엔 웹뷰 JS가 이미 로드/로그인까지 끝나 있을 가능성이 높으므로 바로 밀어준다.
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        applyDeepLinkFromIntent(intent);
+    }
+
+    private void applyDeepLinkFromIntent(Intent intent) {
+        if (intent == null || !intent.hasExtra(EXTRA_DEEPLINK_CATEGORY)) return;
+        pendingDeepLinkCategory = intent.getStringExtra(EXTRA_DEEPLINK_CATEGORY);
+        pendingDeepLinkEntityId = intent.getIntExtra(EXTRA_DEEPLINK_ENTITY_ID, -1);
+        pendingDeepLinkAvailable = true;
+        // 같은 인텐트 인스턴스가 재사용될 수 있는 상황(화면 회전 등 재생성)에서 중복 적용을
+        // 막기 위해 넘겨받은 값은 필드로만 들고 있고 인텐트 자체는 그대로 둔다 - 대신
+        // consumePendingDeepLink()가 1회성 소비를 보장한다.
+        if (webView != null && mainHandler != null) {
+            // 앱이 이미 켜져 있던 경우(onNewIntent) 대비 - JS가 준비돼 있으면 즉시 라우팅되고,
+            // 아직 아니면(콜드 스타트 중 onCreate 쪽 호출) 조용히 무시된다(guard 때문에).
+            mainHandler.post(() -> webView.evaluateJavascript(
+                    "window.checkNativeNotificationDeepLink && window.checkNativeNotificationDeepLink();", null));
+        }
+    }
+
+    // admin.js가 로그인 완료 시점에(자동 로그인/PIN 성공) 그리고 위 applyDeepLinkFromIntent가
+    // 밀어준 시점에 호출 - 있으면 1회 소비하고 지운다(중복 라우팅 방지).
+    String consumePendingDeepLink() {
+        if (!pendingDeepLinkAvailable) return null;
+        pendingDeepLinkAvailable = false;
+        org.json.JSONObject obj = new org.json.JSONObject();
+        try {
+            obj.put("category", pendingDeepLinkCategory);
+            if (pendingDeepLinkEntityId >= 0) obj.put("entityId", pendingDeepLinkEntityId);
+        } catch (org.json.JSONException ignored) {
+        }
+        return obj.toString();
     }
 
     @Override
@@ -901,6 +956,13 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public void openNotificationAccessSettings() {
         activity.runOnUiThread(() -> activity.openNotificationAccessSettings());
+    }
+
+    // AdminAlertService의 알림을 탭해 열렸을 때 이동할 처리 화면 정보(있으면 1회성) -
+    // {"category":"deposit_error","entityId":123} 형태의 JSON 문자열, 없으면 null.
+    @android.webkit.JavascriptInterface
+    public String consumePendingDeepLink() {
+        return activity.consumePendingDeepLink();
     }
 
     @android.webkit.JavascriptInterface

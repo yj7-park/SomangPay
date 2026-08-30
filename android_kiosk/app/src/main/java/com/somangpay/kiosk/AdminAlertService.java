@@ -137,7 +137,11 @@ public class AdminAlertService extends Service {
             if (!"alert".equals(json.optString("type"))) return; // "refresh"/"ping" 등은 무시
             String title = json.optString("title", "소망페이 관리자");
             String body = json.optString("body", "");
-            showAlertNotification(title, body);
+            // category/entity_id는 notify_admins_alert()가 보내며, 알림을 탭했을 때 MainActivity가
+            // 해당 처리 화면(충전함 상세, 회원 상세 등)으로 바로 이동시키는 딥링크에 쓰인다.
+            String category = json.isNull("category") ? null : json.optString("category");
+            int entityId = json.optInt("entity_id", -1);
+            showAlertNotification(title, body, category, entityId);
         } catch (JSONException e) {
             Log.w(TAG, "메시지 파싱 실패: " + e.getMessage());
         }
@@ -176,7 +180,7 @@ public class AdminAlertService extends Service {
                 .build();
     }
 
-    private void showAlertNotification(String title, String body) {
+    private void showAlertNotification(String title, String body, String category, int entityId) {
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -194,13 +198,32 @@ public class AdminAlertService extends Service {
         } else {
             builder = new Notification.Builder(this);
         }
+
+        // 알림 탭 시 MainActivity를 열면서 처리 화면 정보를 실어 보낸다 - 정확히 이 알림에 담긴
+        // 대상(예: 이 입금 건)으로 이동해야 하므로, notify()의 알림 ID와 같은 값을 PendingIntent의
+        // requestCode로도 써서 알림마다 별개의 PendingIntent를 유지한다(동일 requestCode를 쓰면
+        // FLAG_UPDATE_CURRENT가 기존 PendingIntent의 extras를 최신 알림 것으로 덮어써, 먼저 온
+        // 알림을 나중에 탭했을 때 엉뚱한 대상이 열린다).
+        int notifId = (int) System.currentTimeMillis();
+        Intent contentIntent = new Intent(this, MainActivity.class);
+        contentIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        if (category != null) {
+            contentIntent.putExtra(MainActivity.EXTRA_DEEPLINK_CATEGORY, category);
+            if (entityId >= 0) contentIntent.putExtra(MainActivity.EXTRA_DEEPLINK_ENTITY_ID, entityId);
+        }
+        int piFlags = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= android.app.PendingIntent.FLAG_IMMUTABLE;
+        android.app.PendingIntent pendingIntent = android.app.PendingIntent.getActivity(
+                this, notifId, contentIntent, piFlags);
+
         Notification notification = builder
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
                 .build();
-        nm.notify((int) System.currentTimeMillis(), notification);
+        nm.notify(notifId, notification);
     }
 
     private static boolean isBlank(String s) {
