@@ -1673,7 +1673,7 @@ function renderCardSlot(cardType, containerId, label) {
     container.innerHTML = `
       <div class="card-slot">
         <div class="card-slot-type" style="color: var(--text-muted);">${label} - 미등록</div>
-        <button class="btn-action btn-primary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.82rem;" onclick="openScannerModal('REGISTER', {userId: currentDetailUserId, cardType: '${cardType}'})">발급하기</button>
+        <button class="btn-action btn-primary" style="width:auto; padding:0.4rem 0.9rem; font-size:0.82rem;" onclick="openScannerModal('REGISTER', {userId: currentDetailUserId, cardType: '${cardType}'})">등록하기</button>
       </div>
     `;
   }
@@ -2582,6 +2582,7 @@ async function submitProxyRegister(btn) {
         document.getElementById("reg-birth-date").value = "";
         document.getElementById("reg-credit").value = "0";
         await loadAdminUsers();
+        await loadAdminCards();
         await loadStatsSummary();
         await showAlertModal("신규 회원이 대리 등록되었습니다!");
         openMemberDetail(newUser.id);

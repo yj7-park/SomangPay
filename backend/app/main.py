@@ -448,7 +448,7 @@ async def admin_register_user(
         ))
         db.commit()
 
-    await notify_admins(["users", "stats"])
+    await notify_admins(["users", "stats", "cards"])
     return new_user
 
 @app.put("/api/admin/users/{user_id}", response_model=schemas.UserResponse)
