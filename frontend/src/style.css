@@ -591,58 +591,86 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   opacity: 0.75;
 }
 
-/* 사용자 관리 탭 - 돋보기 버튼을 누르면 검색창/스캔 버튼 카드가 제목줄 바로 아래로
-   펼쳐지는 드롭다운(키오스크 선택기 .kiosk-selector-list와 같은 위치/느낌). 화면 전체
-   폭을 덮으면 뒤 목록이 안 보여 답답하므로 절반 정도만 차지하고 돋보기 버튼 아래
-   우측에 붙인다(#26) - min-width는 "NFC/QR 검색" 버튼이 한 줄로 나올 최소 폭. 부모
-   .kiosk-title-row가 이미 position:relative를 준다. */
-.member-search-dropdown {
-  display: none;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  width: 50%;
-  min-width: 220px;
-  margin-top: 0.4rem;
-  background: var(--bg-card);
-  backdrop-filter: var(--backdrop-blur);
-  -webkit-backdrop-filter: var(--backdrop-blur);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  box-shadow: var(--shadow-subtle);
-  z-index: 95;
-}
-.member-search-dropdown.open {
-  display: block;
-}
-
-/* 검색어가 입력된 상태에서는 돋보기 아이콘 버튼 아래에 작은 점을 찍어 필터가 걸려있음을
-   표시한다(#26) - 하단 탭바 활성 표시(.admin-tab-btn.active::after, instagram-theme.css)와
-   같은 패턴. */
-#member-search-toggle {
-  position: relative;
-}
-#member-search-toggle.filter-active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
-}
-
-/* 검색어 입력칸 - 입력값이 있을 때만 오른쪽 끝에 X(지우기) 버튼을 겹쳐 보여준다(#26) */
+/* 사용자 관리 탭 검색창 - 예전엔 돋보기 버튼을 눌러야 펼쳐지는 드롭다운이었는데(#26),
+   회원 목록에서 가장 자주 쓰는 조작을 한 번 더 눌러야 하는 게 어색해 제목줄 바로 아래
+   상시 노출 필드로 바꿨다(#redesign). 왼쪽에 돋보기 아이콘을 얹어 검색창임을 바로
+   알아보게 하고, 입력값이 있을 때만 오른쪽 끝에 X(지우기) 버튼을 겹쳐 보여준다. */
 .member-search-input-wrap {
   position: relative;
   margin-bottom: 0.8rem;
 }
+.member-search-static {
+  margin-bottom: 1rem;
+}
 .member-search-input-wrap .form-control {
   margin-bottom: 0;
   padding-right: 2.2rem;
+}
+.member-search-static .form-control {
+  padding-left: 2.4rem;
+}
+.member-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* 충전함 상태 필터 칩 - 값이 3개뿐이라 드롭다운 대신 상시 노출 칩으로(#redesign, admin.js의
+   renderInboxFilterSelector 참고). 각 칩 안의 건수 배지가 대기(amber)/오류(danger) 상태의
+   심각도를 색으로 먼저 보여주고, 칩 자체가 눌려있으면(현재 필터) 그 색이 액센트로 바뀐다. */
+.filter-chip-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-glass);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.filter-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.3em;
+  padding: 0 0.4em;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.78em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.filter-chip-amber:not(.active) .filter-chip-count {
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--accent-amber);
+}
+.filter-chip-danger:not(.active) .filter-chip-count {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--accent-danger);
+}
+.filter-chip.active {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #001318;
+}
+.filter-chip.active .filter-chip-count {
+  background: rgba(0, 0, 0, 0.18);
+  color: inherit;
 }
 .member-search-clear-btn {
   display: none;
@@ -833,12 +861,26 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   font-weight: 800;
   color: var(--text-main);
   margin-top: 0.2rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .hero-stat .stat-value-sm {
   font-size: clamp(1.3rem, 3vw, 1.7rem);
   font-weight: 800;
   color: var(--text-main);
   margin-top: 0.2rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 800 웨이트 통계 숫자에서 단위("원"/"명")만 작게 - 숫자 줄이 타일 폭을 넘겨 줄바꿈되던
+   문제(#redesign)를 막고 숫자에 시선이 먼저 가게 한다. */
+.stat-value .stat-unit,
+.stat-value-sm .stat-unit {
+  font-size: 0.5em;
+  font-weight: 500;
+  margin-left: 0.15em;
+  color: var(--text-muted);
 }
 
 @media screen and (max-width: 480px) {
@@ -868,6 +910,8 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   font-weight: 800;
   color: var(--text-main);
   margin-top: 0.2rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 통계 그리드 셀은 라벨/값 모두 우측 정렬. */
@@ -904,6 +948,8 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .attention-tile .stat-value {
   font-size: 1.4rem;
   font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .attention-tile.has-items {
   border-color: var(--accent-amber);
@@ -971,9 +1017,11 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 .member-card .member-card-balance {
   font-weight: 800;
-  color: var(--accent-emerald);
+  /* 잔액은 "지금 얼마 있나"라는 중립 정보 - 초록(크레딧 증가)이 아니라 잉크색으로. */
+  color: var(--text-main);
   font-size: 1.05rem;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .status-dot {
   display: inline-block;
@@ -1052,10 +1100,15 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 }
 .activity-row .activity-amount {
   font-weight: 800;
-  color: var(--accent-emerald);
+  /* 초록은 "크레딧이 실제로 반영됨(완료)"에만 - 대기·오류·기타 금액은 중립(잉크색). */
+  color: var(--text-main);
   font-size: 1rem;
   white-space: nowrap;
   text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.activity-row .activity-amount.is-credited {
+  color: var(--accent-emerald);
 }
 .activity-row .activity-amount-col {
   display: flex;
@@ -1210,6 +1263,75 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   font-size: 1.1rem;
   cursor: pointer;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 이름 + 배지/상태 칩을 두 줄로 쌓는다 - 390px에서 상태 텍스트가 헤더 오른쪽 끝으로
+   잘려나가던 문제(#redesign)를 없애고 회원 목록 카드와 같은 정보 구성으로 통일. */
+.detail-header-id {
+  flex: 1;
+  min-width: 0;
+}
+.detail-header-id h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detail-header-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+.detail-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.detail-status-chip.is-active {
+  background: rgba(16, 185, 129, 0.16);
+  color: var(--accent-emerald);
+}
+.detail-status-chip.is-suspended {
+  background: rgba(239, 68, 68, 0.16);
+  color: var(--accent-danger);
+}
+
+/* 세그먼트 컨트롤 - 이모지 버튼(🔁☀️🌙) 대신 쓰는 연결된 토글. ADMIN 설정 · USER
+   프로필의 "화면 테마" 공용(#redesign). */
+.seg-control {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border-glass);
+}
+.seg-control button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.seg-control button.is-on {
+  background: var(--accent-cyan);
+  color: #001318;
 }
 
 /* #27: 회원 상세 카드 우측 상단의 정보수정 버튼 - 테두리/음영 없이 이름과 같은 글자색만
@@ -2424,5 +2546,59 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   .recent-payment-amount {
     font-size: 1.05rem !important;
   }
+}
+
+/* ---------------- 관리자 PIN 잠금 화면(#redesign) ----------------
+   예전엔 그냥 텍스트 입력칸 + 버튼 하나뿐이라 실제 잠금 화면 느낌이 없었다. 원형 배지에
+   자물쇠 아이콘을 얹고, 제목/설명을 가운데 정렬하고, 숫자 키패드를 더했다 - 키패드는
+   위 입력칸(admin-pin-input)에 값을 그대로 채워 넣으므로 물리 키보드 타이핑과 병행해도
+   충돌하지 않는다(admin.js의 appendAdminPinDigit 참고). */
+.pin-lock-box {
+  text-align: center;
+}
+.pin-lock-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--accent-cyan);
+  font-size: 1.8rem;
+}
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+.pin-key {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 1px solid var(--border-glass);
+  background: var(--surface-1);
+  color: var(--text-main);
+  font-size: 1.3rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin-key:active {
+  background: var(--surface-2);
+}
+.pin-key-spacer {
+  background: none;
+  border-color: transparent;
+  cursor: default;
+}
+.pin-key-backspace {
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
 }
 

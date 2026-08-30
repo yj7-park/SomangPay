@@ -23,6 +23,24 @@ function historyDateKey(date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+// 공용 날짜·시각 표기 - new Date(x).toLocaleString()이 브라우저 로캘에 따라
+// "8/30/2026, 9:09:16 PM"처럼 영어로 새는 걸 막고, ADMIN 충전함 행·입금 처리 모달과
+// USER 대기 카드가 전부 "오늘 오후 9:09 / 8월 30일 오후 9:09" 형태로 통일되게 한다.
+function formatDateTimeKST(value) {
+  if (value == null || value === "") return "";
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  let datePart;
+  if (historyDateKey(d) === historyDateKey(now)) datePart = "오늘";
+  else if (historyDateKey(d) === historyDateKey(yesterday)) datePart = "어제";
+  else if (d.getFullYear() === now.getFullYear()) datePart = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  else datePart = `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+  return `${datePart} ${formatHistoryTime(d)}`;
+}
+
 // 이력 카드 레이아웃(#19): 좌상단 종류 배지 + 시간, 좌하단 사유, 우상단 금액, 우하단 잔액.
 // 백엔드가 label/badge_class/amount_text/amount_class를 이미 계산해서 내려주므로 여기선
 // 그대로 꽂기만 한다. 날짜별로 카드를 묶어 구분선(.history-date-divider)을 넣고, 카드

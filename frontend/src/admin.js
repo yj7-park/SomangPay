@@ -21,6 +21,8 @@ const ICON_SVGS = {
   users: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="7.5" r="3.2"/><path d="M2.5 20c1-3.5 3.4-5.4 6-5.4s5 1.9 6 5.4"/><circle cx="17" cy="8.2" r="2.5"/><path d="M15.3 11.9c2.2.4 3.9 2.1 4.7 4.9"/></svg>',
   refresh: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.3L3 16"/><path d="M3 21v-5h5"/></svg>',
   "chevron-down": '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  "arrow-left": '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  backspace: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-7-8Z"/><path d="M14.5 9.5l4 5M18.5 9.5l-4 5"/></svg>',
   trash: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
   x: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   plus: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -153,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
   hydrateIconPlaceholders();
   updateFixedViewLayoutMetrics(); // PIN 인증 전에도 --header-h/뷰 높이를 미리 맞춰 둔다
   initAdminTheme();
+  initAdminPinKeypad();
 
   // APK 다운로드 링크는 웹 브라우저에서만 의미가 있다 - 이미 설치된 네이티브 앱
   // 안(AndroidInterface 있음)에서는 굳이 보여줄 필요가 없어 숨긴다.
@@ -239,9 +242,7 @@ function updateAdminThemeButtonsUI(activePref) {
   };
   Object.entries(buttons).forEach(([pref, btn]) => {
     if (!btn) return;
-    const active = pref === activePref;
-    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
-    btn.style.color = active ? "#001318" : "var(--text-main)";
+    btn.classList.toggle("is-on", pref === activePref);
   });
 }
 
@@ -598,6 +599,33 @@ if (window.navigator && navigator.serviceWorker) {
   });
 }
 
+// PIN 화면 숫자 키패드(#redesign) - 텍스트 입력칸(admin-pin-input)에 직접 쓰는 대신
+// 탭으로 채울 수 있게 한다. 백엔드가 PIN 길이를 고정하지 않아(verify-pin이 문자열을 그대로
+// 검증) 자동 제출 대신 입력칸과 똑같이 maxlength까지 채우고 "인증하기"로 넘긴다 - 물리
+// 키보드로 입력칸에 직접 타이핑하는 것도 계속 그대로 동작한다(데스크톱 사이드바 레이아웃).
+function initAdminPinKeypad() {
+  const keypad = document.getElementById("admin-pin-keypad");
+  if (!keypad) return;
+  keypad.querySelectorAll(".pin-key[data-digit]").forEach(btn => {
+    btn.addEventListener("click", () => appendAdminPinDigit(btn.dataset.digit));
+  });
+  document.getElementById("admin-pin-backspace")?.addEventListener("click", removeAdminPinDigit);
+}
+
+function appendAdminPinDigit(digit) {
+  const input = document.getElementById("admin-pin-input");
+  if (!input) return;
+  const max = Number(input.getAttribute("maxlength")) || 8;
+  if (input.value.length >= max) return;
+  input.value += digit;
+}
+
+function removeAdminPinDigit() {
+  const input = document.getElementById("admin-pin-input");
+  if (!input) return;
+  input.value = input.value.slice(0, -1);
+}
+
 async function submitAdminPin() {
   const pinInput = document.getElementById("admin-pin-input");
   const pin = pinInput ? pinInput.value.trim() : "";
@@ -709,10 +737,7 @@ function switchAdminView(viewName, inboxFilter) {
     if (viewName === "kiosk") renderKioskList();
     if (viewName === "settings") refreshAdminPushButtonUI();
     if (viewName === "inbox") {
-      if (inboxFilter) {
-        inboxDepositFilter = inboxFilter;
-        inboxFilterOpen = false;
-      }
+      if (inboxFilter) inboxDepositFilter = inboxFilter;
       activityFeedLimit = ACTIVITY_PAGE_SIZE;
       updateFixedViewLayoutMetrics();
       renderInboxFilterSelector();
@@ -1330,13 +1355,19 @@ async function loadStatsSummary() {
   }
 }
 
+// 통계 숫자는 800 웨이트라 "5,400,000원"이 타일 폭을 넘으면 통째로 줄바꿈됐다 - 단위("원"/"명")를
+// 작은 <small>로 떼어내고 CSS에서 nowrap/tabular-nums를 걸어 숫자 줄만 붙여 쓴다.
+function statAmountHtml(value, unit = "원") {
+  return `${Number(value).toLocaleString()}<small class="stat-unit">${unit}</small>`;
+}
+
 function renderDashboard(stats) {
-  document.getElementById("stat-total-balance").innerText = `${stats.total_balance.toLocaleString()}원`;
-  document.getElementById("stat-users-with-balance").innerText = `${stats.users_with_balance.toLocaleString()}명`;
-  document.getElementById("stat-today-deposit").innerText = `${stats.today.deposit_amount.toLocaleString()}원`;
-  document.getElementById("stat-today-payment").innerText = `${stats.today.payment_amount.toLocaleString()}원`;
-  document.getElementById("stat-month-deposit").innerText = `${stats.this_month.deposit_amount.toLocaleString()}원`;
-  document.getElementById("stat-month-payment").innerText = `${stats.this_month.payment_amount.toLocaleString()}원`;
+  document.getElementById("stat-total-balance").innerHTML = statAmountHtml(stats.total_balance);
+  document.getElementById("stat-users-with-balance").innerHTML = statAmountHtml(stats.users_with_balance, "명");
+  document.getElementById("stat-today-deposit").innerHTML = statAmountHtml(stats.today.deposit_amount);
+  document.getElementById("stat-today-payment").innerHTML = statAmountHtml(stats.today.payment_amount);
+  document.getElementById("stat-month-deposit").innerHTML = statAmountHtml(stats.this_month.deposit_amount);
+  document.getElementById("stat-month-payment").innerHTML = statAmountHtml(stats.this_month.payment_amount);
   document.getElementById("stat-pending-deposit").innerText = `${stats.pending_deposit_count}건`;
   document.getElementById("stat-error-deposit").innerText = `${stats.error_deposit_count}건`;
 
@@ -1371,31 +1402,6 @@ function renderMemberFeedCard(u) {
   return div;
 }
 
-// 사용자 관리 탭 - 돋보기 버튼을 누르면 검색창/스캔 버튼 카드가 제목줄 바로 아래로
-// 펼쳐진다(키오스크 선택기와 같은 위치/느낌의 드롭다운 - fitDropdownVertically 참고).
-let memberSearchOpen = false;
-function toggleMemberSearchPanel() {
-  memberSearchOpen = !memberSearchOpen;
-  const panel = document.getElementById("member-search-panel");
-  if (!panel) return;
-  panel.classList.toggle("open", memberSearchOpen);
-  if (memberSearchOpen) {
-    fitDropdownVertically(panel);
-    document.getElementById("member-search-input")?.focus();
-  }
-}
-
-// 패널 바깥(회원 카드, 탭바 등)을 누르면 드롭다운을 닫는다(#26) - 토글 버튼 클릭은
-// toggleMemberSearchPanel이 이미 처리하므로 여기서 다시 닫지 않도록 제외한다.
-document.addEventListener("click", (e) => {
-  if (!memberSearchOpen) return;
-  const panel = document.getElementById("member-search-panel");
-  const toggle = document.getElementById("member-search-toggle");
-  if (panel?.contains(e.target) || toggle?.contains(e.target)) return;
-  memberSearchOpen = false;
-  panel.classList.remove("open");
-});
-
 // 입력칸 오른쪽 X 버튼(#26) - 검색어를 지우고 목록/하이라이팅을 원래대로 되돌린다.
 function clearMemberSearchInput() {
   const input = document.getElementById("member-search-input");
@@ -1410,7 +1416,6 @@ function renderMemberFeed() {
   const feed = document.getElementById("search-member-feed");
   if (!feed) return;
   const query = (document.getElementById("member-search-input")?.value || "").trim().toLowerCase();
-  document.getElementById("member-search-toggle")?.classList.toggle("filter-active", !!query);
   document.getElementById("member-search-input-wrap")?.classList.toggle("has-value", !!query);
 
   const activeUsers = users.filter(u => u.status !== "SUSPENDED");
@@ -1468,43 +1473,34 @@ const DEPOSIT_STATUS_META = {
   OTHER: { text: "기타", cls: "status-other" },
 };
 
-// 충전함 제목 옆 필터 - 키오스크 선택기와 같은 드롭다운 패턴(toggleKioskSelector 참고).
+// 충전함 제목 옆 필터 - 예전엔 키오스크 선택기와 같은 드롭다운(눌러야 펼쳐짐)이었는데(#26),
+// 값이 3개뿐이라 펼치고 고르는 동작 자체가 불필요한 클릭이었다. 대기/오류처럼 "지금 몇 건
+// 처리할 게 있는지"가 중요한 화면이라 각 칩에 건수를 같이 보여주는 상시 노출 칩 행으로
+// 바꿨다(#redesign) - bankTransactions가 커서 없이 전체를 한 번에 불러오므로(loadBankTransactions)
+// 로컬 배열 길이를 세는 것만으로 카운트가 정확하다.
 const INBOX_FILTERS = ["ALL", "PENDING", "ERROR"];
-const INBOX_FILTER_LABEL = { ALL: "전체", PENDING: "대기 중인 계좌 입금", ERROR: "매칭 오류 계좌 입금" };
+const INBOX_FILTER_LABEL = { ALL: "전체", PENDING: "대기", ERROR: "오류" };
 let inboxDepositFilter = "ALL";
-let inboxFilterOpen = false;
-
-function toggleInboxFilterSelector() {
-  inboxFilterOpen = !inboxFilterOpen;
-  renderInboxFilterSelector();
-}
 
 function selectInboxFilter(filter) {
   inboxDepositFilter = filter;
-  inboxFilterOpen = false;
   activityFeedLimit = ACTIVITY_PAGE_SIZE;
   renderInboxFilterSelector();
   renderInboxActivityFeed();
 }
 
 function renderInboxFilterSelector() {
-  const label = document.getElementById("inbox-filter-label");
-  const arrow = document.getElementById("inbox-filter-arrow");
-  const list = document.getElementById("inbox-filter-list");
-  if (!label || !list) return;
+  const row = document.getElementById("inbox-filter-chips");
+  if (!row) return;
 
-  label.innerText = INBOX_FILTER_LABEL[inboxDepositFilter];
-  if (arrow) arrow.style.transform = inboxFilterOpen ? "rotate(180deg)" : "rotate(0deg)";
+  const counts = { ALL: bankTransactions.length, PENDING: 0, ERROR: 0 };
+  bankTransactions.forEach(t => { if (t.status === "PENDING" || t.status === "ERROR") counts[t.status]++; });
 
-  list.style.display = inboxFilterOpen ? "flex" : "none";
-  if (!inboxFilterOpen) return;
-
-  list.innerHTML = INBOX_FILTERS.map(f => `
-    <button type="button" class="kiosk-selector-item-main ${f === inboxDepositFilter ? 'active' : ''}" onclick="selectInboxFilter('${f}')">
-      <span class="kiosk-selector-item-name">${INBOX_FILTER_LABEL[f]}</span>
+  row.innerHTML = INBOX_FILTERS.map(f => `
+    <button type="button" class="filter-chip ${f === "ERROR" ? "filter-chip-danger" : f === "PENDING" ? "filter-chip-amber" : ""} ${f === inboxDepositFilter ? "active" : ""}" onclick="selectInboxFilter('${f}')">
+      ${INBOX_FILTER_LABEL[f]}<span class="filter-chip-count">${counts[f]}</span>
     </button>
   `).join('');
-  fitDropdownVertically(list);
 }
 
 function buildDepositEvents() {
@@ -1525,6 +1521,7 @@ function buildDepositEvents() {
       amount: t.amount,
       status: meta.text,
       statusClass: meta.cls,
+      isCredited: t.status === "CREDITED" || t.status === "CREDITED_MANUAL",
     };
   }).sort((a, b) => new Date(b.time) - new Date(a.time));
 }
@@ -1534,11 +1531,11 @@ function renderActivityLine(ev) {
     <span class="activity-icon">${ev.icon}</span>
     <div class="activity-info">
       <div class="activity-title">${ev.title}</div>
-      <div class="activity-sub">${new Date(ev.time).toLocaleString()}</div>
+      <div class="activity-sub">${formatDateTimeKST(ev.time)}</div>
       <span class="activity-status ${ev.statusClass}">${ev.status}</span>
     </div>
     <div class="activity-amount-col">
-      <div class="activity-amount">${ev.amount.toLocaleString()}원</div>
+      <div class="activity-amount${ev.isCredited ? " is-credited" : ""}">${ev.isCredited ? "+" : ""}${ev.amount.toLocaleString()}원</div>
     </div>
   `;
 }
@@ -1607,10 +1604,8 @@ function renderMemberDetail() {
   badge.innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
   badge.className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
   const statusEl = document.getElementById("detail-member-status");
-  statusEl.innerHTML = isActive
-    ? '<span class="status-dot"></span>활성'
-    : '<span class="status-dot suspended"></span>정지됨';
-  statusEl.style.color = isActive ? "var(--accent-emerald)" : "var(--accent-danger)";
+  statusEl.textContent = isActive ? "활성" : "정지됨";
+  statusEl.className = `detail-status-chip ${isActive ? "is-active" : "is-suspended"}`;
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("detail-member-phone").innerText = user.phone || "-";
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
@@ -1942,6 +1937,7 @@ async function loadBankTransactions() {
     if (!res.ok) return;
     bankTransactions = await res.json();
     renderInboxActivityFeed();
+    renderInboxFilterSelector(); // 칩 건수가 bankTransactions 기준이라 목록 새로고침마다 같이 갱신
     if (_depositDetailTxn) {
       _depositDetailTxn = bankTransactions.find(t => t.id === _depositDetailTxn.id) || null;
       if (_depositDetailTxn) renderDepositDetailModal();
@@ -2017,8 +2013,12 @@ function renderDepositDetailModal() {
   if (!t) return;
 
   document.getElementById("dd-depositor-name").innerText = t.depositor_name;
-  document.getElementById("dd-amount").innerText = `${t.amount.toLocaleString()}원`;
-  document.getElementById("dd-transaction-at").innerText = new Date(t.transaction_at).toLocaleString();
+  const amountEl = document.getElementById("dd-amount");
+  amountEl.innerText = `${t.amount.toLocaleString()}원`;
+  // 금액 초록은 "크레딧이 실제로 반영됨"에만 - 대기·오류·기타는 중립(잉크색)으로.
+  amountEl.style.color = (t.status === "CREDITED" || t.status === "CREDITED_MANUAL")
+    ? "var(--accent-emerald)" : "var(--text-main)";
+  document.getElementById("dd-transaction-at").innerText = formatDateTimeKST(t.transaction_at);
   document.getElementById("dd-txn-id").innerText = t.external_txn_id;
 
   const meta = DEPOSIT_STATUS_META[t.status] || { text: t.status, cls: "status-pending" };
@@ -2030,7 +2030,7 @@ function renderDepositDetailModal() {
   const infoLines = [];
   if (t.matched_user_name) infoLines.push(`매칭 회원: ${escapeHtml(t.matched_user_name)}`);
   if (t.resolved_by_admin_name) infoLines.push(`처리자: ${escapeHtml(t.resolved_by_admin_name)}`);
-  if (t.resolved_at) infoLines.push(`처리 시각: ${new Date(t.resolved_at).toLocaleString()}`);
+  if (t.resolved_at) infoLines.push(`처리 시각: ${formatDateTimeKST(t.resolved_at)}`);
   if (t.resolution_memo) infoLines.push(`메모: ${escapeHtml(t.resolution_memo)}`);
   if (infoLines.length > 0) {
     infoBox.style.display = "block";
@@ -2043,7 +2043,9 @@ function renderDepositDetailModal() {
   const resolvable = t.status === "PENDING" || t.status === "ERROR";
   resolveSection.style.display = resolvable ? "block" : "none";
   if (resolvable) {
-    document.getElementById("dd-user-search").value = "";
+    // "매칭 오류"의 존재 이유가 입금자명인데 후보 목록이 빈 채로 시작했다 - 입금자명(동명이인
+    // 구분용 꼬리 숫자는 떼고)으로 검색을 미리 채워 유사 회원이 바로 뜨게 한다.
+    document.getElementById("dd-user-search").value = (t.depositor_name || "").replace(/\s*\d+\s*$/, "").trim();
     document.getElementById("dd-resolve-memo").value = "";
     document.getElementById("dd-other-reason").value = "";
     renderDepositUserOptions();
@@ -2065,9 +2067,8 @@ function renderDepositUserOptions() {
     const selected = u.id === _depositDetailSelectedUserId;
     return `
       <div onclick="selectDepositUser(${u.id})" style="display:flex; align-items:center; gap: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 8px; cursor:pointer; background: ${selected ? "rgba(16,185,129,0.15)" : "var(--surface-2)"}; border: 1px solid ${selected ? "var(--accent-emerald)" : "transparent"};">
-        <span title="${escapeHtml(u.name || "")}" style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(u.name || "")}</span>
-        <span style="flex: 0 0 auto; width: 100px; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.phone || "")}</span>
-        <span style="flex: 0 0 auto; width: 80px; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.birth_date || "-")}</span>
+        <span style="flex: 1 1 auto; min-width: 0; font-weight: 600;">${escapeHtml(u.name || "")}</span>
+        <span style="flex: 0 0 auto; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.phone || "")}</span>
         <span style="flex: 0 0 auto; width: 1rem; text-align: right;">${selected ? `<span data-icon="check" style="color: var(--accent-emerald);"></span>` : ""}</span>
       </div>
     `;
@@ -2398,7 +2399,7 @@ function renderSmsLog() {
     return `
       <div class="glass-container" style="padding: 0.7rem 0.9rem;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
-          <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(entry.time).toLocaleString()} · ${origin}</span>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">${formatDateTimeKST(entry.time)} · ${origin}</span>
           <span class="activity-status ${meta.cls}">${meta.label}</span>
         </div>
         ${entry.detail ? `<div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.35rem;">${escapeHtml(entry.detail)}</div>` : ""}

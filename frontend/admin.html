@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260819_0002">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260830_9001">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1100">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1100">
   <script src="jsQR.min.js"></script>
   <script>
     // 푸시 알림(Web Push)을 받으려면 서비스 워커 등록이 필요함 - kiosk.html/user.html과 동일한 패턴.
@@ -125,25 +125,23 @@
       <!-- 검색창/스캔 버튼은 고정, 목록만 남은 공간을 차지하며 그 안에서만 스크롤된다
            (홈 탭과 동일한 패턴 - admin.js의 updateFixedViewLayoutMetrics). -->
       <div id="admin-view-search" class="admin-view">
-        <div class="admin-page-title-row kiosk-title-row">
+        <div class="admin-page-title-row">
           <h1 class="admin-page-title">사용자 관리</h1>
           <div class="admin-page-title-actions">
+            <button type="button" class="admin-page-title-action" onclick="openScannerModal('SEARCH')" title="NFC/QR 검색" aria-label="NFC/QR 검색">
+              <span data-icon="nfc"></span>
+            </button>
             <button type="button" class="admin-page-title-action" onclick="openProxyRegisterModal()" title="회원 등록">+</button>
-            <button type="button" id="member-search-toggle" class="admin-page-title-action" onclick="toggleMemberSearchPanel()" title="회원 검색">
-              <span data-icon="search"></span>
-            </button>
           </div>
-          <div id="member-search-panel" class="member-search-dropdown">
-            <div id="member-search-input-wrap" class="member-search-input-wrap">
-              <input type="text" id="member-search-input" class="form-control" placeholder="이름 또는 연락처로 검색" oninput="renderMemberFeed()">
-              <button type="button" id="member-search-clear" class="member-search-clear-btn" onclick="clearMemberSearchInput()" title="검색어 지우기" aria-label="검색어 지우기">
-                <span data-icon="x"></span>
-              </button>
-            </div>
-            <button class="btn-action" style="background: rgba(103,129,192,0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);" onclick="openScannerModal('SEARCH')">
-              NFC/QR 검색
-            </button>
-          </div>
+        </div>
+        <!-- 검색창을 돋보기 버튼 뒤 드롭다운에 숨기지 않고 상시 노출 - 회원 목록에서 가장
+             자주 쓰는 조작이라 여기서만 한 번 더 누를 필요가 없어야 한다(#redesign). -->
+        <div id="member-search-input-wrap" class="member-search-input-wrap member-search-static">
+          <span class="member-search-icon" data-icon="search"></span>
+          <input type="text" id="member-search-input" class="form-control" placeholder="이름 또는 연락처로 검색" oninput="renderMemberFeed()">
+          <button type="button" id="member-search-clear" class="member-search-clear-btn" onclick="clearMemberSearchInput()" title="검색어 지우기" aria-label="검색어 지우기">
+            <span data-icon="x"></span>
+          </button>
         </div>
         <div class="member-feed" id="search-member-feed"></div>
       </div>
@@ -152,14 +150,12 @@
       <!-- 헤더/탭바를 제외한 남은 공간을 "최근 처리 내역" 피드(구 홈 탭)가 전부 차지하며
            그 안에서만 스크롤된다 (admin.js의 updateFixedViewLayoutMetrics - style.css 참고). -->
       <div id="admin-view-inbox" class="admin-view">
-        <div class="admin-page-title-row kiosk-title-row">
+        <div class="admin-page-title-row">
           <h1 class="admin-page-title">충전함 관리</h1>
-          <button type="button" id="inbox-filter-toggle" class="kiosk-selector-btn" onclick="toggleInboxFilterSelector()">
-            <span id="inbox-filter-label">전체</span>
-            <span id="inbox-filter-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
-          </button>
-          <div id="inbox-filter-list" class="kiosk-selector-list"></div>
         </div>
+        <!-- 값이 3개뿐이라 드롭다운으로 펼쳐 고를 필요가 없다 - 각 칩에 건수를 같이 보여주는
+             상시 노출 칩 행으로(#redesign, admin.js의 renderInboxFilterSelector 참고). -->
+        <div class="filter-chip-row" id="inbox-filter-chips"></div>
         <div class="activity-feed-scroll" id="inbox-activity-feed-scroll">
           <div class="activity-feed" id="inbox-activity-feed"></div>
         </div>
@@ -172,9 +168,7 @@
         <!-- 앱 버전 · 다운로드 · 화면 전환 (자주 찾는 정보라 최상단 배치) -->
         <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
-            <h3 style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 0.4rem;">
-              <span data-icon="refresh" style="color: var(--accent-cyan);"></span>앱 버전
-            </h3>
+            <h3 style="font-size: 1.05rem; margin: 0;">앱 버전</h3>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
               <button type="button" class="icon-plain-btn" title="업데이트 확인" aria-label="업데이트 확인" onclick="triggerAppVersionRefresh()"><span data-icon="refresh"></span></button>
@@ -198,10 +192,10 @@
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
             <span style="font-size: 0.8rem; color: var(--text-muted);">화면 테마</span>
-            <div style="display: flex; gap: 0.4rem; margin-left: auto;">
-              <button id="a-theme-system-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="setAdminTheme('system')">🔁 시스템</button>
-              <button id="a-theme-light-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="setAdminTheme('light')">☀️ 라이트</button>
-              <button id="a-theme-dark-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="setAdminTheme('dark')">🌙 다크</button>
+            <div class="seg-control" style="margin-left: auto;">
+              <button id="a-theme-system-btn" type="button" onclick="setAdminTheme('system')">시스템</button>
+              <button id="a-theme-light-btn" type="button" onclick="setAdminTheme('light')">라이트</button>
+              <button id="a-theme-dark-btn" type="button" onclick="setAdminTheme('dark')">다크</button>
             </div>
           </div>
 
@@ -343,20 +337,20 @@
       <!-- ================= MEMBER DETAIL (회원 상세 - 검색/스캔에서 진입) ================= -->
       <div id="admin-view-member-detail" class="admin-view">
         <div class="detail-header">
-          <button class="back-btn" onclick="closeMemberDetail()">←</button>
-          <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
-              <h2 id="detail-member-name" style="margin: 0; font-size: 1.3rem;">-</h2>
+          <button class="back-btn" onclick="closeMemberDetail()" aria-label="뒤로"><span data-icon="arrow-left"></span></button>
+          <div class="detail-header-id">
+            <h2 id="detail-member-name">-</h2>
+            <div class="detail-header-tags">
               <span id="detail-member-badge" class="badge-tag badge-general">-</span>
+              <span id="detail-member-status" class="detail-status-chip"></span>
             </div>
-            <span id="detail-member-status" style="font-size: 0.8rem; font-weight: bold; flex-shrink: 0;"></span>
           </div>
         </div>
 
         <div class="glass-container" style="padding: 1.2rem; margin-bottom: 1rem; position: relative;">
           <button class="icon-plain-btn" style="position: absolute; top: 0.9rem; right: 0.9rem;" onclick="openEditUserModal(currentDetailUserId)" title="정보수정" aria-label="정보수정"><span data-icon="edit"></span></button>
           <div style="font-size: 0.8rem; color: var(--text-muted);">현재 잔액</div>
-          <div style="font-size: 1.8rem; font-weight: 800; color: var(--accent-emerald);" id="detail-member-balance">0원</div>
+          <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-main);" id="detail-member-balance">0원</div>
           <div style="margin-top: 0.7rem; font-size: 0.85rem; color: var(--text-muted);">
             연락처 (로그인 ID): <strong id="detail-member-phone" style="color: var(--text-main);">-</strong>
           </div>
@@ -680,8 +674,8 @@
 
   <!-- Admin PIN Auth Modal -->
   <div id="admin-pin-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large" style="max-width: 400px; border-color: var(--primary);">
-      <div style="font-size: 3rem; margin-bottom: 0.5rem; color: var(--accent-cyan);" data-icon="lock"></div>
+    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary);">
+      <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.6rem; color: var(--text-main); margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">대시보드 접근을 위해 관리자 PIN 번호를 입력하세요.</p>
 
@@ -693,7 +687,25 @@
       </div>
 
       <div class="form-group">
-        <input type="password" id="admin-pin-input" class="form-control" placeholder="PIN 번호 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.5rem;" maxlength="8" onkeyup="if(event.key==='Enter') submitAdminPin();">
+        <input type="password" id="admin-pin-input" class="form-control" placeholder="PIN 번호 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.5rem;" maxlength="8" inputmode="numeric" autocomplete="off" onkeyup="if(event.key==='Enter') submitAdminPin();">
+      </div>
+
+      <!-- 숫자 키패드(#redesign) - 텍스트 필드 하나뿐이던 화면 대신 실제 잠금 화면처럼 탭으로
+           채울 수 있게 한다. 위 입력칸(admin-pin-input)에 직접 타이핑해도 그대로 동작해서
+           데스크톱 사이드바 레이아웃에서는 물리 키보드를 그대로 써도 된다(admin.js 참고). -->
+      <div class="pin-keypad" id="admin-pin-keypad">
+        <button type="button" class="pin-key" data-digit="1">1</button>
+        <button type="button" class="pin-key" data-digit="2">2</button>
+        <button type="button" class="pin-key" data-digit="3">3</button>
+        <button type="button" class="pin-key" data-digit="4">4</button>
+        <button type="button" class="pin-key" data-digit="5">5</button>
+        <button type="button" class="pin-key" data-digit="6">6</button>
+        <button type="button" class="pin-key" data-digit="7">7</button>
+        <button type="button" class="pin-key" data-digit="8">8</button>
+        <button type="button" class="pin-key" data-digit="9">9</button>
+        <span class="pin-key pin-key-spacer" aria-hidden="true"></span>
+        <button type="button" class="pin-key" data-digit="0">0</button>
+        <button type="button" class="pin-key pin-key-backspace" id="admin-pin-backspace" aria-label="한 글자 지우기"><span data-icon="backspace"></span></button>
       </div>
 
       <button class="btn-action btn-primary" style="margin-top: 1rem;" onclick="submitAdminPin()">인증하기</button>
@@ -726,8 +738,8 @@
 
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
-  <script src="src/history-render.js?v=20260825_0001"></script>
+  <script src="src/history-render.js?v=20260831_1000"></script>
   <script src="src/ws-client.js?v=20260826_0001"></script>
-  <script src="src/admin.js?v=20260830_9001"></script>
+  <script src="src/admin.js?v=20260831_1100"></script>
 </body>
 </html>

@@ -71,9 +71,7 @@ function updateUserThemeButtonsUI(activePref) {
   };
   Object.entries(buttons).forEach(([pref, btn]) => {
     if (!btn) return;
-    const active = pref === activePref;
-    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
-    btn.style.color = active ? "#001318" : "var(--text-main)";
+    btn.classList.toggle("is-on", pref === activePref);
   });
 }
 
@@ -681,7 +679,7 @@ function pendingDepositRowHtml(d) {
   return `
     <div class="pending-deposit-row ${armed ? "armed" : ""}" onclick="event.stopPropagation(); armPendingDeposit(${d.id})">
       <div class="pending-deposit-row-info">
-        <div class="pending-deposit-row-date">${new Date(d.created_at).toLocaleString()}</div>
+        <div class="pending-deposit-row-date">${formatDateTimeKST(d.created_at)}</div>
         <div class="pending-deposit-row-amount">+${d.amount.toLocaleString()}원</div>
       </div>
       <div class="pending-deposit-confirm-overlay" onclick="event.stopPropagation()">

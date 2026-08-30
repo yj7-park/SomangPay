@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260830_0001">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_0001">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1100">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1100">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -218,10 +218,10 @@
 
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
             <span style="font-size: 0.92rem; color: var(--text-main);">화면 테마</span>
-            <div style="display: flex; gap: 0.4rem; margin-left: auto;">
-              <button id="u-theme-system-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.85rem;" onclick="setUserTheme('system')">🔁 시스템</button>
-              <button id="u-theme-light-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.85rem;" onclick="setUserTheme('light')">☀️ 라이트</button>
-              <button id="u-theme-dark-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.85rem;" onclick="setUserTheme('dark')">🌙 다크</button>
+            <div class="seg-control" style="margin-left: auto;">
+              <button id="u-theme-system-btn" type="button" onclick="setUserTheme('system')">시스템</button>
+              <button id="u-theme-light-btn" type="button" onclick="setUserTheme('light')">라이트</button>
+              <button id="u-theme-dark-btn" type="button" onclick="setUserTheme('dark')">다크</button>
             </div>
           </div>
 
@@ -273,8 +273,8 @@
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/user.html,/src/user.js"></script>
   <script src="src/qrcode-generator.js"></script>
-  <script src="src/history-render.js?v=20260825_0001"></script>
+  <script src="src/history-render.js?v=20260831_1000"></script>
   <script src="src/ws-client.js?v=20260826_0001"></script>
-  <script src="src/user.js?v=20260831_0001"></script>
+  <script src="src/user.js?v=20260831_1000"></script>
 </body>
 </html>

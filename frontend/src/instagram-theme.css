@@ -435,18 +435,14 @@ button:hover,
   .admin-tab-btn .tab-icon {
     font-size: 1.65rem;
   }
-  /* 아이콘이 이모지라 색으로 활성 상태를 표현할 수 없으므로 아이콘 아래 작은 점으로 표시 */
-  .admin-tab-btn.active::after {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--accent-cyan);
-  }
+}
+
+/* 활성 탭 표시 - 예전엔 아이콘이 이모지라 색으로 활성 상태를 못 나타내 아이콘 아래 점을
+   찍었는데(#redesign), 지금은 admin.js의 ICON_SVGS가 전부 currentColor 스트로크 SVG라
+   .admin-tab-btn.active의 color(위 규칙, --text-main)만으로 이미 명암 대비가 난다. 점 대신
+   USER와 같은 방식으로 활성 아이콘 선을 굵게 - "outline → filled"에 가장 가까운 근사치. */
+.admin-tab-btn.active .tab-icon svg {
+  stroke-width: 2.4;
 }
 
 /* ---------------- Member feed rows: 피드형 리스트 ---------------- */
