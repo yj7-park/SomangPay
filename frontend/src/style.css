@@ -755,6 +755,60 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   }
 }
 
+/* ==========================================================================
+   User Shell (user.html) - admin.html과 동일한 .admin-shell/.admin-tabbar/
+   .admin-view 탭 구조를 그대로 재사용한다(레이아웃 클래스일 뿐 admin 전용 로직은
+   없음 - switchUserView()는 user.js에 별도로 있다). user.html은 admin.html과
+   달리 상단 .app-header가 없어 콘텐츠가 노치/상태바 바로 아래 붙으므로, 이전
+   .mobile-wrapper가 갖던 안전 영역 여백을 #user-shell .admin-main에 그대로 준다. */
+#user-shell .admin-main {
+  padding-top: max(clamp(0.75rem, 2vw, 1.5rem), env(safe-area-inset-top));
+  /* .admin-main 자신은 .admin-shell 쪽에서 flex:1로 뷰포트 높이를 채우지만, 그 값은
+     flex-grow로만 정해져서(명시적 height 아님) 자식의 퍼센트 height(예: 100%)가 먹지
+     않는다 - .admin-main을 flex column으로 바꿔 활성 뷰가 flex-grow로 남은 세로
+     공간을 직접 채울 수 있게 한다. 다른 탭(.admin-view.active)은 그냥 display:block이라
+     flex-grow:0(기본값)로 지금까지처럼 내용 높이만큼만 차지하고 나머지는 빈 공간으로
+     남는다 - QR 탭만 아래에서 flex:1로 이 공간을 직접 가져간다. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* QR 결제 페이지 - 제목("QR 결제")은 다른 탭과 같이 위에 두고, 카드 내용
+   (.user-qr-view-body)만 탭 안의 남은 세로 공간 가운데로 오도록 한다(#user-update). */
+#user-view-qr.active {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.user-qr-view-body {
+  flex: 1;
+  display: flex;
+  /* flex-direction을 기본값(row)으로 두면 justify-content:center가 가로축(주축)을
+     센터링하면서 .glass-container를 내용 크기로 줄여버린다(카드 폭이 줄어드는
+     버그였음) - column으로 바꿔 주축(세로)만 가운데 정렬하고, 교차축(가로)은
+     기본 align-items:stretch로 원래처럼 꽉 채운 폭을 유지한다. */
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* QR 결제 탭바 버튼 - 하단 탭바 5개 항목 중 가운데(3번째)에 넣는 강조 탭(#user-update).
+   탭바 밖으로 튀어나오는 원형 FAB 대신, 다른 탭과 같은 높이로 바 안에 들어앉고
+   아이콘 자리에만 강조색 사각 배지(chip)를 둘러 눈에 띄게 한다(요청 참고 이미지
+   스타일). 레이아웃(아이콘+라벨, 모바일 라벨 숨김, 데스크톱 사이드바 행 전환, hover,
+   active 등)은 다른 탭과 같은 .admin-tab-btn을 그대로 같이 붙여 쓰고, 배지만 이
+   클래스로 얹는다 - active 여부와 무관하게 배지는 항상 켜져 있다. */
+.user-qr-fab .tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3em;
+  /* 위쪽 잔액 카드(.user-card-widget)와 같은 그라디언트로 통일 - "같은 카드에서 온
+     버튼"처럼 보이도록. */
+  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+  color: #fff;
+  border-radius: var(--radius-md);
+}
+
 /* Dashboard stat tiles */
 /* 홈 최상단 카드 - 잔액 보유 회원수(작게, 좌측 상단)와 총 보유 잔액 합계(크게, 우측)를
    한 카드 안에 위아래로 나눠 담는다. min-height로 카드를 세로로 넉넉하게 늘린다. */

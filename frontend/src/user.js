@@ -175,18 +175,29 @@ function userLogout() {
   userToken = null;
   loggedInUser = null;
   disconnectUserWebSocket();
-  document.getElementById("user-login-section").style.display = "block";
-  document.getElementById("user-card-box").style.display = "none";
+  document.getElementById("user-login-wrapper").style.display = "block";
+  document.getElementById("user-shell").style.display = "none";
   document.getElementById("pending-deposit-card").style.display = "none";
   document.getElementById("charge-guide-section").style.display = "none";
-  hideModal("user-settings-modal");
+  switchUserView("home");
   document.getElementById("login-phone").value = "";
   document.getElementById("login-password").value = "";
 }
 
+// ============ 탭 전환(홈/이용내역/문의/마이프로필) - admin.js switchAdminView()와 같은 패턴 ============
+function switchUserView(viewName) {
+  document.querySelectorAll("#user-shell .admin-view").forEach(el => el.classList.remove("active"));
+  const target = document.getElementById(`user-view-${viewName}`);
+  if (target) target.classList.add("active");
+  document.querySelectorAll("#user-shell .admin-tab-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === viewName);
+  });
+  if (viewName === "profile") refreshPushButtonUI();
+}
+
 function onLoginSuccess(user) {
-  document.getElementById("user-login-section").style.display = "none";
-  document.getElementById("user-card-box").style.display = "block";
+  document.getElementById("user-login-wrapper").style.display = "none";
+  document.getElementById("user-shell").style.display = "flex";
   document.getElementById("charge-guide-section").style.display = "block";
 
   document.getElementById("display-user-name").innerText = user.name;
@@ -205,48 +216,45 @@ function onLoginSuccess(user) {
 
 // ============ 등록된 QR 카드(있으면) 표시 ============
 // card_uid 문자열 자체는 서버가 이미 알고 있는 값이라 클라이언트에서 QR 이미지로 그리기만
-// 하면 된다 - qrcode-generator.js(자체 호스팅, 외부 CDN 의존 없음)로 생성.
+// 하면 된다 - qrcode-generator.js(자체 호스팅, 외부 CDN 의존 없음)로 생성. 하단 탭바
+// "QR결제" 탭(#user-update)을 누르면 팝업 없이 바로 이 이미지를 보여주는 전용 페이지로
+// 전환된다(switchUserView('qr'), user.html의 #user-view-qr).
 let _userQrDataUrl = null;
 
 async function loadUserQrCard() {
-  const thumb = document.getElementById("user-qr-thumb");
-  if (!thumb) return;
   try {
     const res = await authFetch(`${API_BASE}/users/me/qr-card`);
-    if (!res.ok) { thumb.style.display = "none"; return; }
+    if (!res.ok) { _userQrDataUrl = null; return; }
     const data = await res.json();
-    if (!data.card_uid) { thumb.style.display = "none"; return; }
+    if (!data.card_uid) { _userQrDataUrl = null; return; }
 
     const qr = qrcode(0, "M");
     qr.addData(data.card_uid);
     qr.make();
     _userQrDataUrl = qr.createDataURL(6, 4);
-    thumb.src = _userQrDataUrl;
-    thumb.style.display = "block";
   } catch (err) {
     console.error("QR 카드 조회 오류:", err);
-    thumb.style.display = "none";
+    _userQrDataUrl = null;
+  } finally {
+    renderUserQrView();
   }
 }
 
-function openUserQrModal() {
-  if (!_userQrDataUrl) return;
-  document.getElementById("user-qr-modal-img").src = _userQrDataUrl;
-  showModal("user-qr-modal");
-}
-
-function closeUserQrModal() {
-  hideModal("user-qr-modal");
-}
-
-// ============ 설정 모달(내 정보/테마/로그아웃) ============
-function openUserSettingsModal() {
-  showModal("user-settings-modal");
-  refreshPushButtonUI();
-}
-
-function closeUserSettingsModal() {
-  hideModal("user-settings-modal");
+// QR 결제 탭의 내용을 현재 _userQrDataUrl 상태에 맞게 그린다 - 로그인 직후 카드 조회가
+// 끝났을 때(loadUserQrCard)와 탭이 아직 로딩 전이었다가 다시 그려야 할 때 모두 이 함수
+// 하나로 처리한다.
+function renderUserQrView() {
+  const img = document.getElementById("user-qr-page-img");
+  const empty = document.getElementById("user-qr-page-empty");
+  if (!img || !empty) return;
+  if (_userQrDataUrl) {
+    img.src = _userQrDataUrl;
+    img.style.display = "block";
+    empty.style.display = "none";
+  } else {
+    img.style.display = "none";
+    empty.style.display = "block";
+  }
 }
 
 // ============ 푸시 알림 구독 ============

@@ -368,7 +368,7 @@ button:hover,
   color: var(--accent-senior);
 }
 
-/* ---------------- Admin tab bar / sidebar (kiosk·user 화면에는 없음, admin.html 전용 마크업) ---------------- */
+/* ---------------- 탭바/사이드바 (admin.html, user.html 공용 마크업 - kiosk 화면에는 없음) ---------------- */
 /* admin.html 최상단 타이틀바(.app-header)를 없앴으므로, 그 높이(60px)를 빼던 계산을
    걷어내고 .admin-shell이 뷰포트 전체 높이를 쓰도록 한다. */
 .admin-shell {
