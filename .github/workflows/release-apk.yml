@@ -1,11 +1,20 @@
 name: Build & Release Kiosk/Admin/User APKs
 
-# main에 머지될 때마다 소망페이 키오스크/관리자/회원 안드로이드 앱 세 개를 release
-# 빌드로 컴파일해서 GitHub Release에 올리고, admin 대시보드가 항상 최신 빌드를
-# 받아가도록 frontend/SomangPay{Kiosk,Admin,User}.apk도 함께 갱신해 커밋한다.
-# frontend/version.json에는 플레이버별 최신 versionCode/apkUrl을 함께 기록하는데, 이미
-# 설치된 앱들이 실행 시 이 파일을 읽어 스스로 새 버전을 감지/다운로드/설치한다
-# (android_kiosk의 UpdateManager 참고 - 앱 자체 업데이트 체크 로직).
+# main에 머지될 때마다 android_kiosk/** 안에서 바뀐 파일 경로를 보고 kiosk/admin/user 중
+# 실제로 영향받는 플레이버만 골라 release 빌드해서 GitHub Release에 올리고, admin
+# 대시보드의 다운로드 링크/frontend/version.json도 그 플레이버 항목만 갱신해 커밋한다 -
+# 빌드하지 않은 플레이버의 기존 항목(버전/APK)은 건드리지 않고 그대로 둔다.
+#
+# frontend/**는 트리거 대상이 아니다 - WebView가 화면을 원격 URL로 그때그때 불러오므로
+# (MainActivity의 loadUrl(TARGET_URL)) 프론트엔드 변경은 서버 배포(deploy.sh frontend)만
+# 반영하면 끝이고, 내용이 똑같은 APK를 다시 깔게 만들 이유가 없다. APK 재빌드가 필요한
+# 건 android_kiosk/**(네이티브 코드) 변경뿐이다.
+#
+# 플레이버 판별 기준(dorny/paths-filter):
+#   - android_kiosk/app/src/{kiosk,admin,user}/** (플레이버 전용 리소스)만 바뀌면
+#     그 플레이버 하나만 빌드.
+#   - 그 외 android_kiosk/** 공용 네이티브 코드(AndroidInterface, NFC/카드리더 브릿지,
+#     build.gradle 등)가 바뀌면 세 플레이버 다 빌드.
 #
 # 이 워크플로우 자신이 만드는 커밋 메시지에는 [skip ci]가 들어있어 무한 재실행을 방지한다
 # (GitHub Actions는 head 커밋 메시지에 [skip ci]/[ci skip]이 있으면 push 트리거를 자동으로 건너뜀).
@@ -21,8 +30,69 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect which flavors are affected
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            shared:
+              - 'android_kiosk/**'
+              - '!android_kiosk/app/src/kiosk/**'
+              - '!android_kiosk/app/src/admin/**'
+              - '!android_kiosk/app/src/user/**'
+              - '.github/workflows/release-apk.yml'
+            kiosk_only:
+              - 'android_kiosk/app/src/kiosk/**'
+            admin_only:
+              - 'android_kiosk/app/src/admin/**'
+            user_only:
+              - 'android_kiosk/app/src/user/**'
+
+      - name: Resolve build matrix
+        id: resolve
+        run: |
+          # workflow_dispatch(수동 실행)는 변경 파일 개념이 없으니 기존과 동일하게 항상 세 개 다 빌드.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'matrix=["kiosk","admin","user"]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          build_kiosk=false; build_admin=false; build_user=false
+          if [ "${{ steps.filter.outputs.shared }}" = "true" ]; then
+            build_kiosk=true; build_admin=true; build_user=true
+          fi
+          [ "${{ steps.filter.outputs.kiosk_only }}" = "true" ] && build_kiosk=true
+          [ "${{ steps.filter.outputs.admin_only }}" = "true" ] && build_admin=true
+          [ "${{ steps.filter.outputs.user_only }}" = "true" ] && build_user=true
+
+          flavors=()
+          [ "$build_kiosk" = "true" ] && flavors+=("kiosk")
+          [ "$build_admin" = "true" ] && flavors+=("admin")
+          [ "$build_user" = "true" ] && flavors+=("user")
+
+          if [ ${#flavors[@]} -eq 0 ]; then
+            matrix="[]"
+          else
+            matrix=$(printf '%s\n' "${flavors[@]}" | jq -R . | jq -sc .)
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Resolved flavors to build: $matrix"
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,19 +114,42 @@ jobs:
         run: |
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
 
-      - name: Build release APKs (kiosk/admin/user flavors)
+      - name: Build release APK (${{ matrix.flavor }} flavor)
         working-directory: android_kiosk
         env:
+          MATRIX_FLAVOR: ${{ matrix.flavor }}
           RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/android_kiosk/release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleKioskRelease assembleAdminRelease assembleUserRelease -PappVersionCode=${{ github.run_number }} --console=plain
+        run: |
+          FLAVOR_CAP="$(tr '[:lower:]' '[:upper:]' <<< "${MATRIX_FLAVOR:0:1}")${MATRIX_FLAVOR:1}"
+          ./gradlew "assemble${FLAVOR_CAP}Release" -PappVersionCode=${{ github.run_number }} --console=plain
 
       - name: Remove decoded keystore
         if: always()
         working-directory: android_kiosk
         run: rm -f release.keystore
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.flavor }}
+          path: android_kiosk/app/build/outputs/apk/${{ matrix.flavor }}/release/app-${{ matrix.flavor }}-release.apk
+          retention-days: 1
+
+  release:
+    needs: [changes, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download built APKs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: apk-*
 
       - name: Prepare release metadata
         id: meta
@@ -64,63 +157,79 @@ jobs:
           VERSION_NAME="1.0.${{ github.run_number }}"
           echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
-          cp android_kiosk/app/build/outputs/apk/kiosk/release/app-kiosk-release.apk "${{ github.workspace }}/SomangPayKiosk.apk"
-          cp android_kiosk/app/build/outputs/apk/admin/release/app-admin-release.apk "${{ github.workspace }}/SomangPayAdmin.apk"
-          cp android_kiosk/app/build/outputs/apk/user/release/app-user-release.apk "${{ github.workspace }}/SomangPayUser.apk"
-          # GitHub Release에 올라가는 파일명에는 버전을 넣어 릴리스 페이지에서 바로 버전을 구분할 수 있게 한다.
-          # frontend/에 커밋되는 admin 다운로드용 사본은 매 빌드마다 새 파일을 추가하면 저장소가 계속 불어나므로
-          # 그쪽은 고정 파일명을 유지하고(아래 "Publish latest APKs to frontend" 단계), 대신 <a download="..."> 값에
-          # 버전을 넣어 사용자가 내려받을 때 저장되는 파일명에서 버전을 알 수 있게 한다.
-          cp "${{ github.workspace }}/SomangPayKiosk.apk" "${{ github.workspace }}/SomangPayKiosk-$VERSION_NAME.apk"
-          cp "${{ github.workspace }}/SomangPayAdmin.apk" "${{ github.workspace }}/SomangPayAdmin-$VERSION_NAME.apk"
-          cp "${{ github.workspace }}/SomangPayUser.apk" "${{ github.workspace }}/SomangPayUser-$VERSION_NAME.apk"
+
+          for flavor in $(echo '${{ needs.changes.outputs.matrix }}' | jq -r '.[]'); do
+            cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
+            src="artifacts/apk-${flavor}/app-${flavor}-release.apk"
+            cp "$src" "${{ github.workspace }}/SomangPay${cap}.apk"
+            # GitHub Release에 올라가는 파일명에는 버전을 넣어 릴리스 페이지에서 바로 버전을 구분할 수 있게 한다.
+            # frontend/에 커밋되는 admin 다운로드용 사본은 매 빌드마다 새 파일을 추가하면 저장소가 계속 불어나므로
+            # 그쪽은 고정 파일명을 유지하고(아래 "Publish latest APKs to frontend" 단계), 대신 <a download="..."> 값에
+            # 버전을 넣어 사용자가 내려받을 때 저장되는 파일명에서 버전을 알 수 있게 한다.
+            cp "${{ github.workspace }}/SomangPay${cap}.apk" "${{ github.workspace }}/SomangPay${cap}-${VERSION_NAME}.apk"
+          done
+
+      - name: Build release file list
+        id: files
+        run: |
+          VERSION_NAME="${{ steps.meta.outputs.version_name }}"
+          list=""
+          for flavor in $(echo '${{ needs.changes.outputs.matrix }}' | jq -r '.[]'); do
+            cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
+            list="$list ${{ github.workspace }}/SomangPay${cap}-${VERSION_NAME}.apk"
+          done
+          echo "list=$list" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          FLAVOR_LIST: ${{ join(fromJSON(needs.changes.outputs.matrix), ', ') }}
         run: |
           gh release create "${{ steps.meta.outputs.tag }}" \
-            "${{ github.workspace }}/SomangPayKiosk-${{ steps.meta.outputs.version_name }}.apk" \
-            "${{ github.workspace }}/SomangPayAdmin-${{ steps.meta.outputs.version_name }}.apk" \
-            "${{ github.workspace }}/SomangPayUser-${{ steps.meta.outputs.version_name }}.apk" \
-            --title "Kiosk/Admin/User APK build #${{ github.run_number }}" \
-            --notes "커밋 ${{ github.sha }} 기준 자동 빌드 (main 머지 트리거)."
+            ${{ steps.files.outputs.list }} \
+            --title "APK build #${{ github.run_number }} (${{ env.FLAVOR_LIST }})" \
+            --notes "커밋 ${{ github.sha }} 기준 자동 빌드 (main 머지 트리거). 빌드된 플레이버: ${{ env.FLAVOR_LIST }}"
 
       - name: Publish latest APKs to frontend (served by admin download links)
         run: |
           VERSION_NAME="${{ steps.meta.outputs.version_name }}"
-          cp "${{ github.workspace }}/SomangPayKiosk.apk" frontend/SomangPayKiosk.apk
-          cp "${{ github.workspace }}/SomangPayAdmin.apk" frontend/SomangPayAdmin.apk
-          cp "${{ github.workspace }}/SomangPayUser.apk" frontend/SomangPayUser.apk
-          sed -i -E "s#(/SomangPayKiosk\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
-          sed -i -E "s#(/SomangPayAdmin\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
-          sed -i -E "s#(/SomangPayUser\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
-          # 서버 URL/커밋 파일명은 고정이지만, 브라우저가 저장할 때 쓰는 파일명(download 속성)에는
-          # 버전을 넣어 여러 번 받아도 어느 빌드인지 파일명만으로 구분되게 한다.
-          sed -i -E "s#download=\"SomangPayKiosk[^\"]*\"#download=\"SomangPayKiosk-${VERSION_NAME}.apk\"#" frontend/admin.html
-          sed -i -E "s#download=\"SomangPayAdmin[^\"]*\"#download=\"SomangPayAdmin-${VERSION_NAME}.apk\"#" frontend/admin.html
-          sed -i -E "s#download=\"SomangPayUser[^\"]*\"#download=\"SomangPayUser-${VERSION_NAME}.apk\"#" frontend/admin.html
-          rm -f "${{ github.workspace }}/SomangPayKiosk.apk" "${{ github.workspace }}/SomangPayAdmin.apk" "${{ github.workspace }}/SomangPayUser.apk"
-          rm -f "${{ github.workspace }}/SomangPayKiosk-${VERSION_NAME}.apk" "${{ github.workspace }}/SomangPayAdmin-${VERSION_NAME}.apk" "${{ github.workspace }}/SomangPayUser-${VERSION_NAME}.apk"
+          for flavor in $(echo '${{ needs.changes.outputs.matrix }}' | jq -r '.[]'); do
+            cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
+            cp "${{ github.workspace }}/SomangPay${cap}.apk" "frontend/SomangPay${cap}.apk"
+            sed -i -E "s#(/SomangPay${cap}\.apk\?v=)[^\"]*#\1${{ github.run_number }}#" frontend/admin.html
+            # 서버 URL/커밋 파일명은 고정이지만, 브라우저가 저장할 때 쓰는 파일명(download 속성)에는
+            # 버전을 넣어 여러 번 받아도 어느 빌드인지 파일명만으로 구분되게 한다.
+            sed -i -E "s#download=\"SomangPay${cap}[^\"]*\"#download=\"SomangPay${cap}-${VERSION_NAME}.apk\"#" frontend/admin.html
+          done
+          rm -f "${{ github.workspace }}"/SomangPay*.apk
 
       - name: Publish version manifest (앱 인앱 업데이트 체크용)
         run: |
-          cat > frontend/version.json <<EOF
-          {
-            "kiosk": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}", "apkUrl": "/SomangPayKiosk.apk" },
-            "admin": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}", "apkUrl": "/SomangPayAdmin.apk" },
-            "user": { "versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}", "apkUrl": "/SomangPayUser.apk" }
-          }
-          EOF
+          VERSION_NAME="1.0.${{ github.run_number }}"
+          for flavor in $(echo '${{ needs.changes.outputs.matrix }}' | jq -r '.[]'); do
+            cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
+            tmp=$(mktemp)
+            jq --argjson vc "${{ github.run_number }}" --arg vn "$VERSION_NAME" --arg url "/SomangPay${cap}.apk" \
+              ".${flavor} = {\"versionCode\": \$vc, \"versionName\": \$vn, \"apkUrl\": \$url}" \
+              frontend/version.json > "$tmp"
+            mv "$tmp" frontend/version.json
+          done
 
       - name: Commit updated APKs + admin links
+        env:
+          FLAVOR_LIST: ${{ join(fromJSON(needs.changes.outputs.matrix), ', ') }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add frontend/SomangPayKiosk.apk frontend/SomangPayAdmin.apk frontend/SomangPayUser.apk frontend/admin.html frontend/version.json
+          add_paths="frontend/admin.html frontend/version.json"
+          for flavor in $(echo '${{ needs.changes.outputs.matrix }}' | jq -r '.[]'); do
+            cap="$(tr '[:lower:]' '[:upper:]' <<< "${flavor:0:1}")${flavor:1}"
+            add_paths="$add_paths frontend/SomangPay${cap}.apk"
+          done
+          git add $add_paths
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
-          git commit -m "chore: publish kiosk/admin/user APK build #${{ github.run_number }} [skip ci]"
+          git commit -m "chore: publish ${FLAVOR_LIST} APK build #${{ github.run_number }} [skip ci]"
           git push origin HEAD:main
