@@ -1334,6 +1334,50 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   color: #001318;
 }
 
+/* iOS식 토글 스위치 - 이모지 버튼(🔕/🔔) 대신(#redesign). */
+.switch-toggle {
+  --sw-w: 44px;
+  --sw-h: 26px;
+  position: relative;
+  flex-shrink: 0;
+  width: var(--sw-w);
+  height: var(--sw-h);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-glass);
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.switch-toggle .switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(var(--sw-h) - 6px);
+  height: calc(var(--sw-h) - 6px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.16s ease;
+}
+.switch-toggle.is-on {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+.switch-toggle.is-on .switch-knob {
+  transform: translateX(calc(var(--sw-w) - var(--sw-h)));
+}
+.switch-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.switch-status {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* #27: 회원 상세 카드 우측 상단의 정보수정 버튼 - 테두리/음영 없이 이름과 같은 글자색만
    써서 카드 위에 얹힌 듯 가볍게 보이도록 한다 (정지/삭제는 정보수정 모달 안으로 이동). */
 .icon-plain-btn {
@@ -1418,6 +1462,36 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   font-size: 2.4rem;
   font-weight: 900;
   margin-top: 0.2rem;
+}
+
+/* 잔액 카드 아래 퀵액션 3개(#redesign) - QR 결제 / 충전 안내 / 이용 내역. */
+.user-quick-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.2rem;
+}
+.user-quick-actions button {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.85rem 0.4rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.user-quick-actions button svg {
+  color: var(--accent-cyan);
+}
+.user-quick-actions button:hover {
+  border-color: var(--accent-cyan);
 }
 
 /* 충전 대기 카드(#18) - 메인 잔액 카드 바로 아래, 비슷한 크기로 강조 표시해 눈에 띄게 한다.
@@ -2008,16 +2082,132 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   background: rgba(103, 129, 192, 0.1);
 }
 
-/* 키오스크 상세 정보 - 이름 아래 읽기 전용으로 보여주는 UUID(키오스크 ID) */
+/* 키오스크 상세 정보 - 이름 아래 UUID(키오스크 ID). 눌러서 복사할 수 있는 칩으로
+   바꿨다(#redesign) - 등록/문의 시 단말기 UUID를 손으로 옮겨 적던 걸 대신한다. */
 .kiosk-detail-uuid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
   font-size: 0.78rem;
   color: var(--text-muted);
   font-family: monospace;
-  overflow-wrap: anywhere;
   background: var(--surface-2);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
   padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  text-align: left;
+}
+.kiosk-detail-uuid-text {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.kiosk-detail-uuid-copy-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+/* 키오스크 선택 - 예전 드롭다운 대신 상시 노출 가로 스크롤 칩 목록(#redesign, admin.js의
+   renderKioskSelector 참고). 개수가 늘어나도 옆으로 스크롤될 뿐 목록 높이는 그대로다. */
+.kiosk-select-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  margin-bottom: 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+.kiosk-select-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-glass);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.kiosk-select-chip.active {
+  border-color: var(--accent-cyan);
+  background: rgba(103, 129, 192, 0.14);
+  color: var(--text-main);
+}
+
+/* 온라인 상태 점 - 회색(오프라인)/초록(온라인, is-online). 선택 칩과 상세 패널
+   양쪽에서 재사용한다(#redesign). */
+.kiosk-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim, var(--text-muted));
+  flex-shrink: 0;
+}
+.kiosk-online-dot.is-online {
+  background: var(--accent-emerald);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+.kiosk-online-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* 메뉴별 매출 막대 리스트(#redesign) - 표 대신 이 기간 최고 매출 대비 비율로 막대를
+   그려서 뭐가 제일 잘 팔리는지 숫자를 안 읽어도 한눈에 들어오게 한다. */
+.kiosk-sales-bar-row {
+  margin-bottom: 0.9rem;
+}
+.kiosk-sales-bar-row:last-child {
+  margin-bottom: 0;
+}
+.kiosk-sales-bar-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+}
+.kiosk-sales-bar-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-main);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kiosk-sales-bar-amount {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--accent-emerald);
+  font-variant-numeric: tabular-nums;
+}
+.kiosk-sales-bar-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.kiosk-sales-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent-cyan);
+}
+.kiosk-sales-bar-qty {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* 키오스크에 배정할 메뉴 그리드 - 실제 키오스크 화면(.menu-card)과 같은 모양으로 2열,
@@ -2603,5 +2793,16 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   background: none;
   color: var(--text-muted);
   font-size: 1.1rem;
+}
+
+/* 설정 탭 그룹 캡션(#redesign) - iOS 설정 앱처럼 각 카드 그룹 위에 작은 대문자 라벨을 둬서
+   "앱/화면/알림/고급" 네 묶음의 경계가 카드 사이 여백만으로도 아니라 눈에 바로 들어오게. */
+.settings-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin: 0 0.3rem 0.4rem;
 }
 

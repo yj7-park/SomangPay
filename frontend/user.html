@@ -12,7 +12,7 @@
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1200">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1300">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1200">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -132,6 +132,23 @@
           </div>
         </div>
 
+        <!-- 잔액 카드 바로 아래 퀵액션(#redesign) - 지갑 앱의 기본. 결제하러 하단 탭까지
+             가지 않아도 되게 한다. -->
+        <div class="user-quick-actions">
+          <button type="button" onclick="switchUserView('qr')">
+            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M19 17v4M17 19h4"/></svg>
+            <span>QR 결제</span>
+          </button>
+          <button type="button" onclick="document.getElementById('charge-guide-section').scrollIntoView({ behavior: 'smooth', block: 'center' })">
+            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="m7 12 5 5 5-5"/><path d="M5 20h14"/></svg>
+            <span>충전 안내</span>
+          </button>
+          <button type="button" onclick="switchUserView('history')">
+            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+            <span>이용 내역</span>
+          </button>
+        </div>
+
         <!-- 충전 대기 카드(#18) - 대기 중인 입금 건이 있을 때만 표시.
              행을 누르면 확정 버튼이 그 행 안에 오버레이되어 나타난다(별도 모달 없음). -->
         <div id="pending-deposit-card" class="pending-deposit-card" style="display: none;">
@@ -178,15 +195,20 @@
         <h1 class="admin-page-title">QR 결제</h1>
         <div class="user-qr-view-body">
           <div class="glass-container" style="padding: 1.5rem; text-align: center;">
-            <!-- 등록된 카드가 있을 때만 표시(renderUserQrView(), user.js) -->
-            <img id="user-qr-page-img" src="" alt="QR 코드" style="display: none; width: 100%; max-width: 320px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 14px;">
+            <!-- 카드가 있을 때만: "내 결제 코드" + 이름을 QR 위에 올려 세로 중앙 정렬이 휑하지 않게 한다(#redesign) -->
+            <div id="user-qr-card-head" style="display: none; margin-bottom: 1rem;">
+              <div style="font-size: 0.8rem; color: var(--text-muted);">내 결제 코드</div>
+              <div id="user-qr-name" style="font-size: 1.15rem; font-weight: 700; color: var(--text-main); margin-top: 0.15rem;"></div>
+            </div>
+            <!-- 등록된 카드가 있을 때만 표시(renderUserQrView(), user.js). 흰 패딩 축소 + radius↑ + 브랜드색 얇은 프레임. -->
+            <img id="user-qr-page-img" src="" alt="QR 코드" style="display: none; width: 100%; max-width: 260px; margin: 0 auto; background: #fff; padding: 12px; border-radius: 16px; border: 2px solid var(--accent-cyan);">
             <!-- 카드가 없을 때 표시 -->
             <div id="user-qr-page-empty" style="display: none; padding: 2rem 0;">
               <div style="display: inline-flex; color: var(--text-muted); margin-bottom: 0.8rem;"><svg class="icon-line" viewBox="0 0 24 24" width="2.2em" height="2.2em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M19 17v4M17 19h4"/></svg></div>
               <p style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 0.5rem;">등록된 QR 카드가 없습니다.</p>
               <p style="font-size: 0.85rem; color: var(--text-muted);">교회 사무실(관리자)에 문의해 카드를 등록해 주세요.</p>
             </div>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1.2rem;">키오스크 QR 스캔에 사용하세요.</p>
+            <p id="user-qr-guide" style="display: none; font-size: 0.95rem; color: var(--text-main); margin-top: 1rem;">키오스크 QR 스캔에 사용하세요.</p>
           </div>
         </div>
       </div>
@@ -229,7 +251,8 @@
                지원 안 하는 브라우저에서는 버튼이 비활성화된 채 "미지원 브라우저"로 표시된다. -->
           <div id="u-push-section" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
             <span style="font-size: 0.92rem; color: var(--text-main);">푸시 알림</span>
-            <button id="u-push-toggle-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.85rem; margin-left: auto;" onclick="togglePushNotifications()">🔕 꺼짐</button>
+            <span id="u-push-status" class="switch-status"></span>
+            <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
           </div>
 
           <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 내용을 아무것도
@@ -275,6 +298,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_1200"></script>
   <script src="src/ws-client.js?v=20260826_0001"></script>
-  <script src="src/user.js?v=20260831_1200"></script>
+  <script src="src/user.js?v=20260831_1300"></script>
 </body>
 </html>

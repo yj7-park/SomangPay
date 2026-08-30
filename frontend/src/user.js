@@ -256,13 +256,21 @@ function renderUserQrView() {
   const img = document.getElementById("user-qr-page-img");
   const empty = document.getElementById("user-qr-page-empty");
   if (!img || !empty) return;
+  const head = document.getElementById("user-qr-card-head");
+  const guide = document.getElementById("user-qr-guide");
+  const nameEl = document.getElementById("user-qr-name");
+  if (nameEl && loggedInUser) nameEl.innerText = loggedInUser.name || "";
   if (_userQrDataUrl) {
     img.src = _userQrDataUrl;
     img.style.display = "block";
     empty.style.display = "none";
+    if (head) head.style.display = "block";
+    if (guide) guide.style.display = "block";
   } else {
     img.style.display = "none";
     empty.style.display = "block";
+    if (head) head.style.display = "none";
+    if (guide) guide.style.display = "none";
   }
 }
 
@@ -322,20 +330,27 @@ async function refreshPushButtonUI() {
   await ensurePushSubscriptionFresh();
 
   const btn = document.getElementById("u-push-toggle-btn");
+  const status = document.getElementById("u-push-status");
   if (!btn) return;
   if (!pushSupported()) {
-    btn.innerText = "🔕 미지원 브라우저";
     btn.disabled = true;
+    btn.classList.remove("is-on");
+    btn.setAttribute("aria-checked", "false");
+    if (status) status.innerText = "미지원 브라우저";
     return;
   }
   const sub = await getCurrentPushSubscription();
   btn.disabled = false;
-  btn.innerText = sub ? "🔔 켜짐" : "🔕 꺼짐";
+  if (status) status.innerText = "";
+  btn.classList.toggle("is-on", !!sub);
+  btn.setAttribute("aria-checked", sub ? "true" : "false");
 }
 
 async function togglePushNotifications() {
   const btn = document.getElementById("u-push-toggle-btn");
-  if (btn) { btn.disabled = true; btn.innerText = "⏳ 처리 중..."; }
+  const status = document.getElementById("u-push-status");
+  if (btn) btn.disabled = true;
+  if (status) status.innerText = "처리 중…";
   try {
     const sub = await getCurrentPushSubscription();
     if (sub) {
