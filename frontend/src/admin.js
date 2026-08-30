@@ -27,6 +27,8 @@ const ICON_SVGS = {
   x: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   plus: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
   minus: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>',
+  copy: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  alert: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
 };
 function icon(name) {
   return ICON_SVGS[name] || "";
@@ -314,11 +316,14 @@ async function getCurrentAdminPushSubscription() {
 
 async function refreshAdminPushButtonUI() {
   const section = document.getElementById("a-push-section");
+  const groupLabel = document.getElementById("a-push-group-label"); // 설정 그룹 캡션(#redesign) - 카드와 함께 숨김
   if (!isInstalledAdminAppContext()) {
     if (section) section.style.display = "none";
+    if (groupLabel) groupLabel.style.display = "none";
     return;
   }
   if (section) section.style.display = "";
+  if (groupLabel) groupLabel.style.display = "";
 
   // user.js의 refreshPushButtonUI()와 동일 - 화면을 열 때마다 먼저 자가복구를 한 번 시도한다.
   // 구독이 이미 살아있으면 스로틀에 걸려 즉시 반환되어 비용이 없고, 새로고침/버전업 등으로
@@ -700,7 +705,17 @@ const adminRealtime = createRealtimeClient({
       .catch(err => console.error("Resume refresh error:", err));
     ensureAdminPushSubscriptionFresh();
   },
+  // 실시간 연결 상태(#redesign) - 예전엔 상단 고정 바가 있었을 때만 보이던 정보였는데,
+  // 지금은 탭바가 유일한 전 화면 공용 요소라 거기 점 하나로 옮겼다(updateAdminWsStatusDot).
+  onStatusChange: (status) => updateAdminWsStatusDot(status),
 });
+
+function updateAdminWsStatusDot(status) {
+  const dot = document.getElementById("admin-ws-status-dot");
+  if (!dot) return;
+  dot.className = `ws-status-dot ws-status-${status}`;
+  dot.title = status === "open" ? "실시간 연결됨" : status === "connecting" ? "연결 중..." : "실시간 연결 끊김 - 재연결 시도 중";
+}
 
 function connectAdminWebSocket() { adminRealtime.connect(); }
 function disconnectAdminWebSocket() { adminRealtime.disconnect(); }
@@ -1361,20 +1376,49 @@ function statAmountHtml(value, unit = "원") {
   return `${Number(value).toLocaleString()}<small class="stat-unit">${unit}</small>`;
 }
 
+// 홈 탭 기간 통계(오늘/이번달) 토글(#redesign) - stats.today/stats.this_month는 이미 한 번의
+// /admin/stats/summary 응답에 같이 오므로, 토글은 재조회 없이 캐시해둔 stats만 다시 그린다.
+let _lastDashboardStats = null;
+let homeStatsPeriod = "today";
+
+function selectHomeStatsPeriod(period) {
+  homeStatsPeriod = period;
+  renderHomePeriodStats();
+}
+
+function renderHomePeriodStats() {
+  document.getElementById("home-period-today-btn")?.classList.toggle("is-on", homeStatsPeriod === "today");
+  document.getElementById("home-period-month-btn")?.classList.toggle("is-on", homeStatsPeriod === "this_month");
+  if (!_lastDashboardStats) return;
+  const period = _lastDashboardStats[homeStatsPeriod];
+  document.getElementById("stat-period-deposit").innerHTML = statAmountHtml(period.deposit_amount);
+  document.getElementById("stat-period-payment").innerHTML = statAmountHtml(period.payment_amount);
+}
+
 function renderDashboard(stats) {
+  _lastDashboardStats = stats;
   document.getElementById("stat-total-balance").innerHTML = statAmountHtml(stats.total_balance);
   document.getElementById("stat-users-with-balance").innerHTML = statAmountHtml(stats.users_with_balance, "명");
-  document.getElementById("stat-today-deposit").innerHTML = statAmountHtml(stats.today.deposit_amount);
-  document.getElementById("stat-today-payment").innerHTML = statAmountHtml(stats.today.payment_amount);
-  document.getElementById("stat-month-deposit").innerHTML = statAmountHtml(stats.this_month.deposit_amount);
-  document.getElementById("stat-month-payment").innerHTML = statAmountHtml(stats.this_month.payment_amount);
-  document.getElementById("stat-pending-deposit").innerText = `${stats.pending_deposit_count}건`;
-  document.getElementById("stat-error-deposit").innerText = `${stats.error_deposit_count}건`;
+  renderHomePeriodStats();
 
-  document.getElementById("attention-pending-deposit").classList.toggle("has-items", stats.pending_deposit_count > 0);
-  document.getElementById("attention-error-deposit").classList.toggle("has-items", stats.error_deposit_count > 0);
+  // 처리 대기 배너 - 0건이면 조용히 숨긴다(#redesign). 대기/오류가 섞여 있으면 둘 다
+  // 소계로 보여줘서 배너 하나만 봐도 어느 쪽이 몇 건인지 알 수 있게 한다.
+  const pendingCount = stats.pending_deposit_count;
+  const errorCount = stats.error_deposit_count;
+  const totalCount = pendingCount + errorCount;
+  const banner = document.getElementById("pending-action-banner");
+  if (banner) {
+    banner.style.display = totalCount > 0 ? "flex" : "none";
+    if (totalCount > 0) {
+      document.getElementById("pending-action-title").innerText = `처리 대기 ${totalCount}건`;
+      const subParts = [];
+      if (pendingCount > 0) subParts.push(`대기 ${pendingCount}건`);
+      if (errorCount > 0) subParts.push(`오류 ${errorCount}건`);
+      document.getElementById("pending-action-sub").innerText = subParts.join(" · ");
+    }
+  }
 
-  const badgeCount = stats.pending_deposit_count + stats.error_deposit_count;
+  const badgeCount = totalCount;
   const badge = document.getElementById("inbox-tab-badge");
   if (badge) {
     badge.style.display = badgeCount > 0 ? "flex" : "none";
@@ -1522,8 +1566,18 @@ function buildDepositEvents() {
       status: meta.text,
       statusClass: meta.cls,
       isCredited: t.status === "CREDITED" || t.status === "CREDITED_MANUAL",
+      needsAction: t.status === "PENDING" || t.status === "ERROR",
     };
   }).sort((a, b) => new Date(b.time) - new Date(a.time));
+}
+
+// 심각도 우선(#redesign) - "전체" 필터에서는 처리 대기/오류가 먼저 정렬돼야 처리된 건들
+// 사이에 섞여 아래로 밀려나지 않는다. PENDING/ERROR만 보는 필터에서는 어차피 전부
+// needsAction이라 순서가 그대로다 - 이 함수는 항상 안전하게 호출해도 된다.
+function sortEventsBySeverity(events) {
+  const needsAction = events.filter(e => e.needsAction);
+  const resolved = events.filter(e => !e.needsAction);
+  return [...needsAction, ...resolved];
 }
 
 function renderActivityLine(ev) {
@@ -1542,7 +1596,11 @@ function renderActivityLine(ev) {
 
 function renderActivityCard(ev) {
   const div = document.createElement("div");
-  div.className = "glass-container activity-row";
+  // 심각도를 형태로(#redesign) - 대기/오류는 왼쪽 색 스트립으로 눈에 띄게, 처리된
+  // 건(완료/기타)은 살짝 흐리고 촘촘하게 묶어서 시선이 위쪽(처리 대기)에 먼저 가게 한다.
+  const severityClass = !ev.needsAction ? "is-resolved"
+    : ev.statusClass === "status-rejected" ? "is-error" : "is-pending";
+  div.className = `glass-container activity-row ${severityClass}`;
   div.style.cursor = "pointer";
   div.onclick = () => openDepositDetailModal(ev.id);
   div.innerHTML = renderActivityLine(ev);
@@ -1553,7 +1611,9 @@ function renderInboxActivityFeed() {
   const feed = document.getElementById("inbox-activity-feed");
   if (!feed) return;
 
-  activityFeedMergedCache = buildDepositEvents();
+  // "전체" 필터에서는 처리 대기/오류를 먼저 보여준다 - PENDING/ERROR 단일 필터는 이미
+  // 전부 needsAction이라 순서가 그대로 유지된다.
+  activityFeedMergedCache = sortEventsBySeverity(buildDepositEvents());
 
   feed.innerHTML = "";
   if (activityFeedMergedCache.length === 0) {
@@ -1561,7 +1621,19 @@ function renderInboxActivityFeed() {
     return;
   }
 
-  activityFeedMergedCache.slice(0, activityFeedLimit).forEach(ev => feed.appendChild(renderActivityCard(ev)));
+  const page = activityFeedMergedCache.slice(0, activityFeedLimit);
+  let dividedShown = false;
+  page.forEach((ev, i) => {
+    // 대기/오류 묶음에서 처리됨 묶음으로 넘어가는 첫 지점에 한 번만 구분선을 꽂는다.
+    if (!dividedShown && !ev.needsAction && i > 0 && page[i - 1].needsAction) {
+      const divider = document.createElement("div");
+      divider.className = "activity-resolved-divider";
+      divider.textContent = "처리됨";
+      feed.appendChild(divider);
+      dividedShown = true;
+    }
+    feed.appendChild(renderActivityCard(ev));
+  });
 }
 
 // 스크롤이 하단 80px 이내로 들어오면 다음 페이지를 이어서 그린다 (드래그/휠 스크롤 모두 대응).
@@ -2688,7 +2760,6 @@ async function submitUserInfoEdit(btn) {
 
 let kiosks = [];
 let selectedKioskId = null;
-let kioskSelectorOpen = false;
 let kioskSalesPeriod = "today";
 let kioskSalesPeriodOpen = false;
 
@@ -2708,16 +2779,26 @@ async function loadKiosks() {
   }
 }
 
+// 메뉴별 매출 = 막대 리스트(#redesign) - 표는 숫자 세 개를 나란히 읽어야 해서 "뭐가 제일
+// 잘 팔리는지"가 한눈에 안 들어왔다. 막대 길이를 이 기간 안 최고 매출 대비 비율로 그려서
+// 순위가 바로 보이게 한다 - 매출액 기준으로 이미 내림차순 정렬해 1위가 맨 위에 오게 한다.
 function renderKioskSalesRows(rows) {
   if (!rows || rows.length === 0) {
-    return `<tr><td colspan="3" style="text-align:center; color: var(--text-muted);">판매 내역이 없습니다.</td></tr>`;
+    return `<p style="text-align:center; color: var(--text-muted); padding: 1rem 0; margin: 0;">판매 내역이 없습니다.</p>`;
   }
-  return rows.map(r => `
-    <tr>
-      <td>${escapeHtml(r.product_name)}</td>
-      <td>${r.quantity.toLocaleString()}개</td>
-      <td style="color: var(--accent-emerald); font-weight: bold;">${r.amount.toLocaleString()}원</td>
-    </tr>
+  const sorted = [...rows].sort((a, b) => b.amount - a.amount);
+  const max = Math.max(...sorted.map(r => r.amount), 1);
+  return sorted.map(r => `
+    <div class="kiosk-sales-bar-row">
+      <div class="kiosk-sales-bar-top">
+        <span class="kiosk-sales-bar-name">${escapeHtml(r.product_name)}</span>
+        <span class="kiosk-sales-bar-amount">${r.amount.toLocaleString()}원</span>
+      </div>
+      <div class="kiosk-sales-bar-track">
+        <div class="kiosk-sales-bar-fill" style="width: ${Math.max(3, Math.round(r.amount / max * 100))}%"></div>
+      </div>
+      <div class="kiosk-sales-bar-qty">${r.quantity.toLocaleString()}개 판매</div>
+    </div>
   `).join('');
 }
 
@@ -2735,8 +2816,8 @@ function selectKioskSalesPeriod(period) {
   kioskSalesPeriodOpen = false;
   renderKioskSalesPeriodSelector();
   const k = kiosks.find(x => x.id === selectedKioskId);
-  const tbody = document.querySelector(".kiosk-sales-table tbody");
-  if (k && tbody) tbody.innerHTML = renderKioskSalesRows(k.sales[period]);
+  const box = document.getElementById("kiosk-sales-bar-list");
+  if (k && box) box.innerHTML = renderKioskSalesRows(k.sales[period]);
 }
 
 // 화면 아래쪽에서 열면 목록이 하단 탭바에 가려질 수 있어, 펼친 뒤 실제 위치를 재보고
@@ -2769,15 +2850,9 @@ function renderKioskSalesPeriodSelector() {
   fitDropdownVertically(list);
 }
 
-// ---------- 상단 선택기: "키오스크를 선택하세요" 옆 화살표를 누르면 목록이 펼쳐진다 ----------
-function toggleKioskSelector() {
-  kioskSelectorOpen = !kioskSelectorOpen;
-  renderKioskSelector();
-}
-
+// ---------- 상단 선택기: 대수가 늘어나도 그대로 늘어나는 상시 노출 가로 스크롤 목록(#redesign) ----------
 function selectKiosk(id) {
   selectedKioskId = id;
-  kioskSelectorOpen = false;
   kioskSalesPeriod = "today";
   kioskSalesPeriodOpen = false;
   renderKioskSelector();
@@ -2785,32 +2860,44 @@ function selectKiosk(id) {
 }
 
 function renderKioskSelector() {
-  const label = document.getElementById("kiosk-selector-label");
-  const arrow = document.getElementById("kiosk-selector-arrow");
-  const list = document.getElementById("kiosk-selector-list");
-  if (!label || !list) return;
+  const strip = document.getElementById("kiosk-select-strip");
+  if (!strip) return;
 
-  const selected = kiosks.find(k => k.id === selectedKioskId);
-  label.innerText = selected ? (selected.device_name || "이름 없는 단말기") : "등록된 키오스크가 없습니다";
-  if (arrow) arrow.style.transform = kioskSelectorOpen ? "rotate(180deg)" : "rotate(0deg)";
-
-  list.style.display = kioskSelectorOpen ? "flex" : "none";
-  if (!kioskSelectorOpen) return;
-
-  // 목록에는 이름만 보여준다 - UUID와 삭제 버튼은 상세 정보 쪽으로 옮겼다.
-  list.innerHTML = kiosks.length === 0
+  // 목록에는 이름 + 온라인 상태 점만 보여준다 - UUID와 삭제 버튼은 상세 정보 쪽에 있다.
+  strip.innerHTML = kiosks.length === 0
     ? `<div class="kiosk-selector-empty">단말기에서 접속하면 자동으로 등록됩니다.</div>`
     : kiosks.map(k => `
-      <button type="button" class="kiosk-selector-item-main ${k.id === selectedKioskId ? 'active' : ''}" onclick="selectKiosk(${k.id})">
-        <span class="kiosk-selector-item-name">${escapeHtml(k.device_name || '이름 없는 단말기')}</span>
+      <button type="button" class="kiosk-select-chip ${k.id === selectedKioskId ? 'active' : ''}" onclick="selectKiosk(${k.id})">
+        <span class="kiosk-online-dot ${k.is_online ? 'is-online' : ''}"></span>
+        <span class="kiosk-select-chip-name">${escapeHtml(k.device_name || '이름 없는 단말기')}</span>
       </button>
     `).join('');
-  fitDropdownVertically(list);
 }
 
 function renderKioskList() {
   renderKioskSelector();
   renderKioskDetail();
+}
+
+// UUID 복사 칩(#redesign) - user.js의 copyAccountNumber와 같은 패턴: 클립보드에 쓰고
+// 아이콘을 잠깐 체크 표시로 바꿔 피드백을 준다.
+async function copyKioskUuid(btn, uuid) {
+  try {
+    await navigator.clipboard.writeText(uuid);
+  } catch (err) {
+    console.error("copyKioskUuid error:", err);
+    return;
+  }
+  const iconEl = btn.querySelector(".kiosk-detail-uuid-copy-icon");
+  if (!iconEl) return;
+  const original = iconEl.innerHTML;
+  iconEl.innerHTML = icon("check");
+  iconEl.style.color = "var(--accent-emerald)";
+  clearTimeout(btn._copyResetTimer);
+  btn._copyResetTimer = setTimeout(() => {
+    iconEl.innerHTML = original;
+    iconEl.style.color = "";
+  }, 1200);
 }
 
 function renderKioskDetail() {
@@ -2834,11 +2921,21 @@ function renderKioskDetail() {
           </button>
         </div>
       </div>
-      <input type="text" class="form-control kiosk-name-input" value="${escapeHtml(k.device_name || '')}" style="margin-bottom: 0.8rem;"
+      <input type="text" class="form-control kiosk-name-input" value="${escapeHtml(k.device_name || '')}" style="margin-bottom: 0.6rem;"
         onblur="autoSaveKiosk(${k.id})" onkeyup="if(event.key==='Enter') this.blur();">
 
+      <!-- 온라인 여부는 실시간(ws_manager 연결 유무), 오프라인일 때는 마지막으로 연결됐던
+           시각을 대신 보여준다(#redesign) - admin_list_kiosks가 매 새로고침마다 계산해서 내려줌. -->
+      <div class="kiosk-online-status" style="margin-bottom: 0.8rem;">
+        <span class="kiosk-online-dot ${k.is_online ? 'is-online' : ''}"></span>
+        ${k.is_online ? '온라인' : (k.last_seen_at ? `오프라인 · 마지막 접속 ${formatDateTimeKST(k.last_seen_at)}` : '오프라인 · 접속 기록 없음')}
+      </div>
+
       <label class="form-label">키오스크 ID</label>
-      <div class="kiosk-detail-uuid" style="margin-bottom: 1rem;">${escapeHtml(k.device_uuid)}</div>
+      <button type="button" class="kiosk-detail-uuid" style="margin-bottom: 1rem;" onclick="copyKioskUuid(this, '${k.device_uuid}')" title="눌러서 복사">
+        <span class="kiosk-detail-uuid-text">${escapeHtml(k.device_uuid)}</span>
+        <span class="kiosk-detail-uuid-copy-icon" data-icon="copy"></span>
+      </button>
 
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.2rem;">
         <label class="form-label" style="margin-bottom: 0;">메뉴</label>
@@ -2875,12 +2972,7 @@ function renderKioskDetail() {
         </button>
         <div id="kiosk-sales-period-list" class="kiosk-sales-period-list"></div>
       </div>
-      <div style="overflow-x: auto;">
-        <table class="table-custom kiosk-sales-table">
-          <thead><tr><th>메뉴</th><th>판매 수량</th><th>매출</th></tr></thead>
-          <tbody>${renderKioskSalesRows(k.sales[kioskSalesPeriod])}</tbody>
-        </table>
-      </div>
+      <div id="kiosk-sales-bar-list">${renderKioskSalesRows(k.sales[kioskSalesPeriod])}</div>
     </div>
 
     <div class="glass-container" style="padding: 1.5rem;">

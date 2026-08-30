@@ -222,6 +222,11 @@ def init_db():
         _run_migration_step(db, "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS notify_deposit_credited BOOLEAN NOT NULL DEFAULT TRUE;", "push_subscriptions.notify_deposit_credited")
         _run_migration_step(db, "ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS notify_payment BOOLEAN NOT NULL DEFAULT TRUE;", "push_subscriptions.notify_payment")
 
+        # 관리자 키오스크 관리 화면 "온라인 상태 / 마지막 접속"(#redesign) - 실시간 온라인
+        # 여부는 DB가 아니라 ws_manager의 인메모리 WS 연결로 판단하고(admin_list_kiosks 참고),
+        # 이 컬럼은 오프라인일 때 보여줄 "마지막으로 연결됐던 시각"만 담는다.
+        _run_migration_step(db, "ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;", "kiosk_devices.last_seen_at")
+
         try:
             _backfill_balance_snapshots(db)
         except Exception as e:

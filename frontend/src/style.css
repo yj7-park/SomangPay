@@ -532,6 +532,29 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   padding: 0 3px;
 }
 
+/* 실시간 WS 연결 상태 점(#redesign) - admin-tab-badge와 같은 모서리 배지 위치를 재사용.
+   기본값(클래스 없음)은 회색(끊김/아직 연결 전)이라 페이지 로드 첫 프레임에도 어색하지
+   않다 - ws-client.js의 onStatusChange가 연결되는 즉시 ws-status-open을 붙인다. */
+.ws-status-dot {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim, var(--text-muted));
+  border: 2px solid var(--bg-card);
+}
+.ws-status-dot.ws-status-open {
+  background: var(--accent-emerald);
+}
+.ws-status-dot.ws-status-connecting {
+  background: var(--accent-amber);
+}
+.ws-status-dot.ws-status-closed {
+  background: var(--accent-danger);
+}
+
 .admin-main {
   flex: 1;
   padding: clamp(0.75rem, 2vw, 1.5rem);
@@ -919,46 +942,40 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   text-align: right;
 }
 
-.attention-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.8rem;
-  margin-bottom: 1.5rem;
-}
-
-.attention-tile {
-  padding: 0.9rem 1.1rem;
+/* 대시보드 "처리 대기" 배너(#redesign) - 대기/오류 타일 2개를 나란히 늘 띄우던 대신,
+   하나로 합쳐서 0건이면 완전히 숨긴다(display:none, admin.js의 renderDashboard). 있을 때만
+   보이므로 굳이 색을 옅게/진하게 나눌 필요가 없어 늘 경고색(amber) 톤 하나로 고정. */
+.pending-action-banner {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.2rem;
   cursor: pointer;
-}
-.attention-tile .attention-icon {
-  font-size: 1.5rem;
-}
-.attention-tile > div {
-  flex: 1 1 auto;
-  text-align: right;
-}
-.attention-tile .stat-label {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-.attention-tile .stat-value {
-  font-size: 1.4rem;
-  font-weight: 800;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.attention-tile.has-items {
   border-color: var(--accent-amber);
   background: rgba(245, 158, 11, 0.08);
 }
-.attention-tile.has-items .stat-value {
+.pending-action-icon {
+  font-size: 1.5rem;
   color: var(--accent-amber);
+  flex-shrink: 0;
 }
-.attention-tile:not(.has-items) .stat-value {
+.pending-action-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pending-action-title {
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--text-main);
+}
+.pending-action-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+.pending-action-chevron {
+  flex-shrink: 0;
   color: var(--text-muted);
 }
 
@@ -1070,15 +1087,17 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .activity-feed {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.45rem;
   margin-bottom: 1rem;
 }
 
+/* 충전함 행 밀도 상향(#redesign) - 처리 대기가 몰릴 때 스크롤 없이 더 많이 보이도록
+   기존 0.9rem 위아래 여백을 줄였다. */
 .activity-row {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  padding: 0.9rem 1.1rem;
+  padding: 0.7rem 1.1rem;
 }
 .activity-row .activity-icon {
   font-size: 1.3rem;
@@ -1116,6 +1135,31 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   align-items: flex-end;
   gap: 0.35rem;
   flex-shrink: 0;
+}
+
+/* 심각도 우선(#redesign) - 대기/오류는 왼쪽 색 스트립으로 시선을 끌고, 처리된(완료/기타)
+   행은 더 흐리고 촘촘하게 묶어 "이미 끝난 일"임을 형태로도 보여준다(색·글자로만
+   구분하던 문제 개선). border-left 두께만큼 좌우 padding을 줄여 다른 행과 텍스트
+   시작 위치를 맞춘다. */
+.activity-row.is-pending {
+  border-left: 3px solid var(--accent-amber);
+  padding-left: calc(1.1rem - 3px);
+}
+.activity-row.is-error {
+  border-left: 3px solid var(--accent-danger);
+  padding-left: calc(1.1rem - 3px);
+}
+.activity-row.is-resolved {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  opacity: 0.68;
+}
+.activity-resolved-divider {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  margin: 0.2rem 0.2rem -0.1rem;
 }
 .activity-status {
   display: inline-block;
@@ -2101,6 +2145,13 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   text-align: left;
 }
 .kiosk-detail-uuid-text {
+  /* 전역 button 리셋(위 "Global Mobile Touch & Button Protection")이 button 태그 자체에
+     white-space:nowrap/word-break:keep-all을 !important로 강제한다 - 자식인 이 span은
+     상속으로 그 값을 그대로 물려받으므로, 여기서 직접 다시 선언해 override해야 UUID가
+     좁은 화면에서 줄바꿈된다(부모의 !important는 부모 자신에게만 적용되고, 자식이 값을
+     직접 선언하면 상속보다 그 선언이 우선한다). */
+  white-space: normal;
+  word-break: break-all;
   overflow-wrap: anywhere;
   min-width: 0;
 }

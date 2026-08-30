@@ -8,17 +8,25 @@ function createRealtimeClient({
   shouldReconnect,    // () => boolean - 끊겼을 때 재연결을 시도해도 되는 상태인지 (로그아웃/미인증이면 false)
   onMessage,          // (data: object) => void - JSON.parse된 메시지 전체를 그대로 전달 (type/scopes 판별은 호출부 책임)
   onResume,           // (선택) () => void - 화면이 다시 보일 때(visibilitychange/pageshow/online) 놓쳤을 갱신을 잡기 위한 강제 재조회
+  onStatusChange,     // (선택) (status: "connecting"|"open"|"closed") => void - 화면에 실시간 연결 상태 점을 보여주고 싶을 때만 넘긴다(admin.js 참고). 안 넘기면 아무 일도 안 하므로 user.js/kiosk.js는 그대로 영향 없음.
   reconnectDelayMs = 3000,
 }) {
   let socket = null;
   let reconnectTimer = null;
+
+  function setStatus(status) {
+    if (onStatusChange) onStatusChange(status);
+  }
 
   function connect() {
     if (socket && socket.readyState <= 1) return; // 이미 연결(중)이면 중복 연결 안 함
     const url = buildUrl();
     if (!url) return; // 아직 연결 준비가 안 됐으면 이번 시도는 건너뜀
 
+    setStatus("connecting");
     socket = new WebSocket(url);
+
+    socket.onopen = () => setStatus("open");
 
     socket.onmessage = (event) => {
       let data;
@@ -28,6 +36,7 @@ function createRealtimeClient({
 
     socket.onclose = () => {
       socket = null;
+      setStatus("closed");
       if (!shouldReconnect()) return;
       clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(connect, reconnectDelayMs);

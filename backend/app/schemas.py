@@ -133,6 +133,11 @@ class AdminKioskResponse(BaseModel):
     default_product_id: Optional[int] = None
     default_quantity: Optional[int] = 1
     updated_at: UTCDatetime
+    # 실시간 온라인 여부(ws_manager 인메모리 연결)와, 오프라인일 때 보여줄 "마지막 접속"
+    # 시각(#redesign, 관리자 키오스크 화면) - is_online은 DB 컬럼이 아니라 admin_list_kiosks가
+    # 응답 조립 시점에 계산해서 채운다.
+    is_online: bool = False
+    last_seen_at: Optional[UTCDatetime] = None
     sales: KioskSalesSummary
 
 # 키오스크별 결제 이력(영구 보존, 기간 제한 없이 커서 페이지네이션으로 지연 로드) - 키오스크

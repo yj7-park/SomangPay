@@ -12,7 +12,7 @@
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1100">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1400">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1100">
   <script src="jsQR.min.js"></script>
   <script>
@@ -51,8 +51,11 @@
   <div class="admin-shell">
     <!-- 트위터 스타일 탭 내비게이션: 데스크톱은 왼쪽 사이드바, 모바일은 하단 아이콘 탭바 -->
     <nav class="admin-tabbar">
-      <button class="admin-tab-btn active" data-view="home" onclick="switchAdminView('home')">
-        <span class="tab-icon" data-icon="home"></span><span>홈</span>
+      <!-- 실시간 연결 상태 점(#redesign) - 예전 상단 고정 바가 있었을 때 보여주던 정보를
+           탭바(유일하게 전 화면 공용인 요소)의 홈 아이콘 모서리로 옮겼다. 초록=연결됨,
+           주황=재연결 중, 회색=끊김(admin.js의 updateAdminWsStatusDot). -->
+      <button class="admin-tab-btn active" data-view="home" onclick="switchAdminView('home')" title="실시간 연결 상태">
+        <span class="tab-icon"><span data-icon="home"></span><span id="admin-ws-status-dot" class="ws-status-dot"></span></span><span>홈</span>
       </button>
       <button class="admin-tab-btn" data-view="search" onclick="switchAdminView('search')">
         <span class="tab-icon" data-icon="users"></span><span>회원 관리</span>
@@ -84,39 +87,34 @@
           </div>
         </div>
 
-        <div class="stat-grid">
-          <div class="glass-container stat-tile">
-            <div class="stat-label">오늘 충전액</div>
-            <div class="stat-value" id="stat-today-deposit">0원</div>
+        <!-- 처리 대기 배너(#redesign) - 대기/오류 타일 2개를 하나로 합쳤다. 0건이면
+             admin.js가 display:none으로 완전히 숨긴다 - 처리할 게 없으면 조용해야 한다. -->
+        <div class="glass-container pending-action-banner" id="pending-action-banner" style="display: none;" onclick="switchAdminView('inbox')">
+          <span class="pending-action-icon" data-icon="alert"></span>
+          <div class="pending-action-text">
+            <div class="pending-action-title" id="pending-action-title">처리 대기 0건</div>
+            <div class="pending-action-sub" id="pending-action-sub"></div>
           </div>
-          <div class="glass-container stat-tile">
-            <div class="stat-label">오늘 결제액</div>
-            <div class="stat-value" id="stat-today-payment">0원</div>
-          </div>
-          <div class="glass-container stat-tile">
-            <div class="stat-label">이번달 충전액</div>
-            <div class="stat-value" id="stat-month-deposit">0원</div>
-          </div>
-          <div class="glass-container stat-tile">
-            <div class="stat-label">이번달 결제액</div>
-            <div class="stat-value" id="stat-month-payment">0원</div>
-          </div>
+          <span class="pending-action-chevron" data-icon="chevron-down" style="transform: rotate(-90deg);"></span>
         </div>
 
-        <div class="attention-row">
-          <div class="glass-container attention-tile" id="attention-pending-deposit" onclick="switchAdminView('inbox', 'PENDING')">
-            <span class="attention-icon" data-icon="bank"></span>
-            <div>
-              <div class="stat-label">대기 중인 계좌 입금</div>
-              <div class="stat-value" id="stat-pending-deposit">0건</div>
-            </div>
+        <!-- 4타일(오늘/이번달 × 충전/결제)이 한 화면에 다 있으니 정작 지금 뭘 보고 있는지
+             헷갈렸다 - 기간 토글 + 2타일로(#redesign, admin.js의 selectHomeStatsPeriod 참고). -->
+        <div class="admin-page-title-row" style="margin-bottom: 0.6rem;">
+          <span style="font-size: 0.85rem; color: var(--text-muted);">기간 통계</span>
+          <div class="seg-control" style="margin-left: auto;">
+            <button id="home-period-today-btn" type="button" onclick="selectHomeStatsPeriod('today')">오늘</button>
+            <button id="home-period-month-btn" type="button" onclick="selectHomeStatsPeriod('this_month')">이번달</button>
           </div>
-          <div class="glass-container attention-tile" id="attention-error-deposit" onclick="switchAdminView('inbox', 'ERROR')">
-            <span class="attention-icon" data-icon="receipt"></span>
-            <div>
-              <div class="stat-label">매칭 오류 계좌 입금</div>
-              <div class="stat-value" id="stat-error-deposit">0건</div>
-            </div>
+        </div>
+        <div class="stat-grid">
+          <div class="glass-container stat-tile">
+            <div class="stat-label">충전액</div>
+            <div class="stat-value" id="stat-period-deposit">0원</div>
+          </div>
+          <div class="glass-container stat-tile">
+            <div class="stat-label">결제액</div>
+            <div class="stat-value" id="stat-period-payment">0원</div>
           </div>
         </div>
       </div>
@@ -165,8 +163,12 @@
       <div id="admin-view-settings" class="admin-view">
         <h1 class="admin-page-title">설정</h1>
 
-        <!-- 앱 버전 · 다운로드 · 화면 전환 (자주 찾는 정보라 최상단 배치) -->
-        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+        <!-- 그룹드 설정 리스트(#redesign) - 예전엔 카드 하나에 앱버전/다운로드/테마/푸시가
+             구분선만으로 이어 붙어 있어 어디부터 어디까지가 한 묶음인지 한눈에 안 들어왔다.
+             iOS 설정 앱처럼 각 그룹 위에 작은 캡션을 두고 카드를 분리했다 - 그룹 안의
+             id/onclick은 전부 그대로라 admin.js는 손댈 게 없다. -->
+        <div class="settings-group-label">앱</div>
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
             <h3 style="font-size: 1.05rem; margin: 0;">앱 버전</h3>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -189,8 +191,11 @@
               </a>
             </div>
           </div>
+        </div>
 
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
+        <div class="settings-group-label">화면</div>
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 0.8rem; color: var(--text-muted);">화면 테마</span>
             <div class="seg-control" style="margin-left: auto;">
               <button id="a-theme-system-btn" type="button" onclick="setAdminTheme('system')">시스템</button>
@@ -198,29 +203,33 @@
               <button id="a-theme-dark-btn" type="button" onclick="setAdminTheme('dark')">다크</button>
             </div>
           </div>
+        </div>
 
-          <!-- 관리자가 대시보드를 안 보고 있을 때도 알아야 할 이벤트를 항목별로 켜고 끌 수 있게
-               한다(#push-admin) - 정작 본인이 방금 한 조작(직권충전 등)까지 알림 오면 시끄러워지므로,
-               "관리자가 직접 하지 않은 채 일어난 일" 3가지만 대상으로 좁혔다(app/services/push.py 참고). -->
-          <div id="a-push-section" style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 0.8rem; color: var(--text-muted);">푸시 알림</span>
-              <button id="a-push-toggle-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem; margin-left: auto;" onclick="toggleAdminPushNotifications()">🔕 꺼짐</button>
-            </div>
-            <div id="a-push-categories" style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.7rem; opacity: 0.5;">
-              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-main); cursor: pointer;">
-                <input type="checkbox" id="a-push-cat-deposit_error" checked onchange="updateAdminPushCategories()"> 미매칭 입금 발생 (확인 필요)
-              </label>
-              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-main); cursor: pointer;">
-                <input type="checkbox" id="a-push-cat-deposit_credited" checked onchange="updateAdminPushCategories()"> 회원 셀프 충전 완료
-              </label>
-              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-main); cursor: pointer;">
-                <input type="checkbox" id="a-push-cat-payment" checked onchange="updateAdminPushCategories()"> 키오스크 결제 발생
-              </label>
-            </div>
+        <!-- 웹 브라우저(설치 안 된 컨텍스트)에서는 카드 자체를 통째로 숨기므로(아래 id 참고,
+             refreshAdminPushButtonUI) 캡션도 같이 숨겨야 라벨만 덩그러니 남지 않는다. -->
+        <div class="settings-group-label" id="a-push-group-label">알림</div>
+        <!-- 관리자가 대시보드를 안 보고 있을 때도 알아야 할 이벤트를 항목별로 켜고 끌 수 있게
+             한다(#push-admin) - 정작 본인이 방금 한 조작(직권충전 등)까지 알림 오면 시끄러워지므로,
+             "관리자가 직접 하지 않은 채 일어난 일" 3가지만 대상으로 좁혔다(app/services/push.py 참고). -->
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;" id="a-push-section">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">푸시 알림</span>
+            <button id="a-push-toggle-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.7rem; font-size: 0.78rem; margin-left: auto;" onclick="toggleAdminPushNotifications()">🔕 꺼짐</button>
+          </div>
+          <div id="a-push-categories" style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.7rem; opacity: 0.5;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-main); cursor: pointer;">
+              <input type="checkbox" id="a-push-cat-deposit_error" checked onchange="updateAdminPushCategories()"> 미매칭 입금 발생 (확인 필요)
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-main); cursor: pointer;">
+              <input type="checkbox" id="a-push-cat-deposit_credited" checked onchange="updateAdminPushCategories()"> 회원 셀프 충전 완료
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-main); cursor: pointer;">
+              <input type="checkbox" id="a-push-cat-payment" checked onchange="updateAdminPushCategories()"> 키오스크 결제 발생
+            </label>
           </div>
         </div>
 
+        <div class="settings-group-label">고급</div>
         <div class="glass-container" style="padding: 1.5rem;">
           <h3 id="dev-mode-toggle-header" style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: pointer;" onclick="toggleDevModeSection()">
             <span style="display: flex; align-items: center; gap: 0.4rem;"><span data-icon="bell"></span>개발자 메뉴</span>
@@ -320,14 +329,12 @@
 
       <!-- ================= KIOSK (키오스크 관리) ================= -->
       <div id="admin-view-kiosk" class="admin-view">
-        <div class="admin-page-title-row kiosk-title-row">
-          <h1 class="admin-page-title">키오스크 관리</h1>
-          <button type="button" id="kiosk-selector-toggle" class="kiosk-selector-btn" onclick="toggleKioskSelector()">
-            <span id="kiosk-selector-label">키오스크를 선택하세요</span>
-            <span id="kiosk-selector-arrow" class="kiosk-selector-arrow-icon" data-icon="chevron-down"></span>
-          </button>
-          <div id="kiosk-selector-list" class="kiosk-selector-list"></div>
-        </div>
+        <h1 class="admin-page-title">키오스크 관리</h1>
+        <!-- 예전엔 버튼 하나 뒤에 키오스크 이름이 드롭다운으로 숨어 있어(#26) 몇 대인지,
+             지금 뭐가 켜져 있는지 한눈에 안 보였다. 대수가 늘어나도 그대로 늘어나는 상시
+             노출 가로 스크롤 목록으로 바꾸고(#redesign), 칩마다 온라인 상태 점을 같이
+             보여준다 - admin.js의 renderKioskSelector 참고. -->
+        <div class="kiosk-select-strip" id="kiosk-select-strip"></div>
 
         <div id="admin-kiosk-detail">
           <!-- Dynamic: 선택된 키오스크의 설정만 표시 -->
@@ -739,7 +746,7 @@
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_1000"></script>
-  <script src="src/ws-client.js?v=20260826_0001"></script>
-  <script src="src/admin.js?v=20260831_1100"></script>
+  <script src="src/ws-client.js?v=20260831_1400"></script>
+  <script src="src/admin.js?v=20260831_1400"></script>
 </body>
 </html>

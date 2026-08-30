@@ -1391,16 +1391,37 @@ async def ws_user(websocket: WebSocket, token: str = Query(...), db: Session = D
         manager.disconnect_user(user.id, websocket)
 
 @app.websocket("/ws/kiosk")
-async def ws_kiosk(websocket: WebSocket, device_uuid: str = Query(...)):
+async def ws_kiosk(websocket: WebSocket, device_uuid: str = Query(...), db: Session = Depends(get_db)):
     # 키오스크 메인 화면은 로그인이 없는 공개 화면이므로(GET /api/kiosk/device/{device_uuid}와
     # 동일한 신뢰 모델) 토큰 검증 없이 device_uuid로만 그룹을 식별한다.
     await manager.connect_kiosk(device_uuid, websocket)
+    # 관리자 키오스크 화면의 "온라인 상태/마지막 접속"(#redesign) - 온라인 여부는
+    # manager.kiosk_sockets(인메모리)로 바로 판단하지만, 오프라인일 때 보여줄 "n분 전"은
+    # DB에 남겨야 하니 연결/해제 시점마다 last_seen_at을 갱신한다. notify_admins(["stats"])는
+    # admin.js가 이미 "stats" 스코프에 loadKiosks()를 묶어놔서(#redesign) 따로 새 스코프를
+    # 안 만들어도 관리자 화면이 열려 있으면 온라인 점이 바로 갱신된다.
+    _touch_kiosk_last_seen(db, device_uuid)
+    await notify_admins(["stats"])
     try:
         await _ws_keepalive_loop(websocket)
     except Exception:
         manager.disconnect_kiosk(device_uuid, websocket)
+        _touch_kiosk_last_seen(db, device_uuid)
+        await notify_admins(["stats"])
 
 # ================= KIOSK DEVICE PERSISTENCE APIS =================
+
+def _touch_kiosk_last_seen(db: Session, device_uuid: str):
+    """ws_kiosk 연결/해제 시점마다 KioskDevice.last_seen_at을 갱신한다. WS 실패로 이 커밋
+    자체가 죽어도 소켓 정리(manager.disconnect_kiosk)는 이미 끝난 뒤라 온라인 판정에는
+    영향이 없다 - 실패해도 조용히 넘어간다(#redesign, 관리자 키오스크 화면 마지막 접속)."""
+    try:
+        db.query(models.KioskDevice).filter(models.KioskDevice.device_uuid == device_uuid).update(
+            {"last_seen_at": datetime.datetime.utcnow()}
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
 
 def _next_kiosk_name(db: Session) -> str:
     """이름을 정하지 않고 등록되는 단말기에 "키오스크 1", "키오스크 2"... 처럼 겹치지 않는
@@ -1616,6 +1637,8 @@ def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depen
             default_product_id=device.default_product_id,
             default_quantity=device.default_quantity,
             updated_at=device.updated_at,
+            is_online=bool(manager.kiosk_sockets.get(device.device_uuid)),
+            last_seen_at=device.last_seen_at,
             sales=schemas.KioskSalesSummary(
                 today=_kiosk_sales_for(db, device.id, period_starts["today"]),
                 this_week=_kiosk_sales_for(db, device.id, period_starts["this_week"]),
