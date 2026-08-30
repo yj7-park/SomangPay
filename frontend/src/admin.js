@@ -308,9 +308,10 @@ async function refreshAdminPushButtonUI() {
   }
   if (section) section.style.display = "";
 
-  // user.js의 refreshPushButtonUI()와 동일 - 진행 중인 갱신(해지→재구독) 도중에 읽으면
-  // 일시적으로 "꺼짐"으로 잘못 보이므로 끝날 때까지 기다린다.
-  if (_adminPushRefreshInFlight) await _adminPushRefreshInFlight;
+  // user.js의 refreshPushButtonUI()와 동일 - 화면을 열 때마다 먼저 자가복구를 한 번 시도한다.
+  // 구독이 이미 살아있으면 스로틀에 걸려 즉시 반환되어 비용이 없고, 새로고침/버전업 등으로
+  // 끊겨 있었다면 여기서 바로 복구된다.
+  await ensureAdminPushSubscriptionFresh();
 
   const btn = document.getElementById("a-push-toggle-btn");
   if (!btn) return;
@@ -424,8 +425,10 @@ async function _doEnsureAdminPushSubscriptionFresh() {
   const existingSub = await getCurrentAdminPushSubscription();
   if (localStorage.getItem(ADMIN_PUSH_ENABLED_KEY) !== "true" && !existingSub) return;
 
+  // user.js의 _doEnsurePushSubscriptionFresh()와 동일 - 스로틀은 이미 살아있는 구독을 너무
+  // 자주 갈아치우지 않기 위함이지, 구독이 아예 없는 상태를 6시간 동안 방치하라는 뜻이 아니다.
   const lastRefresh = Number(localStorage.getItem(ADMIN_PUSH_LAST_REFRESH_KEY) || 0);
-  if (Date.now() - lastRefresh < ADMIN_PUSH_REFRESH_INTERVAL_MS) return;
+  if (existingSub && Date.now() - lastRefresh < ADMIN_PUSH_REFRESH_INTERVAL_MS) return;
 
   try {
     const oldEndpoint = existingSub ? existingSub.endpoint : null;

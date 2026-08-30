@@ -306,10 +306,11 @@ async function refreshPushButtonUI() {
   }
   if (section) section.style.display = "flex";
 
-  // ensurePushSubscriptionFresh()가 지금 막 해지→재구독 중이면, 그 사이 순간에
-  // getSubscription()을 읽으면 일시적으로 null이 나와서 실제론 켜져있는데 "꺼짐"으로
-  // 잘못 보인다 - 진행 중인 갱신이 있으면 끝날 때까지 기다렸다가 읽는다.
-  if (_userPushRefreshInFlight) await _userPushRefreshInFlight;
+  // 화면을 열 때마다 먼저 자가복구를 한 번 시도한다 - 구독이 이미 살아있으면 스로틀에 걸려
+  // 즉시 반환되니 비용이 없고, 뭔가로 인해 끊겨 있었다면(새로고침/버전업 등) 여기서 바로
+  // 복구되어 "꺼짐"으로 보이는 채 방치되지 않는다. ensurePushSubscriptionFresh()가 이미
+  // 진행 중이던 갱신과도 중복 실행 없이 합쳐진다.
+  await ensurePushSubscriptionFresh();
 
   const btn = document.getElementById("u-push-toggle-btn");
   if (!btn) return;
@@ -431,8 +432,11 @@ async function _doEnsurePushSubscriptionFresh() {
   const existingSub = await getCurrentPushSubscription();
   if (localStorage.getItem(USER_PUSH_ENABLED_KEY) !== "true" && !existingSub) return;
 
+  // 스로틀은 "이미 살아있는 구독을 굳이 자주 갈아치우지 않기" 위한 것이지, 구독 자체가
+  // 통째로 없는 상태(브라우저가 조용히 만료시켰거나, 이전 재구독 도중 새로고침 등으로
+  // 끊긴 경우)까지 6시간 동안 방치하라는 뜻이 아니다 - existingSub가 없으면 즉시 재시도한다.
   const lastRefresh = Number(localStorage.getItem(USER_PUSH_LAST_REFRESH_KEY) || 0);
-  if (Date.now() - lastRefresh < USER_PUSH_REFRESH_INTERVAL_MS) return;
+  if (existingSub && Date.now() - lastRefresh < USER_PUSH_REFRESH_INTERVAL_MS) return;
 
   try {
     const oldEndpoint = existingSub ? existingSub.endpoint : null;
