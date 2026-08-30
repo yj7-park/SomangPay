@@ -1424,17 +1424,20 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
    확정은 별도 모달 대신 행 안에 버튼을 오버레이해서 처리(모달 사용성이 안 좋다는 요청). */
 .pending-deposit-card {
   background: var(--surface-1);
-  border: 1.5px solid rgba(245, 158, 11, 0.55);
+  border: 1px solid var(--border-glass);
+  /* 무한 펄스 글로우(2.6s infinite)는 경고/에러로 읽혀서 뺐다(#redesign) - 대신 정적
+     앰버 좌측 스트립 + 등장 시 1회 페이드로 "새로 생긴 대기 건"만 부드럽게 알린다. */
+  border-left: 3px solid var(--accent-amber);
   border-radius: var(--radius-lg);
   padding: 1.3rem 1.4rem;
   margin-bottom: 1.2rem;
   box-shadow: var(--shadow-subtle);
-  animation: pendingDepositGlow 2.6s ease-in-out infinite;
+  animation: pendingDepositIn 0.3s ease-out;
 }
 
-@keyframes pendingDepositGlow {
-  0%, 100% { box-shadow: var(--shadow-subtle), 0 0 0 rgba(245, 158, 11, 0); }
-  50% { box-shadow: var(--shadow-subtle), 0 0 22px rgba(245, 158, 11, 0.45); }
+@keyframes pendingDepositIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .pending-deposit-header {

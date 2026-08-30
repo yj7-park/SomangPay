@@ -646,7 +646,18 @@ body[data-theme="light"] .ig-login-logo {
   transition: border-color 0.15s ease;
 }
 .ig-input:focus {
-  border-color: var(--text-dim);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(103, 129, 192, 0.22);
+}
+/* 라이트 모드에서 입력칸 배경(--surface-1 = navy 3.5%)이 흰 카드와 거의 구분이 안 돼
+   대비를 올린다(#redesign) - 보더는 --border-glass가 이미 #dbdbdb라 그대로 둔다. */
+body[data-theme="light"] .ig-input {
+  background: #fafafa;
+}
+@media (prefers-color-scheme: light) {
+  body:not([data-theme="dark"]) .ig-input {
+    background: #fafafa;
+  }
 }
 .ig-field-label {
   position: absolute;
@@ -725,10 +736,12 @@ body[data-theme="light"] .ig-login-logo {
   line-height: 1.5;
   color: var(--text-muted);
 }
-/* "계정이 없으신가요?"는 텍스트 노드 그대로 두고, 안내 문구만 다음 줄 블록으로 */
+/* "계정이 없으신가요?"는 텍스트 노드 그대로 두고, 안내 문구만 다음 줄 블록으로.
+   예전엔 액센트색+600이라 링크처럼 보였는데 실제로는 안 눌리는 가짜 어포던스였다
+   (#redesign) - 그냥 강조 텍스트로 낮춘다. */
 .ig-login-footer span {
   display: block;
   margin-top: 0.15rem;
-  color: var(--accent-cyan);
-  font-weight: 600;
+  color: var(--text-main);
+  font-weight: 500;
 }
