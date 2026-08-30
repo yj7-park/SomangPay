@@ -9,10 +9,12 @@ android {
     defaultConfig {
         minSdk 24
         targetSdk 34
-        // CI가 -PversionCode=<run_number>로 매 릴리스마다 고유 번호를 주입한다.
-        // 로컬 수동 빌드에서는 프로퍼티가 없으니 1로 폴백.
+        // CI가 -PappVersionCode=<run_number>로 매 릴리스마다 고유 번호를 주입한다.
+        // 로컬 수동 빌드에서는 프로퍼티가 없으니 1/"1.0.0"으로 폴백.
+        // versionName은 frontend/version.json이 기록하는 "1.0.<run_number>"와 동일한
+        // 규칙이어야 앱 내 버전 표시(update-widget.js)가 서버가 아는 최신 버전과 같게 보인다.
         versionCode project.hasProperty('appVersionCode') ? (project.appVersionCode as Integer) : 1
-        versionName "1.0.0"
+        versionName project.hasProperty('appVersionCode') ? ("1.0." + project.appVersionCode) : "1.0.0"
     }
 
     // BuildConfig.TARGET_URL / KIOSK_LOCKDOWN_ENABLED 필드 생성을 위해 명시적으로 켬
