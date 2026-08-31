@@ -216,14 +216,14 @@ function userLogout() {
   document.getElementById("login-password").value = "";
 }
 
-// ============ 탭 전환(홈/이용내역/문의/마이프로필) - admin.js switchAdminView()와 같은 패턴 ============
+// ============ 탭 전환(홈/충전/QR결제/이용내역/마이프로필) - admin.js switchAdminView()와 같은 패턴 ============
 // 상단 고정 바 제목(#redesign) - USER는 뒤로가기가 필요한 드릴다운 화면이 없는 평면 탭
 // 5개뿐이라 ADMIN의 updateAdminHeader와 달리 제목만 갱신하면 된다.
 const USER_HEADER_TITLES = {
   home: "소망페이",
+  charge: "충전",
   history: "이용 내역",
   qr: "QR 결제",
-  inquiry: "문의",
   profile: "마이 프로필",
 };
 

@@ -12,7 +12,7 @@
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_2118">
+  <link rel="stylesheet" href="src/style.css?v=20260831_2201">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2118">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -95,16 +95,20 @@
   </header>
 
   <!-- 로그인 후 화면 - admin.html과 같은 탭 구조(.admin-shell/.admin-tabbar/.admin-view)를
-       재사용한다. 홈 / 이용 내역 / 문의 / 마이 프로필 4개 탭 + 가운데 QR 결제 액션 버튼. -->
+       재사용한다. 홈 / 충전 / 이용 내역 / 마이 프로필 4개 탭 + 가운데 QR 결제 액션 버튼. -->
   <div id="user-shell" class="admin-shell" style="display: none;">
     <nav class="admin-tabbar">
       <button class="admin-tab-btn active" data-view="home" onclick="switchUserView('home')">
         <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V20a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1V9.5"/></svg></span>
         <span>홈</span>
       </button>
-      <button class="admin-tab-btn" data-view="history" onclick="switchUserView('history')">
-        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span>
-        <span>이용내역</span>
+      <!-- #redesign - 원래 여기 있던 "문의"는 준비 중 안내만 있는 자리채움이었다. 실사용
+           빈도가 높은 "충전"으로 바꾸고, 이용내역과 자리를 맞바꿔 QR결제 바로 옆(홈 다음)
+           으로 당겼다 - 잔액 확인 다음으로 자주 하는 동작이라 이용내역(결과를 나중에
+           들여다보는 동작)보다 앞에 두는 게 맞다. -->
+      <button class="admin-tab-btn" data-view="charge" onclick="switchUserView('charge')">
+        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="m7 12 5 5 5-5"/><path d="M5 20h14"/></svg></span>
+        <span>충전</span>
       </button>
       <!-- 다른 탭과 동일한 탭 전환 버튼(#user-update) - 팝업 모달 대신 QR 전용 페이지로
            이동한다. 아이콘에만 .user-qr-fab로 강조 배지를 얹어 다른 탭과 구분한다. -->
@@ -112,9 +116,9 @@
         <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M19 17v4M17 19h4"/></svg></span>
         <span>QR결제</span>
       </button>
-      <button class="admin-tab-btn" data-view="inquiry" onclick="switchUserView('inquiry')">
-        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-4.7 7.6 8.5 8.5 0 0 1-7.6-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
-        <span>문의</span>
+      <button class="admin-tab-btn" data-view="history" onclick="switchUserView('history')">
+        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg></span>
+        <span>이용내역</span>
       </button>
       <button class="admin-tab-btn" data-view="profile" onclick="switchUserView('profile')">
         <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg></span>
@@ -147,9 +151,9 @@
             <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M19 17v4M17 19h4"/></svg>
             <span>QR 결제</span>
           </button>
-          <button type="button" onclick="document.getElementById('charge-guide-section').scrollIntoView({ behavior: 'smooth', block: 'center' })">
+          <button type="button" onclick="switchUserView('charge')">
             <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="m7 12 5 5 5-5"/><path d="M5 20h14"/></svg>
-            <span>충전 안내</span>
+            <span>충전</span>
           </button>
           <button type="button" onclick="switchUserView('history')">
             <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
@@ -167,24 +171,6 @@
             </div>
           </div>
           <div id="pending-deposit-list" class="pending-deposit-list"></div>
-        </div>
-
-        <!-- Bank Transfer Charge Guide -->
-        <div id="charge-guide-section" class="glass-container" style="padding: 1.5rem; display: none;">
-          <h4 style="color: var(--accent-amber); font-size: 1.05rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span style="display: inline-flex;"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M4 10h16v9H4z"/><path d="M4 19h16M8 13v4M12 13v4M16 13v4"/></svg></span>
-            계좌이체 충전 안내
-          </h4>
-          <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem;">
-            <div>입금 계좌:
-              <button id="charge-guide-account-copy-btn" onclick="copyAccountNumber(this)" title="눌러서 계좌번호 복사"
-                style="display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0.1rem 0.3rem; margin-left: 0.1rem; cursor: pointer; font: inherit; font-weight: 700; color: var(--text-main); border-radius: 6px; vertical-align: middle;">
-                <strong id="charge-guide-account">-</strong>
-                <span id="charge-guide-account-copy-icon" style="display: inline-flex; color: var(--text-muted);"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
-              </button>
-            </div>
-            <div style="margin-top: 0.4rem;">입금자명(<strong>반드시 이 이름 그대로</strong> 입금): <strong id="charge-guide-depositor-name" style="color: var(--accent-cyan);">-</strong></div>
-          </div>
         </div>
       </div>
 
@@ -219,12 +205,56 @@
         </div>
       </div>
 
-      <!-- ================= 문의 ================= -->
-      <div id="user-view-inquiry" class="admin-view">
-        <div class="glass-container" style="padding: 1.5rem; text-align: center;">
-          <div style="display: inline-flex; color: var(--accent-cyan); margin-bottom: 0.8rem;"><svg class="icon-line" viewBox="0 0 24 24" width="2.2em" height="2.2em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-4.7 7.6 8.5 8.5 0 0 1-7.6-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
-          <p style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 0.5rem;">앱 안에서 문의를 남기는 기능은 준비 중입니다.</p>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">잔액, 결제, 계정 관련 문의는 교회 사무실(관리자)로 연락해 주세요.</p>
+      <!-- ================= 충전 ================= -->
+      <!-- #redesign - 옛 "문의" 탭 자리. 계좌 정보(구 홈 화면 charge-guide-section, id는
+           그대로 유지 - loadChargeGuide()/copyAccountNumber()가 이 id로 채운다)를 전용
+           탭으로 옮기고, 그 아래 "충전은 이렇게 진행돼요" 3단계 안내를 새로 추가했다 -
+           계좌 정보만으로는 "이름이 다르면 안 붙는다"/"입금 후 홈에서 한 번 더 눌러야
+           확정된다"는, 실제로 문의가 들어오던 부분이 설명되지 않았다. -->
+      <div id="user-view-charge" class="admin-view">
+        <div id="charge-guide-section" class="glass-container" style="padding: 1.5rem; display: none; margin-bottom: 1.2rem;">
+          <h4 style="color: var(--accent-cyan); font-size: 1.05rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span style="display: inline-flex;"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M4 10h16v9H4z"/><path d="M4 19h16M8 13v4M12 13v4M16 13v4"/></svg></span>
+            계좌이체 충전 안내
+          </h4>
+          <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem;">
+            <div>입금 계좌:
+              <button id="charge-guide-account-copy-btn" onclick="copyAccountNumber(this)" title="눌러서 계좌번호 복사"
+                style="display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0.1rem 0.3rem; margin-left: 0.1rem; cursor: pointer; font: inherit; font-weight: 700; color: var(--text-main); border-radius: 6px; vertical-align: middle;">
+                <strong id="charge-guide-account">-</strong>
+                <span id="charge-guide-account-copy-icon" style="display: inline-flex; color: var(--text-muted);"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+              </button>
+            </div>
+            <div style="margin-top: 0.4rem;">입금자명(<strong>반드시 이 이름 그대로</strong> 입금): <strong id="charge-guide-depositor-name" style="color: var(--accent-cyan);">-</strong></div>
+          </div>
+        </div>
+
+        <div class="glass-container" style="padding: 1.5rem;">
+          <h4 style="font-size: 1.05rem; margin-bottom: 1rem;">충전은 이렇게 진행돼요</h4>
+          <div class="guide-steps">
+            <div class="guide-step">
+              <span class="guide-step-num">1</span>
+              <div class="guide-step-body">
+                <div class="guide-step-title">위 계좌로 입금</div>
+                <div class="guide-step-desc">반드시 등록된 본인 이름 그대로 입금해 주세요. 이름이 다르면 자동으로 확인되지 않아요.</div>
+              </div>
+            </div>
+            <div class="guide-step">
+              <span class="guide-step-num">2</span>
+              <div class="guide-step-body">
+                <div class="guide-step-title">입금 자동 확인</div>
+                <div class="guide-step-desc">입금자명이 일치하면 자동으로 확인되어 홈 화면에 "충전 대기" 카드로 표시돼요.</div>
+              </div>
+            </div>
+            <div class="guide-step">
+              <span class="guide-step-num">3</span>
+              <div class="guide-step-body">
+                <div class="guide-step-title">홈에서 확정하면 충전 완료</div>
+                <div class="guide-step-desc">홈 화면 "충전 대기" 카드를 눌러 금액을 확인하고 확정하면 바로 잔액에 반영돼요.</div>
+              </div>
+            </div>
+          </div>
+          <p style="margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--border-glass); font-size: 0.82rem; color: var(--text-muted);">입금했는데 확인이 안 되거나 이름을 다르게 입금하신 경우, 교회 사무실(관리자)로 연락해 주세요.</p>
         </div>
       </div>
 
@@ -340,6 +370,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_1700"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/user.js?v=20260831_1700"></script>
+  <script src="src/user.js?v=20260831_2201"></script>
 </body>
 </html>
