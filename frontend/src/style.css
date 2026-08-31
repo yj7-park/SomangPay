@@ -245,7 +245,7 @@ body {
   grid-column: 2;
   text-align: center;
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: 700; /* #redesign - 900/800 남발 규율, 타이틀은 700까지만 */
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
@@ -376,6 +376,10 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   max-width: 100%;
   min-height: 42px;
   text-decoration: none;
+}
+
+button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
+  opacity: 0.45;
 }
 
 .btn-primary {
@@ -623,27 +627,16 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   display: block;
 }
 
-/* 탭별 본문 제목 - 최상단 타이틀바를 없앤 뒤로 각 탭의 본문(admin-main) 맨 위에 직접 넣는다.
-   home/search/inbox는 :not() 셀렉터로 이 요소도 이미 flex-shrink:0 처리되어(위 fixed-height
-   뷰 규칙 참고) 스크롤 영역 계산에 자동으로 반영된다 - 별도 대응 불필요. */
-.admin-page-title {
-  font-size: 1.3rem;
-  font-weight: 800;
-  color: var(--text-main);
-  margin: 0.1rem 0 1rem;
-}
-
-/* 사용자 관리 탭처럼 제목 옆에 글씨만 있는 액션 버튼(+)이 필요한 경우 - 예전 하단 우측
-   FAB(＋ 새 회원 등록) 버튼을 대신한다. */
+/* 탭 본문 안 제목 행 - 제목 자체(.admin-page-title, <h1>)는 상단 고정 바로 옮겨가면서
+   지워졌다(#redesign, style.css의 .app-header 참고) - 이 클래스는 이제 "기간 통계"처럼
+   라벨+컨트롤 한 줄을 정렬하는 용도로만 남았다. 사용자 관리 탭처럼 라벨 옆에 액션
+   버튼(+)이 필요한 경우도 마찬가지 - 예전 하단 우측 FAB(＋ 새 회원 등록)를 대신한다. */
 .admin-page-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
   margin-bottom: 1rem;
-}
-.admin-page-title-row .admin-page-title {
-  margin: 0.1rem 0 0;
 }
 .admin-page-title-actions {
   display: flex;
@@ -910,9 +903,9 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   align-items: center;
   justify-content: center;
   padding: 0.3em;
-  /* 위쪽 잔액 카드(.user-card-widget)와 같은 그라디언트로 통일 - "같은 카드에서 온
-     버튼"처럼 보이도록. */
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+  /* 위쪽 잔액 카드(.user-card-widget)와 같은 배경으로 통일 - "같은 카드에서 온 버튼"처럼
+     보이도록(#redesign - 카드가 그라디언트→플랫 남색으로 바뀌어 여기도 맞춤). */
+  background: var(--brand-navy);
   color: #fff;
   border-radius: var(--radius-md);
 }
@@ -1540,18 +1533,40 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   border: 1px solid rgba(59, 130, 246, 0.4);
 }
 
-/* user.html 로그인 후 잔액 표시 카드 (회원 PWA 메인 화면) */
+/* user.html 로그인 후 잔액 표시 카드 (회원 PWA 메인 화면, #redesign) - 예전엔 135°
+   남색→블루 2톤 대각선 그라디언트였는데, 리뷰에서 "올드하고 라이트에서 탁하다"는
+   지적을 받았다. 플랫 남색(로고에서 가장 어두운 톤, 라이트/다크 둘 다 대비 좋음) +
+   로고 마크를 우상단에 크고 옅게 얹은 "월렛 카드" 느낌으로 - 카카오페이/토스 카드
+   패턴 참고. z-index:0으로 새 스태킹 컨텍스트를 만들어 워터마크(z-index:-1)가 카드
+   밖으로 새지 않고 이름/잔액 텍스트 뒤에만 깔리게 한다. */
 .user-card-widget {
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--brand-navy);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   margin-bottom: 1.2rem;
   box-shadow: var(--shadow-subtle);
   color: #fff;
 }
+.user-card-widget::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -20%;
+  right: -14%;
+  width: 62%;
+  aspect-ratio: 1;
+  background-image: url('/icons/logo-mark-user.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.16;
+  pointer-events: none;
+}
 
-/* badge-general/badge-senior의 기본 색(파랑/앰버 계열 텍스트)은 이 카드의 남색~블루
-   그라디언트 배경 위에서는 거의 안 보인다(#14) - 이 카드 위에서만 흰 반투명 필로 덮어써
+/* badge-general/badge-senior의 기본 색(파랑/앰버 계열 텍스트)은 이 카드의 남색
+   배경 위에서는 거의 안 보인다(#14) - 이 카드 위에서만 흰 반투명 필로 덮어써
    항상 대비를 확보한다. */
 .user-card-widget .badge-tag {
   background: rgba(255, 255, 255, 0.22);
@@ -1561,8 +1576,17 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 
 .user-balance-big {
   font-size: 2.4rem;
-  font-weight: 900;
+  /* #redesign - 남발되던 900(Black)을 700(Bold)으로. 리뷰의 폰트 웨이트 규율("이름·잔액·
+     타이틀 전부 800~900 남발 → 강조는 700까지만") 적용. */
+  font-weight: 700;
   margin-top: 0.2rem;
+}
+/* "원" 단위는 숫자보다 가늘게 - 숫자 자체가 더 도드라지게(#redesign, user.js의
+   renderUserBalance 참고). */
+.user-balance-unit {
+  font-size: 0.65em;
+  font-weight: 500;
+  margin-left: 0.1em;
 }
 
 /* 잔액 카드 아래 퀵액션 3개(#redesign) - QR 결제 / 충전 안내 / 이용 내역. */

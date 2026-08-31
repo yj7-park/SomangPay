@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1600">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1200">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1701">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1301">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -130,7 +130,7 @@
         <!-- User Balance Card -->
         <div id="user-card-box" class="user-card-widget">
           <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
-            <h2 id="display-user-name" style="font-size: 1.6rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</h2>
+            <h2 id="display-user-name" style="font-size: 1.6rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</h2>
             <span id="display-user-badge" class="badge-tag badge-general" style="flex-shrink: 0;">-</span>
           </div>
 
@@ -229,20 +229,43 @@
       </div>
 
       <!-- ================= 마이 프로필 ================= -->
+      <!-- #redesign - 예전엔 설정이 카드 하나에 자유배치라 화면 맨 위에 정체성이 없고
+           (이름조차 없음), 어디부터 어디까지가 한 묶음인지도 안 보였다. ADMIN 설정 탭과
+           같은 그룹드 리스트 패턴(.settings-group-label + 카드별 그룹: 계정/화면/알림/앱)
+           으로, 맨 위엔 이름+유형 배지 헤더를 한 줄 둔다(이니셜 아바타는 안 쓴다 - 한국어
+           이름에 의미 없이 공간만 차지, feedback_no_initial_avatars_korean 참고). -->
       <div id="user-view-profile" class="admin-view">
-        <div class="glass-container" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 0.8rem;">
-          <div>
-            <label class="form-label">연락처 (로그인 ID)</label>
-            <input type="text" id="display-user-phone" disabled style="width: 100%; padding: 0.6rem; border-radius: 8px; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-muted);">
-            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">연락처를 변경하시려면 교회 사무실(관리자)에 문의해 주세요.</p>
+        <div class="detail-header-id" style="margin-bottom: 1.2rem;">
+          <h2 id="profile-display-name" style="font-size: 1.5rem;">-</h2>
+          <div class="detail-header-tags">
+            <span id="profile-display-badge" class="badge-tag badge-general">-</span>
           </div>
-          <div>
-            <label class="form-label">비밀번호 변경 (변경할 경우만 입력)</label>
-            <input type="password" id="edit-user-password" placeholder="새 비밀번호 입력" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-glass); color: var(--text-main);">
-          </div>
-          <button class="btn-action btn-primary" style="padding: 0.75rem;" onclick="changePassword()">비밀번호 변경</button>
+        </div>
 
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+        <div class="settings-group-label">계정</div>
+        <div class="glass-container" style="padding: 1.2rem;">
+          <!-- 비활성 <input> 대신 읽기전용 행(#redesign) - 어차피 못 바꾸는 값을 입력칸처럼
+               보여줘 헷갈리게 하지 않는다. -->
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="min-width: 0;">
+              <div style="font-size: 0.78rem; color: var(--text-muted);">연락처 (로그인 ID)</div>
+              <div id="display-user-phone" style="font-size: 0.95rem; color: var(--text-main); margin-top: 0.15rem;">-</div>
+            </div>
+            <span style="margin-left: auto; flex-shrink: 0; font-size: 0.75rem; color: var(--text-muted); background: var(--surface-2); border-radius: 999px; padding: 0.2rem 0.6rem;">변경 문의</span>
+          </div>
+
+          <div style="margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border-glass);">
+            <label class="form-label">비밀번호 변경 (변경할 경우만 입력)</label>
+            <input type="password" id="edit-user-password" placeholder="새 비밀번호 입력" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-glass); color: var(--text-main);" oninput="document.getElementById('change-password-btn').disabled = !this.value;">
+            <!-- 화면에서 제일 시끄러운 풀폭 solid 버튼이었다(#redesign) - ghost/tinted로
+                 강등하고, 입력값이 있을 때만 활성화(실수로 빈 값 제출 방지 겸 시각적 강조). -->
+            <button id="change-password-btn" class="btn-action" disabled style="margin-top: 0.6rem; background: var(--accent-cyan-glow); color: var(--accent-cyan); border: 1px solid var(--accent-cyan);" onclick="changePassword()">비밀번호 변경</button>
+          </div>
+        </div>
+
+        <div class="settings-group-label">화면</div>
+        <div class="glass-container" style="padding: 1.2rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 0.92rem; color: var(--text-main);">화면 테마</span>
             <div class="seg-control" style="margin-left: auto;">
               <button id="u-theme-system-btn" type="button" onclick="setUserTheme('system')">시스템</button>
@@ -250,25 +273,37 @@
               <button id="u-theme-dark-btn" type="button" onclick="setUserTheme('dark')">다크</button>
             </div>
           </div>
-
-          <!-- 입금 확인/충전 완료 시 앱을 꺼둔 상태에서도 알림을 받을지 여부(Web Push, #push).
-               지원 안 하는 브라우저에서는 버튼이 비활성화된 채 "미지원 브라우저"로 표시된다. -->
-          <div id="u-push-section" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
-            <span style="font-size: 0.92rem; color: var(--text-main);">푸시 알림</span>
-            <span id="u-push-status" class="switch-status"></span>
-            <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
-          </div>
-
-          <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 내용을 아무것도
-               그리지 않아 라벨만 덩그러니 남는다(#17) - 그 경우 update-widget.js가 이 행
-               자체를 감춘다. -->
-          <div id="user-app-version-row" style="display: flex; align-items: center; gap: 0.5rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
-            <span style="font-size: 0.92rem; color: var(--text-main);">앱 버전</span>
-            <span id="update-widget-root" style="display: inline-flex; align-items: center; margin-left: auto;"></span>
-          </div>
-
-          <button onclick="userLogout()" style="margin-top: 0.6rem; padding: 0.6rem 0.8rem; font-size: 0.85rem; background: rgba(239,68,68,0.15); border: 1px solid var(--icon-danger); color: var(--icon-danger); border-radius: 8px; cursor: pointer;">로그아웃</button>
         </div>
+
+        <!-- 입금 확인/충전 완료 시 앱을 꺼둔 상태에서도 알림을 받을지 여부(Web Push, #push).
+             설치된 앱 컨텍스트가 아니면(user.js의 isInstalledUserAppContext) 그룹 전체
+             (캡션+카드)를 감춘다 - #redesign 전엔 이 id가 카드 안쪽 행 하나에만 걸려 있어서
+             캡션만 카드 없이 덩그러니 남았다(refreshPushButtonUI도 같이 손봄, "block"으로). -->
+        <div id="u-push-section">
+          <div class="settings-group-label">알림</div>
+          <div class="glass-container" style="padding: 1.2rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 0.92rem; color: var(--text-main);">푸시 알림</span>
+              <span id="u-push-status" class="switch-status"></span>
+              <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 내용을 아무것도
+             그리지 않아 라벨만 덩그러니 남는다(#17) - 그 경우 update-widget.js가 이 그룹
+             전체(캡션+카드)를 감춘다. -->
+        <div id="user-app-version-row">
+          <div class="settings-group-label">앱</div>
+          <div class="glass-container" style="padding: 1.2rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-size: 0.92rem; color: var(--text-main);">앱 버전</span>
+              <span id="update-widget-root" style="display: inline-flex; align-items: center; margin-left: auto;"></span>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="userLogout()" style="margin-top: 0.4rem; width: 100%; padding: 0.7rem 0.8rem; font-size: 0.85rem; background: rgba(239,68,68,0.15); border: 1px solid var(--icon-danger); color: var(--icon-danger); border-radius: 8px; cursor: pointer;">로그아웃</button>
       </div>
 
     </main>
@@ -302,6 +337,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_1200"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/user.js?v=20260831_1400"></script>
+  <script src="src/user.js?v=20260831_1501"></script>
 </body>
 </html>

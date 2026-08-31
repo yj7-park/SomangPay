@@ -10,6 +10,14 @@ function escapeHtml(str) {
   }[ch]));
 }
 
+// 홈 잔액 카드 숫자(#redesign) - "원" 단위를 숫자보다 가늘게(font-weight 낮춤) 둬서 숫자
+// 자체가 더 도드라지게 한다. onLoginSuccess/refreshMyInfo 둘 다 여기로 통일.
+function renderUserBalance(amount) {
+  const el = document.getElementById("display-user-balance");
+  if (!el) return;
+  el.innerHTML = `${amount.toLocaleString()}<span class="user-balance-unit">원</span>`;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const savedToken = localStorage.getItem("user_token");
   if (savedToken) {
@@ -241,8 +249,12 @@ function onLoginSuccess(user) {
   document.getElementById("display-user-name").innerText = user.name;
   document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
   document.getElementById("display-user-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
-  document.getElementById("display-user-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
-  document.getElementById("display-user-phone").value = user.phone || "-";
+  renderUserBalance(user.credit_balance);
+  // 마이 프로필 상단 이름+유형 배지 헤더(#redesign) - 홈 카드와 같은 정보, 별도 엘리먼트.
+  document.getElementById("profile-display-name").innerText = user.name;
+  document.getElementById("profile-display-badge").innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
+  document.getElementById("profile-display-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
+  document.getElementById("display-user-phone").innerText = user.phone || "-"; // #redesign - 비활성 input → 읽기전용 행
 
   loadChargeGuide();
   loadMyDeposits();
@@ -343,14 +355,15 @@ async function getCurrentPushSubscription() {
 }
 
 async function refreshPushButtonUI() {
-  // u-push-section은 원래 style="display: flex"인 행이라, 다시 보여줄 때 ""로 지우면
-  // display 자체가 인라인 스타일에서 빠지면서 flex 레이아웃도 같이 사라진다 - "flex"로 명시.
+  // #redesign - u-push-section이 이제 캡션+카드를 함께 감싸는 바깥 래퍼라(그룹 전체를
+  // 숨기기 위함, user.html 참고) 항상 block 레이아웃이면 된다 - 실제 가로 정렬(flex)은
+  // 안쪽 행에 별도 style로 고정돼 있어 이 wrapper의 display 값과 무관하다.
   const section = document.getElementById("u-push-section");
   if (!isInstalledUserAppContext()) {
     if (section) section.style.display = "none";
     return;
   }
-  if (section) section.style.display = "flex";
+  if (section) section.style.display = "block";
 
   // 화면을 열 때마다 먼저 자가복구를 한 번 시도한다 - 구독이 이미 살아있으면 스로틀에 걸려
   // 즉시 반환되니 비용이 없고, 뭔가로 인해 끊겨 있었다면(새로고침/버전업 등) 여기서 바로
@@ -576,7 +589,7 @@ async function refreshMyInfo() {
   const res = await authFetch(`${API_BASE}/users/me`);
   if (res.ok) {
     loggedInUser = await res.json();
-    document.getElementById("display-user-balance").innerText = `${loggedInUser.credit_balance.toLocaleString()}원`;
+    renderUserBalance(loggedInUser.credit_balance);
   }
 }
 
@@ -787,6 +800,7 @@ async function changePassword() {
 
     if (res.ok) {
       document.getElementById("edit-user-password").value = "";
+      document.getElementById("change-password-btn").disabled = true; // #redesign - 값 비워졌으니 버튼도 같이 비활성화
       await showAlertModal("🎉 비밀번호가 변경되었습니다!");
     } else {
       const err = await res.json().catch(() => ({}));

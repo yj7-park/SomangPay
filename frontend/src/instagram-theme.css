@@ -492,9 +492,13 @@ button:hover,
   border: 1px solid rgba(103, 129, 192, 0.45);
 }
 
-/* ---------------- User PWA 잔액 카드: 로고 톤의 남색 → 블루 단색 계통 그라디언트 ---------------- */
+/* ---------------- User PWA 잔액 카드 ----------------
+   #redesign - 예전엔 여기서 --brand-gradient(남색→블루 대각선)로 덮어써서 style.css의
+   플랫 남색이 무효화됐다(리뷰: "2톤 대각선 그라디언트가 올드하고 라이트에서 탁하다").
+   instagram-theme.css가 style.css보다 나중에 로드돼 그대로 두면 계속 이긴다 - 여기서도
+   플랫 배경으로 다시 맞춘다(style.css .user-card-widget 참고, 값은 --brand-navy로 통일). */
 .user-card-widget {
-  background: var(--brand-gradient);
+  background: var(--brand-navy);
 }
 
 /* ---------------- Tables ---------------- */
@@ -612,8 +616,10 @@ body[data-theme="light"] .ig-login-logo {
 .ig-login-wordmark {
   margin: 0;
   font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
+  /* #redesign - 폰트 웨이트 규율(리뷰: "이름·잔액·타이틀 전부 800~900 남발") 적용,
+     자간도 0으로(한글 워드마크에 굳이 letter-spacing을 줄 이유가 없었다). */
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-main);
 }
 
