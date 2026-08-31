@@ -2149,10 +2149,13 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 
 /* "선택된 메뉴" 아래 담긴 항목 목록(kiosk.js updateCheckoutSummary가 .cart-item으로 생성) -
    색 지정이 없어 상속에 맡겨져 있었는데 실제로는 잘 안 보인다는 피드백이 있어 위 "선택된
-   메뉴" 레이블과 동일한 색으로 명시. */
+   메뉴" 레이블과 동일한 색으로 명시. 글자 크기/들여쓰기(#redesign, 사용자 피드백)는
+   "선택된 메뉴" 레이블 아래 딸린 하위 항목이라는 위계가 보이도록 살짝 작고 안으로. */
 .cart-item {
   color: var(--text-muted);
   padding: 0.2rem 0;
+  font-size: 0.88rem;
+  padding-left: 0.5rem;
 }
 
 /* "카드를 대주세요" 결제 유도 패널(#redesign, kiosk.html의 kiosk-tap-card-panel) - 메뉴를
@@ -2160,7 +2163,9 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
    지적이었다. 장바구니가 비어있으면 눈에 덜 띄게 죽여두고(.is-active 없음), 담기는 순간
    kiosk.js updateCheckoutSummary가 .is-active를 얹어 강조한다. */
 .kiosk-tap-card-panel {
-  display: flex;
+  /* 사용자 요청으로 일단 숨김(#redesign) - 아래 flex 레이아웃/.is-active 강조 규칙은
+     되살릴 때 바로 쓸 수 있게 그대로 둔다. */
+  display: none;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
