@@ -299,7 +299,12 @@
             <input type="password" id="edit-user-password" placeholder="새 비밀번호 입력" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-glass); color: var(--text-main);" oninput="document.getElementById('change-password-btn').disabled = !this.value;">
             <!-- 화면에서 제일 시끄러운 풀폭 solid 버튼이었다(#redesign) - ghost/tinted로
                  강등하고, 입력값이 있을 때만 활성화(실수로 빈 값 제출 방지 겸 시각적 강조). -->
-            <button id="change-password-btn" class="btn-action" disabled style="margin-top: 0.6rem; background: var(--accent-cyan-glow); color: var(--accent-cyan); border: 1px solid var(--accent-cyan);" onclick="changePassword()">비밀번호 변경</button>
+            <!-- #redesign(사용자 피드백: "라이트 테마에서 너무 흐려") - 원래 ghost/tinted
+                 스타일이었는데, disabled 시 opacity 0.45가 곱해지면서 라이트에서 옅은
+                 tint(--accent-cyan-glow)가 거의 안 보이는 지경까지 흐려졌다. 다른 주 액션
+                 버튼(.btn-primary)과 같은 꽉 찬 색으로 - 채워진 배경은 0.45 곱해져도
+                 충분히 보인다. -->
+            <button id="change-password-btn" class="btn-action btn-primary" disabled style="margin-top: 0.6rem;" onclick="changePassword()">비밀번호 변경</button>
           </div>
         </div>
 
