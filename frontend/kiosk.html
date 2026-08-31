@@ -15,7 +15,7 @@
   <link rel="alternate icon" href="/favicon-kiosk.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-kiosk.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_2323">
+  <link rel="stylesheet" href="src/style.css?v=20260831_2341">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2258">
   <script src="jsQR.min.js"></script>
   <script>
@@ -233,12 +233,14 @@
        재사용 + 숫자 키패드 추가(kiosk.js initKioskRegisterPinKeypad). 입력칸은 letter-spacing
        버그 수정을 위해 .pin-code-input 공유 클래스로(placeholder까지 안 벌어지게, style.css). -->
   <div id="kiosk-register-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary); padding: 1.8rem;">
+    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary);">
       <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 0.5rem;">키오스크 등록이 필요합니다</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">이 단말기는 아직 등록되지 않았습니다.<br>관리자 PIN을 입력해 등록해 주세요.</p>
       <div class="form-group" style="margin-bottom: 0;">
-        <input type="password" inputmode="numeric" pattern="[0-9]*" id="kiosk-register-pin-input" class="form-control pin-code-input" placeholder="PIN 입력" style="min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') registerKioskDevice();">
+        <!-- inputmode="none"(#redesign, 사용자 피드백: "가상 키보드가 나와버리잖아") - 아래
+             전용 숫자 키패드로만 입력받는다. 물리 키보드 입력은 그대로 동작한다. -->
+        <input type="password" inputmode="none" pattern="[0-9]*" id="kiosk-register-pin-input" class="form-control pin-code-input" placeholder="PIN 입력" style="min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') registerKioskDevice();">
       </div>
       <div class="pin-keypad" id="kiosk-register-pin-keypad">
         <button type="button" class="pin-key" data-digit="1">1</button>
@@ -255,7 +257,7 @@
         <button type="button" class="pin-key pin-key-backspace" id="kiosk-register-pin-backspace" aria-label="한 글자 지우기" data-icon="backspace"></button>
       </div>
       <div id="kiosk-register-status" style="font-size: 0.8rem; color: var(--accent-rose); margin-top: 0.8rem; min-height: 1.2em;"></div>
-      <div style="display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1rem;">
+      <div class="pin-lock-actions" style="display: flex; gap: 0.8rem; justify-content: flex-end;">
         <button class="btn-action btn-primary" style="flex: 1; min-height: 44px;" onclick="registerKioskDevice()">등록하기</button>
       </div>
     </div>
@@ -263,12 +265,14 @@
 
   <!-- Kiosk PIN Auth Modal (#redesign - 위 등록 모달과 동일한 공용 잠금화면+키패드) -->
   <div id="kiosk-pin-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary); padding: 1.8rem;">
+    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary);">
       <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 0.5rem;">키오스크 관리자 인증</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">키오스크 설정을 변경하려면 PIN을 입력하세요.</p>
       <div class="form-group" style="margin-bottom: 0;">
-        <input type="password" inputmode="numeric" pattern="[0-9]*" id="kiosk-pin-input" class="form-control pin-code-input" placeholder="PIN 입력" style="min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
+        <!-- inputmode="none"(#redesign, 사용자 피드백: "가상 키보드가 나와버리잖아") - 아래
+             전용 숫자 키패드로만 입력받는다. 물리 키보드 입력은 그대로 동작한다. -->
+        <input type="password" inputmode="none" pattern="[0-9]*" id="kiosk-pin-input" class="form-control pin-code-input" placeholder="PIN 입력" style="min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
       </div>
       <div class="pin-keypad" id="kiosk-pin-keypad">
         <button type="button" class="pin-key" data-digit="1">1</button>
@@ -284,7 +288,7 @@
         <button type="button" class="pin-key" data-digit="0">0</button>
         <button type="button" class="pin-key pin-key-backspace" id="kiosk-pin-backspace" aria-label="한 글자 지우기" data-icon="backspace"></button>
       </div>
-      <div style="display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1.5rem;">
+      <div class="pin-lock-actions" style="display: flex; gap: 0.8rem; justify-content: flex-end;">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main); flex: 1; min-height: 44px;" onclick="closeKioskPinModal()">취소</button>
         <button class="btn-action btn-primary" style="flex: 1; min-height: 44px;" onclick="verifyKioskAdminPin()">인증하기</button>
       </div>

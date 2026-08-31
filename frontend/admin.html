@@ -12,7 +12,7 @@
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_2323">
+  <link rel="stylesheet" href="src/style.css?v=20260831_2341">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2258">
   <script src="jsQR.min.js"></script>
   <script>
@@ -746,7 +746,11 @@
       </div>
 
       <div class="form-group">
-        <input type="password" id="admin-pin-input" class="form-control pin-code-input" placeholder="PIN 번호 입력" maxlength="8" inputmode="numeric" autocomplete="off" onkeyup="if(event.key==='Enter') submitAdminPin();">
+        <!-- inputmode="none"(#redesign, 사용자 피드백: "가상 키보드가 나와버리잖아") - 아래
+             전용 숫자 키패드로만 입력받는다. 물리 키보드 입력/onkeyup Enter 제출은
+             inputmode와 무관하게 그대로 동작한다(포커스/값 자체는 막지 않음, 화면
+             키보드 팝업만 억제). -->
+        <input type="password" id="admin-pin-input" class="form-control pin-code-input" placeholder="PIN 번호 입력" maxlength="8" inputmode="none" autocomplete="off" onkeyup="if(event.key==='Enter') submitAdminPin();">
       </div>
 
       <!-- 숫자 키패드(#redesign) - 텍스트 필드 하나뿐이던 화면 대신 실제 잠금 화면처럼 탭으로
@@ -767,7 +771,7 @@
         <button type="button" class="pin-key pin-key-backspace" id="admin-pin-backspace" aria-label="한 글자 지우기"><span data-icon="backspace"></span></button>
       </div>
 
-      <button class="btn-action btn-primary" style="margin-top: 1rem;" onclick="submitAdminPin()">인증하기</button>
+      <button class="btn-action btn-primary pin-lock-actions" style="margin-top: 1rem;" onclick="submitAdminPin()">인증하기</button>
     </div>
   </div>
 
