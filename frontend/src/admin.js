@@ -2382,26 +2382,35 @@ function toggleDevModeSection() {
 }
 
 // ---------------- 알림 접근 권한 (BankNotificationListener용) ----------------
-// AndroidInterface가 없는 일반 브라우저(관리자 앱이 아닌 곳)에서는 아무것도 하지 않는다
-// (kiosk.js의 initWebNFC()와 동일한 판단 방식) - 이 권한은 관리자 앱에서만 의미가 있다.
+// AndroidInterface가 없는 일반 브라우저(관리자 앱이 아닌 곳)에서는 이 권한 자체가 의미
+// 없으므로(#settings-redesign, 리뷰 지적: "미지원인 경우에는 안 표기되게") 문구를 남기지
+// 않고 섹션 전체(캡션 포함)를 감춘다 - a-push-section이 isInstalledAdminAppContext()로
+// 그룹째 숨기는 것과 같은 패턴.
 function refreshNotificationAccessStatus() {
+  const section = document.getElementById("notif-access-section");
   const statusEl = document.getElementById("notif-access-status");
-  const btn = document.getElementById("notif-access-open-btn");
-  if (!statusEl) return;
+  const btn = document.getElementById("notif-access-toggle-btn");
+  const detailEl = document.getElementById("notif-access-detail");
+  if (!section) return;
 
   if (!window.AndroidInterface || typeof window.AndroidInterface.isNotificationAccessGranted !== "function") {
-    statusEl.textContent = "이 브라우저에서는 상태를 확인할 수 없습니다 (관리자 앱에서만 사용 가능).";
-    statusEl.style.color = "var(--text-muted)";
-    if (btn) btn.style.display = "none";
+    section.style.display = "none";
     return;
   }
+  section.style.display = "block";
 
   const granted = window.AndroidInterface.isNotificationAccessGranted();
-  statusEl.textContent = granted
-    ? "알림 접근 권한이 켜져 있습니다 - 문자/RCS/푸시 알림을 모두 감지합니다."
-    : "알림 접근 권한이 꺼져 있습니다 - SMS만 감지되고 RCS/푸시 알림은 놓칠 수 있습니다.";
-  statusEl.style.color = granted ? "var(--accent-emerald)" : "var(--accent-danger)";
-  if (btn) btn.style.display = granted ? "none" : "inline-flex";
+  if (statusEl) statusEl.innerText = "";
+  if (btn) {
+    btn.classList.toggle("is-on", granted);
+    btn.setAttribute("aria-checked", granted ? "true" : "false");
+  }
+  if (detailEl) {
+    detailEl.textContent = granted
+      ? "문자/RCS/푸시 알림을 모두 감지합니다."
+      : "SMS만 감지되고 RCS/푸시 알림은 놓칠 수 있습니다. 스위치를 탭해서 켜주세요.";
+    detailEl.style.color = granted ? "var(--text-muted)" : "var(--accent-danger)";
+  }
 }
 
 function openNotificationAccessSettingsFromWeb() {

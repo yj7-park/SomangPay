@@ -286,10 +286,20 @@
             <button class="btn-action" style="width: auto; padding: 0.5rem 1rem; background: var(--surface-1); color: var(--text-main);" onclick="resetSmsDetectSettings()">초기화</button>
           </div>
 
-          <div style="padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
-            <h4 style="font-size: 0.92rem; margin-bottom: 0.4rem; color: var(--text-muted);">알림 접근 권한 (RCS/푸시 알림 감지용)</h4>
-            <p id="notif-access-status" style="font-size: 0.82rem; margin-bottom: 0.6rem;">확인 중...</p>
-            <button id="notif-access-open-btn" class="btn-action" style="width: auto; padding: 0.4rem 0.9rem; font-size: 0.85rem; background: rgba(103,129,192,0.2); color: var(--accent-cyan); display: none;" onclick="openNotificationAccessSettingsFromWeb()">권한 설정 열기</button>
+          <!-- 위 "알림" 그룹 푸시 스위치와 같은 .settings-row + .switch-toggle 패턴으로 통일
+               (#settings-redesign). 이 권한은 앱이 직접 켤 수 없고 OS 설정 화면에서만
+               켜지므로, 스위치는 상태만 반영하고 탭하면 그 설정 화면을 연다(그대로
+               openNotificationAccessSettingsFromWeb) - 계속 눌러서 다시 확인/변경할 수
+               있게 켜져 있어도 비활성화하지 않는다. 관리자 앱이 아닌 곳(AndroidInterface
+               없음)에서는 미지원 문구 대신 섹션 자체를 감춘다(refreshNotificationAccessStatus,
+               기본값도 display:none이라 JS가 뜨기 전엔 아예 안 보인다). -->
+          <div id="notif-access-section" style="padding-top: 1.2rem; border-top: 1px solid var(--border-glass); display: none;">
+            <div class="settings-row">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">알림 접근 권한</span>
+              <span id="notif-access-status" class="switch-status"></span>
+              <button id="notif-access-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="알림 접근 권한" onclick="openNotificationAccessSettingsFromWeb()"><span class="switch-knob"></span></button>
+            </div>
+            <p id="notif-access-detail" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem;"></p>
           </div>
 
           <div style="margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--border-glass);">
@@ -770,6 +780,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_1700"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/admin.js?v=20260831_1900"></script>
+  <script src="src/admin.js?v=20260831_2000"></script>
 </body>
 </html>
