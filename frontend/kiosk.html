@@ -321,18 +321,8 @@
             <h4 style="color: var(--text-main); margin-bottom: 0;">단말기 명칭 · 기본 결제</h4>
             <span id="k-device-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
           </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; align-items: center; margin-bottom: 0.5rem;">
-            <div>
-              <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.2rem;">단말기 명칭</label>
-              <input type="text" id="k-device-name-input" class="form-control" placeholder="예: 식당 라면 코너 1호기" style="margin-bottom: 0;" onblur="saveKioskDeviceSettings()" onkeyup="if(event.key==='Enter') this.blur();">
-            </div>
-            <div>
-              <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.2rem;">기본 자동 결제 메뉴</label>
-              <select id="k-default-product-select" class="form-control" style="margin-bottom: 0;" onchange="saveKioskDeviceSettings()">
-                <option value="">-- 기본 결제 없음 (메뉴 선택 필수) --</option>
-              </select>
-            </div>
-          </div>
+          <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.2rem;">단말기 명칭</label>
+          <input type="text" id="k-device-name-input" class="form-control" placeholder="예: 식당 라면 코너 1호기" style="margin-bottom: 0.5rem;" onblur="saveKioskDeviceSettings()" onkeyup="if(event.key==='Enter') this.blur();">
           <!-- 장비 ID - 고객 화면 헤더에서는 빠지고 여기 설정에서만 보인다(운영자용, #redesign). -->
           <p id="kiosk-device-uuid-display" style="font-size: 0.76rem; color: var(--text-muted); margin: 0.4rem 0 0; font-family: monospace;">장비 ID: 로딩 중...</p>
         </div>
@@ -371,10 +361,19 @@
           </div>
         </div>
 
+        <!-- #redesign(사용자 요청: "admin처럼 kiosk 설정에도 메뉴 아래에 기본 결제메뉴를
+             넣자") - 기존엔 기본 자동 결제 메뉴 select가 위 "단말기" 그룹에 단말기 명칭과
+             나란히 있었는데, ADMIN 키오스크 상세(admin.js renderKioskDetail)는 메뉴 카드
+             선택 바로 아래에 둔다 - 메뉴를 먼저 고르고 나서야 "그중 기본값"을 정하는
+             순서가 자연스러워서 그 배치를 그대로 따른다. -->
         <div class="settings-group-label">노출 메뉴</div>
         <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">카드를 눌러 선택한 메뉴만 이 단말기의 고객 화면에 표시됩니다. 전부 해제하면(기본값) 전체 메뉴가 표시됩니다.</p>
           <div id="k-assigned-products-checklist" class="kiosk-menu-assign-grid"></div>
+          <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin: 0.8rem 0 0.2rem;">기본 자동 결제 메뉴</label>
+          <select id="k-default-product-select" class="form-control" style="margin-bottom: 0;" onchange="saveKioskDeviceSettings()">
+            <option value="">-- 기본 결제 없음 (메뉴 선택 필수) --</option>
+          </select>
         </div>
 
       </div>
