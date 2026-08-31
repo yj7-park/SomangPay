@@ -2193,6 +2193,8 @@ function renderDepositDetailModal() {
   const statusEl = document.getElementById("dd-status");
   statusEl.innerText = meta.text;
   statusEl.className = `activity-status ${meta.cls}`;
+  statusEl.style.marginTop = "0";
+  statusEl.style.marginLeft = "auto";
 
   const infoBox = document.getElementById("dd-resolution-info");
   const infoLines = [];
@@ -2210,38 +2212,95 @@ function renderDepositDetailModal() {
   const resolveSection = document.getElementById("dd-resolve-section");
   const resolvable = t.status === "PENDING" || t.status === "ERROR";
   resolveSection.style.display = resolvable ? "block" : "none";
+  // "기타로 처리"는 예외 경로 - 모달을 열 때마다 접힌 상태로 되돌린다.
+  document.getElementById("dd-other-section").style.display = "none";
   if (resolvable) {
     // "매칭 오류"의 존재 이유가 입금자명인데 후보 목록이 빈 채로 시작했다 - 입금자명(동명이인
     // 구분용 꼬리 숫자는 떼고)으로 검색을 미리 채워 유사 회원이 바로 뜨게 한다.
     document.getElementById("dd-user-search").value = (t.depositor_name || "").replace(/\s*\d+\s*$/, "").trim();
     document.getElementById("dd-resolve-memo").value = "";
     document.getElementById("dd-other-reason").value = "";
+    // 이미 매칭 회원(오류 재처리 등)이 있으면 그대로 두고, 없으면 가장 유력한 후보를
+    // 자동 선택해 둔다 - 관리자가 매번 "이 사람 맞나요?"에 답만 하고 바로 처리 버튼을
+    // 누를 수 있게(#redesign, s-deposit 리뷰: "정작 입금자명은 뻔히 있는데 후보 목록이
+    // 빈 채로 시작한다").
+    if (!_depositDetailSelectedUserId) {
+      const best = bestDepositCandidate();
+      if (best) _depositDetailSelectedUserId = best.id;
+    }
     renderDepositUserOptions();
   }
+}
+
+// 입금자명(꼬리 숫자 뗀 검색어)과 회원 이름의 일치도를 대략적으로 가늠한다 - 정확한
+// 문자열 유사도 알고리즘은 과하고, "완전 일치"와 "한쪽이 다른 쪽을 포함"만 구분해도
+// 자동 선택/힌트 표시엔 충분하다.
+function depositNameMatchQuality(name, query) {
+  if (!query) return null;
+  const n = (name || "").trim();
+  const q = query.trim();
+  if (!n) return null;
+  if (n === q) return "exact";
+  if (n.startsWith(q) || q.startsWith(n)) return "similar";
+  return null;
+}
+
+function bestDepositCandidate() {
+  const query = (document.getElementById("dd-user-search").value || "").trim();
+  let best = null, bestRank = 0;
+  for (const u of users) {
+    const quality = depositNameMatchQuality(u.name, query);
+    const rank = quality === "exact" ? 2 : quality === "similar" ? 1 : 0;
+    if (rank > bestRank) { bestRank = rank; best = u; }
+  }
+  return best;
 }
 
 function renderDepositUserOptions() {
   const box = document.getElementById("dd-user-options");
   if (!box) return;
-  const query = (document.getElementById("dd-user-search").value || "").trim().toLowerCase();
-  const matches = users.filter(u => !query || u.name.toLowerCase().includes(query) || (u.phone || "").includes(query)).slice(0, 20);
+  const query = (document.getElementById("dd-user-search").value || "").trim();
+  const queryLower = query.toLowerCase();
+  const matchQualityRank = { exact: 2, similar: 1 };
+  const matches = users
+    .filter(u => !queryLower || u.name.toLowerCase().includes(queryLower) || (u.phone || "").includes(queryLower))
+    .map(u => ({ u, quality: depositNameMatchQuality(u.name, query) }))
+    .sort((a, b) => (matchQualityRank[b.quality] || 0) - (matchQualityRank[a.quality] || 0))
+    // 후보를 소수로 좁혀 이 목록 자체는 스크롤 없이 한 화면에 들어오게 한다 - 모달
+    // 전체 스크롤(.modal-body)과 겹치는 이중 스크롤을 피한다(#redesign, s-deposit 리뷰).
+    .slice(0, 6);
 
   if (matches.length === 0) {
     box.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">일치하는 회원이 없습니다.</p>`;
     return;
   }
 
-  box.innerHTML = matches.map(u => {
+  box.innerHTML = matches.map(({ u, quality }) => {
     const selected = u.id === _depositDetailSelectedUserId;
+    const hint = quality === "exact" ? "이름 일치" : quality === "similar" ? "이름 유사" : "";
     return `
       <div onclick="selectDepositUser(${u.id})" style="display:flex; align-items:center; gap: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 8px; cursor:pointer; background: ${selected ? "rgba(16,185,129,0.15)" : "var(--surface-2)"}; border: 1px solid ${selected ? "var(--accent-emerald)" : "transparent"};">
-        <span style="flex: 1 1 auto; min-width: 0; font-weight: 600;">${escapeHtml(u.name || "")}</span>
-        <span style="flex: 0 0 auto; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(u.phone || "")}</span>
+        <span style="flex: 1 1 auto; min-width: 0;">
+          <span style="font-weight: 600;">${escapeHtml(u.name || "")}</span>${hint ? `<span style="font-size: 0.72rem; color: var(--text-muted);"> · ${hint}</span>` : ""}
+          <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 0.1rem;">${escapeHtml(u.phone || "")} · 잔액 ${u.credit_balance.toLocaleString()}원</div>
+        </span>
         <span style="flex: 0 0 auto; width: 1rem; text-align: right;">${selected ? `<span data-icon="check" style="color: var(--accent-emerald);"></span>` : ""}</span>
       </div>
     `;
   }).join("");
   hydrateIconPlaceholders(box);
+
+  const resolveBtn = document.getElementById("dd-resolve-btn");
+  const selectedUser = matches.find(m => m.u.id === _depositDetailSelectedUserId)?.u
+    || users.find(u => u.id === _depositDetailSelectedUserId);
+  resolveBtn.innerText = selectedUser ? `${selectedUser.name} 회원으로 충전 처리` : "선택한 회원으로 충전 처리(완료)";
+}
+
+// "기타로 처리"는 예외 경로라 기본은 접어 두고, 눌렀을 때만 사유 입력을 펼친다
+// (#redesign, s-deposit 리뷰: "스크롤 아래로 묻힘 → 하단 보조 링크로").
+function toggleDepositOtherSection() {
+  const section = document.getElementById("dd-other-section");
+  section.style.display = section.style.display === "none" ? "block" : "none";
 }
 
 function selectDepositUser(userId) {

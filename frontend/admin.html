@@ -420,39 +420,56 @@
     </main>
   </div>
 
-  <!-- Deposit Detail Modal (계좌 입금 상세 - 회원 지정 처리 / 기타 처리) -->
+  <!-- Deposit Detail Modal (계좌 입금 상세 - 회원 지정 처리 / 기타 처리)
+       #redesign(ADMIN 리디자인 아티팩트 s-deposit 반영):
+       - 입금자명/금액/시각/거래번호/상태 5행 나열 → 이름·금액 한 줄 + 시각·거래번호·상태
+         한 줄(뮤트)로 압축한 요약 카드 하나.
+       - 후보 목록 자체 스크롤(max-height:160px) 제거 - .modal-body 스크롤과 겹치는
+         이중 스크롤이었다. renderDepositUserOptions()가 개수를 좁혀 보통 스크롤이
+         필요 없게 한다.
+       - 후보 행에 전화번호 대신(과 함께) 잔액, 그리고 입금자명과의 일치도 힌트 표시.
+         가장 근접한 후보는 자동 선택 + 강조(카카오페이식 "이 사람 맞나요?" 패턴) -
+         admin.js의 renderDepositUserOptions/openDepositDetailModal 참고.
+       - "기타로 처리"를 원래 크기의 보조 섹션에서 하단 텍스트 링크로 격하, 클릭해야
+         사유 입력이 펼쳐진다(toggleDepositOtherSection). -->
   <div id="deposit-detail-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 460px;">
       <h2 style="font-size: 1.3rem; color: var(--accent-cyan); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="bank"></span> 계좌 입금 상세</h2>
 
       <div class="modal-body">
-        <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.88rem; margin-bottom: 1rem;">
-          <div style="display:flex; justify-content:space-between; margin-bottom: 0.3rem;"><span style="color: var(--text-muted);">입금자명</span><strong id="dd-depositor-name">-</strong></div>
-          <div style="display:flex; justify-content:space-between; margin-bottom: 0.3rem;"><span style="color: var(--text-muted);">금액</span><strong id="dd-amount" style="color: var(--accent-emerald);">-</strong></div>
-          <div style="display:flex; justify-content:space-between; margin-bottom: 0.3rem;"><span style="color: var(--text-muted);">입금 시각</span><span id="dd-transaction-at">-</span></div>
-          <div style="display:flex; justify-content:space-between;"><span style="color: var(--text-muted);">거래번호</span><span id="dd-txn-id" style="font-size: 0.78rem; color: var(--text-muted);">-</span></div>
+        <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; margin-bottom: 1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; gap: 0.6rem;">
+            <strong id="dd-depositor-name" style="font-size: 0.95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</strong>
+            <strong id="dd-amount" style="font-size: 1.05rem; flex-shrink: 0; font-variant-numeric: tabular-nums;">-</strong>
+          </div>
+          <div style="margin-top: 0.35rem; font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <span id="dd-transaction-at">-</span>
+            <span>·</span>
+            <span id="dd-txn-id">-</span>
+            <span id="dd-status" class="activity-status status-pending" style="margin-top: 0; margin-left: auto;">-</span>
+          </div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.6rem;">
-          <span style="font-size: 0.85rem; color: var(--text-muted);">상태</span>
-          <span id="dd-status" class="activity-status status-pending">-</span>
-        </div>
         <div id="dd-resolution-info" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem; display: none;"></div>
 
         <!-- 대기(PENDING)/오류(ERROR) 상태일 때만 노출 - 회원 지정 처리 / 기타 처리 -->
         <div id="dd-resolve-section" style="display: none; border-top: 1px solid var(--border-glass); padding-top: 1rem; margin-top: 0.4rem;">
           <div class="form-group">
-            <label class="form-label">회원을 지정해 충전 처리</label>
+            <label class="form-label">이 입금을 붙일 회원</label>
             <input type="text" id="dd-user-search" class="form-control" placeholder="이름 또는 연락처로 검색" oninput="renderDepositUserOptions()">
           </div>
-          <div id="dd-user-options" style="max-height: 160px; overflow-y: auto; margin-bottom: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem;"></div>
+          <div id="dd-user-options" style="margin-bottom: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem;"></div>
           <div class="form-group" style="margin-bottom: 0.6rem;">
             <label class="form-label">메모 (선택)</label>
             <input type="text" id="dd-resolve-memo" class="form-control" placeholder="예: 전화로 확인 후 대신 처리">
           </div>
-          <button class="btn-action btn-emerald" style="width: 100%; margin-bottom: 1rem;" onclick="submitDepositResolve(this)">선택한 회원으로 충전 처리(완료)</button>
+          <button id="dd-resolve-btn" class="btn-action btn-emerald" style="width: 100%;" onclick="submitDepositResolve(this)">선택한 회원으로 충전 처리(완료)</button>
 
-          <div style="border-top: 1px dashed var(--border-glass); padding-top: 0.8rem;">
+          <!-- 기본 접힘 - "기타로 처리"는 예외 경로라 눌러야만 사유 입력이 펼쳐진다. -->
+          <div style="text-align: center; margin-top: 0.9rem;">
+            <button type="button" id="dd-other-toggle" onclick="toggleDepositOtherSection()" style="background: none; border: none; padding: 0.2rem; font-size: 0.8rem; color: var(--text-muted); text-decoration: underline; cursor: pointer;">충전 대상이 아님 (기타로 처리)</button>
+          </div>
+          <div id="dd-other-section" style="display: none; border-top: 1px dashed var(--border-glass); padding-top: 0.8rem; margin-top: 0.8rem;">
             <div class="form-group" style="margin-bottom: 0.6rem;">
               <label class="form-label">충전 대상이 아님 - 사유</label>
               <textarea id="dd-other-reason" class="form-control" rows="2" placeholder="예: 테스트 입금, 타 용도 입금 등"></textarea>
@@ -782,6 +799,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_1700"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/admin.js?v=20260831_2000"></script>
+  <script src="src/admin.js?v=20260831_2104"></script>
 </body>
 </html>
