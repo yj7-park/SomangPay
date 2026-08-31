@@ -60,7 +60,10 @@ function formatDateTimeKST(value) {
 // 스타일(viewBox 24, stroke 1.7, round cap/join)로 맞췄다.
 const HISTORY_ICON_PATHS = {
   cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 1.95-1.57L23 6H6"/>',
-  in: '<path d="M12 5v13"/><path d="M6 13l6 6 6-6"/>',
+  // 계좌이체 자동충전(bank_charge) - USER 충전 탭 아이콘과 동일한 카드+플러스
+  // (사용자 피드백: "이용 내역도 충전 메뉴에서 쓴 아이콘으로") - 아래쪽 화살표는
+  // "받기/다운로드"로 읽혀 다른 곳(user.html 충전 탭)에서 이미 카드+플러스로 바꿨다.
+  in: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/><path d="M12 12.5v4M10 14.5h4"/>',
   out: '<path d="M12 19V6"/><path d="M6 12l6-6 6 6"/>',
   gift: '<path d="M20 12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
