@@ -2125,6 +2125,21 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   justify-content: flex-start !important;
 }
 
+/* 모바일(768px 미만) 세로 스택(#redesign, 사용자 피드백: "결제 금액 섹션이 뷰포트 하단에
+   위치하고, 위쪽은 메뉴 선택으로 채워지면 좋겠다") - 두 섹션 다 콘텐츠 높이만큼만
+   차지해서, 메뉴/결제 내역이 짧으면 .kiosk-body(flex:1, 뷰포트 남는 높이 전부)의 빈
+   공간이 결제 금액 카드 "아래"에 그냥 남아 있었다. 메뉴 선택 쪽에 flex:1을 줘서 남는
+   공간을 흡수하게 하면(넘치면 이 섹션 안에서만 스크롤), 결제 금액 카드는 자기 콘텐츠
+   높이만큼만 차지하며 자연히 뷰포트 하단에 붙는다. 태블릿 그리드 레이아웃
+   (min-width:768px, 아래 규칙)은 이미 각 섹션에 height:100%를 줘서 영향 없음. */
+@media screen and (max-width: 767.98px) {
+  .kiosk-menu-section {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 .checkout-cart-box {
   background: rgba(0, 0, 0, 0.25);
   border-radius: var(--radius-md);
