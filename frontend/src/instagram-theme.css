@@ -38,6 +38,12 @@
   --brand-navy: #1f1e59;
   --brand-blue: #6781c0;
   --brand-sky: #adc0e2;
+  /* USER 잔액 카드/QR FAB 배경(#redesign) 전용 - --brand-navy보다 살짝 어둡게. 로고 마크
+     SVG(logo-mark-user.svg)가 정확히 --brand-navy(#1f1e59) 색 사각형을 포함하고 있어서,
+     배경을 --brand-navy 그대로 쓰면 그 부분 워터마크가 배경과 완전히 같은 색이 되어
+     안 보였다(사용자 리포트로 발견) - 라이트/다크 공통, 여기 한 번만 선언해도 두
+     테마 스코프 모두 상속받는다(둘 다 --brand-navy 값 자체가 테마 불문 고정인 것과 동일 이유). */
+  --user-card-bg: #16153f;
 
   --accent-cyan: #6781c0;    /* 메인 액센트 (버튼/링크/포커스) - 로고 중간 톤 */
   --accent-cyan-glow: rgba(103, 129, 192, 0.18);
@@ -494,11 +500,12 @@ button:hover,
 
 /* ---------------- User PWA 잔액 카드 ----------------
    #redesign - 예전엔 여기서 --brand-gradient(남색→블루 대각선)로 덮어써서 style.css의
-   플랫 남색이 무효화됐다(리뷰: "2톤 대각선 그라디언트가 올드하고 라이트에서 탁하다").
+   플랫 배경이 무효화됐다(리뷰: "2톤 대각선 그라디언트가 올드하고 라이트에서 탁하다").
    instagram-theme.css가 style.css보다 나중에 로드돼 그대로 두면 계속 이긴다 - 여기서도
-   플랫 배경으로 다시 맞춘다(style.css .user-card-widget 참고, 값은 --brand-navy로 통일). */
+   플랫 배경으로 다시 맞춘다(style.css .user-card-widget 참고, --user-card-bg 정의는
+   위 :root 참고). */
 .user-card-widget {
-  background: var(--brand-navy);
+  background: var(--user-card-bg, #16153f);
 }
 
 /* ---------------- Tables ---------------- */
