@@ -12,7 +12,7 @@
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1400">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1600">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1200">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -85,6 +85,15 @@
     </div>
   </div>
 
+  <!-- 상단 고정 바(#redesign) - ADMIN과 동일한 컴포넌트(style.css의 .app-header). 로그인
+       전에는 안 보이다가 user.js의 onLoginSuccess가 표시한다. USER는 뒤로가기가 필요한
+       드릴다운 화면이 없어(평면 탭 5개) 뒤로가기 버튼은 항상 숨김 상태로 둔다. -->
+  <header class="app-header" id="user-header" style="display: none;">
+    <span class="app-header-back" aria-hidden="true"></span>
+    <h1 class="app-header-title" id="user-header-title">소망페이</h1>
+    <div class="app-header-actions"></div>
+  </header>
+
   <!-- 로그인 후 화면 - admin.html과 같은 탭 구조(.admin-shell/.admin-tabbar/.admin-view)를
        재사용한다. 홈 / 이용 내역 / 문의 / 마이 프로필 4개 탭 + 가운데 QR 결제 액션 버튼. -->
   <div id="user-shell" class="admin-shell" style="display: none;">
@@ -117,7 +126,6 @@
 
       <!-- ================= 홈 ================= -->
       <div id="user-view-home" class="admin-view active">
-        <h1 class="admin-page-title">소망페이</h1>
 
         <!-- User Balance Card -->
         <div id="user-card-box" class="user-card-widget">
@@ -182,17 +190,15 @@
 
       <!-- ================= 이용 내역 ================= -->
       <div id="user-view-history" class="admin-view">
-        <h1 class="admin-page-title">이용 내역</h1>
         <div class="glass-container" style="padding: 1.5rem;">
           <div id="my-deposits-list"></div>
         </div>
       </div>
 
       <!-- ================= QR 결제 ================= -->
-      <!-- 제목은 다른 탭과 같이 위에 두고, 카드 내용은 .user-qr-view-body가 남은 세로
-           공간 안에서 상하 가운데로 오도록 감싼다(#user-update). -->
+      <!-- 제목은 상단 고정 바로 옮겨갔다(#redesign) - 카드 내용은 .user-qr-view-body가
+           남은 세로 공간 안에서 상하 가운데로 오도록 감싼다(#user-update). -->
       <div id="user-view-qr" class="admin-view">
-        <h1 class="admin-page-title">QR 결제</h1>
         <div class="user-qr-view-body">
           <div class="glass-container" style="padding: 1.5rem; text-align: center;">
             <!-- 카드가 있을 때만: "내 결제 코드" + 이름을 QR 위에 올려 세로 중앙 정렬이 휑하지 않게 한다(#redesign) -->
@@ -215,7 +221,6 @@
 
       <!-- ================= 문의 ================= -->
       <div id="user-view-inquiry" class="admin-view">
-        <h1 class="admin-page-title">문의</h1>
         <div class="glass-container" style="padding: 1.5rem; text-align: center;">
           <div style="display: inline-flex; color: var(--accent-cyan); margin-bottom: 0.8rem;"><svg class="icon-line" viewBox="0 0 24 24" width="2.2em" height="2.2em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-4.7 7.6 8.5 8.5 0 0 1-7.6-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
           <p style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 0.5rem;">앱 안에서 문의를 남기는 기능은 준비 중입니다.</p>
@@ -225,7 +230,6 @@
 
       <!-- ================= 마이 프로필 ================= -->
       <div id="user-view-profile" class="admin-view">
-        <h1 class="admin-page-title">마이 프로필</h1>
         <div class="glass-container" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 0.8rem;">
           <div>
             <label class="form-label">연락처 (로그인 ID)</label>
@@ -298,6 +302,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_1200"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/user.js?v=20260831_1300"></script>
+  <script src="src/user.js?v=20260831_1400"></script>
 </body>
 </html>

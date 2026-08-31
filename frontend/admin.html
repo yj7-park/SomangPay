@@ -12,7 +12,7 @@
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1500">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1600">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1100">
   <script src="jsQR.min.js"></script>
   <script>
@@ -48,6 +48,15 @@
     })();
   </script>
 
+  <!-- 상단 고정 바(#redesign) - 뒤로가기/제목/액션 3열 그리드로 제목이 항상 바 정중앙에
+       온다(style.css의 .app-header 참고). 탭 전환마다 admin.js의 updateAdminHeader가 내용을
+       채운다 - 정적 마크업은 자리(back 버튼, actions 슬롯)만 잡아둔다. -->
+  <header class="app-header">
+    <button type="button" class="back-btn app-header-back" id="admin-header-back-btn" onclick="closeMemberDetail()" aria-label="뒤로"><span data-icon="arrow-left"></span></button>
+    <h1 class="app-header-title" id="admin-header-title">소망페이 관리자</h1>
+    <div class="app-header-actions" id="admin-header-actions"></div>
+  </header>
+
   <div class="admin-shell">
     <!-- 트위터 스타일 탭 내비게이션: 데스크톱은 왼쪽 사이드바, 모바일은 하단 아이콘 탭바 -->
     <nav class="admin-tabbar">
@@ -75,7 +84,6 @@
 
       <!-- ================= HOME (대시보드) ================= -->
       <div id="admin-view-home" class="admin-view active">
-        <h1 class="admin-page-title">소망페이 관리자</h1>
         <div class="glass-container hero-stat">
           <div class="hero-stat-top">
             <div class="stat-label">잔액 보유 회원수</div>
@@ -123,15 +131,6 @@
       <!-- 검색창/스캔 버튼은 고정, 목록만 남은 공간을 차지하며 그 안에서만 스크롤된다
            (홈 탭과 동일한 패턴 - admin.js의 updateFixedViewLayoutMetrics). -->
       <div id="admin-view-search" class="admin-view">
-        <div class="admin-page-title-row">
-          <h1 class="admin-page-title">사용자 관리</h1>
-          <div class="admin-page-title-actions">
-            <button type="button" class="admin-page-title-action" onclick="openScannerModal('SEARCH')" title="NFC/QR 검색" aria-label="NFC/QR 검색">
-              <span data-icon="nfc"></span>
-            </button>
-            <button type="button" class="admin-page-title-action" onclick="openProxyRegisterModal()" title="회원 등록">+</button>
-          </div>
-        </div>
         <!-- 검색창을 돋보기 버튼 뒤 드롭다운에 숨기지 않고 상시 노출 - 회원 목록에서 가장
              자주 쓰는 조작이라 여기서만 한 번 더 누를 필요가 없어야 한다(#redesign). -->
         <div id="member-search-input-wrap" class="member-search-input-wrap member-search-static">
@@ -148,9 +147,6 @@
       <!-- 헤더/탭바를 제외한 남은 공간을 "최근 처리 내역" 피드(구 홈 탭)가 전부 차지하며
            그 안에서만 스크롤된다 (admin.js의 updateFixedViewLayoutMetrics - style.css 참고). -->
       <div id="admin-view-inbox" class="admin-view">
-        <div class="admin-page-title-row">
-          <h1 class="admin-page-title">충전함 관리</h1>
-        </div>
         <!-- 값이 3개뿐이라 드롭다운으로 펼쳐 고를 필요가 없다 - 각 칩에 건수를 같이 보여주는
              상시 노출 칩 행으로(#redesign, admin.js의 renderInboxFilterSelector 참고). -->
         <div class="filter-chip-row" id="inbox-filter-chips"></div>
@@ -161,7 +157,6 @@
 
       <!-- ================= SETTINGS (설정) ================= -->
       <div id="admin-view-settings" class="admin-view">
-        <h1 class="admin-page-title">설정</h1>
 
         <!-- 그룹드 설정 리스트(#redesign) - 예전엔 카드 하나에 앱버전/다운로드/테마/푸시가
              구분선만으로 이어 붙어 있어 어디부터 어디까지가 한 묶음인지 한눈에 안 들어왔다.
@@ -329,7 +324,6 @@
 
       <!-- ================= KIOSK (키오스크 관리) ================= -->
       <div id="admin-view-kiosk" class="admin-view">
-        <h1 class="admin-page-title">키오스크 관리</h1>
         <!-- 예전엔 버튼 하나 뒤에 키오스크 이름이 드롭다운으로 숨어 있어(#26) 몇 대인지,
              지금 뭐가 켜져 있는지 한눈에 안 보였다. 대수가 늘어나도 그대로 늘어나는 상시
              노출 가로 스크롤 목록으로 바꾸고(#redesign), 칩마다 온라인 상태 점을 같이
@@ -343,8 +337,9 @@
 
       <!-- ================= MEMBER DETAIL (회원 상세 - 검색/스캔에서 진입) ================= -->
       <div id="admin-view-member-detail" class="admin-view">
+        <!-- 뒤로가기는 이제 상단 고정 바(app-header-back)가 담당 - 화면 안에 중복으로 두지
+             않는다(#redesign). -->
         <div class="detail-header">
-          <button class="back-btn" onclick="closeMemberDetail()" aria-label="뒤로"><span data-icon="arrow-left"></span></button>
           <div class="detail-header-id">
             <h2 id="detail-member-name">-</h2>
             <div class="detail-header-tags">
@@ -747,6 +742,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_1000"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/admin.js?v=20260831_1400"></script>
+  <script src="src/admin.js?v=20260831_1500"></script>
 </body>
 </html>

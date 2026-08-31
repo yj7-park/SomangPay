@@ -145,9 +145,24 @@ html, body {
      무너진다(참고 이미지: 큰 제목은 굵게, 본문 불릿 텍스트는 가볍게). */
   font-weight: 500;
   line-height: 1.4;
-  overflow-x: hidden !important; /* Block horizontal scrollbars */
+  /* overflow-x는 여기(html,body 공용)가 아니라 아래 body 전용 규칙에서만 건다 - 이유는
+     그 규칙의 주석 참고(#redesign, position:sticky 버그). */
   word-break: keep-all !important; /* Keep Korean words intact */
   word-wrap: break-word !important;
+}
+
+/* html이 아니라 body에만 overflow-x:hidden을 건다(#redesign) - 예전엔 html,body 양쪽에
+   같이 걸려 있었는데, CSS 스펙상 overflow-x가 visible이 아니면 overflow-y는 자동으로
+   auto로 계산돼("두 축 중 하나가 visible이 아니면 나머지도 visible일 수 없음") html과
+   body가 각각 별도의 스크롤 컨테이너가 됐다. 그러면 body 바로 아래 position:sticky 요소
+   (.app-header, USER/ADMIN 상단 고정 바)의 "가장 가까운 스크롤 조상"이 실제 스크롤이
+   일어나는 곳(html 쪽일 수도, body 쪽일 수도)과 어긋나 sticky가 전혀 안 먹는 버그가
+   있었다(스크롤하면 헤더가 콘텐츠와 같이 그대로 밀려 올라감 - Playwright로 실제 스크롤
+   테스트해서 발견, overflow-y를 visible로 명시해도 spec상 auto로 재승격되어 무효였음).
+   body에만 걸면 body 혼자 유일한 스크롤 컨테이너가 되고 html은 스크롤과 무관해져(overflow
+   기본값 visible 유지) sticky가 body 기준으로 정상 동작한다. */
+body {
+  overflow-x: hidden !important; /* Block horizontal scrollbars */
 }
 
 /* 위 html,body의 color: var(--text-main)는 body 시점의(=문서 루트, 다크 기본값) --text-main
@@ -212,6 +227,46 @@ html, body {
   max-width: 100% !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+}
+
+/* USER/ADMIN 상단 고정 바(#redesign) - 예전엔 이 자리에 있다가 각 탭 본문 맨 위 <h1>로
+   옮겨가며 없어졌는데(admin-page-title 주석 참고), 스크롤하면 지금 어느 탭인지 보여줄
+   기준선이 없어져 리뷰에서 지적된 부분("No sticky top app bar"). 제목을 flex
+   space-between이 아니라 고정폭 3열 그리드(뒤로가기 40px / 제목 1fr / 액션 40px)로 두는
+   이유 - 뒤로가기나 액션 버튼이 없는 화면(대부분의 탭)에서도 제목이 항상 바 정중앙에
+   와야 해서다. flex 방식이었다면 한쪽만 비어 있을 때 제목이 반대쪽으로 쏠린다.
+   admin.js의 updateAdminHeader가 뷰 전환마다 제목·뒤로가기·액션을 채운다. user.js는
+   뒤로가기/액션이 필요 없는 평면 탭뿐이라 switchUserView()가 제목만 직접 채운다. */
+.app-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+}
+.app-header-title {
+  grid-column: 2;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-header-back {
+  grid-column: 1;
+  /* 안 쓰는 화면에서는 자리만 차지하고 안 보이게(visibility) - display:none을 쓰면 그리드
+     칸 자체가 무너져 제목이 다시 왼쪽으로 쏠린다. */
+  visibility: hidden;
+}
+.app-header-back.is-visible {
+  visibility: visible;
+}
+.app-header-actions {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-width: 0;
 }
 
 .brand-logo {
@@ -809,11 +864,13 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 /* ==========================================================================
    User Shell (user.html) - admin.html과 동일한 .admin-shell/.admin-tabbar/
    .admin-view 탭 구조를 그대로 재사용한다(레이아웃 클래스일 뿐 admin 전용 로직은
-   없음 - switchUserView()는 user.js에 별도로 있다). user.html은 admin.html과
-   달리 상단 .app-header가 없어 콘텐츠가 노치/상태바 바로 아래 붙으므로, 이전
-   .mobile-wrapper가 갖던 안전 영역 여백을 #user-shell .admin-main에 그대로 준다. */
+   없음 - switchUserView()는 user.js에 별도로 있다). #redesign 이전엔 상단
+   .app-header가 없어 콘텐츠가 노치/상태바 바로 아래 붙는 문제가 있어 여기 padding-top에
+   안전 영역을 직접 줬는데, 이제 .app-header가 생겨 그쪽에서 이미 처리하므로
+   (style.css .app-header 참고) 여기서 또 더하면 안전 영역이 이중으로 잡혀 헤더 아래
+   틈이 벌어진다 - admin.html의 plain .admin-main과 같은 값으로 되돌림. */
 #user-shell .admin-main {
-  padding-top: max(clamp(0.75rem, 2vw, 1.5rem), env(safe-area-inset-top));
+  padding-top: clamp(0.75rem, 2vw, 1.5rem);
   /* .admin-main 자신은 .admin-shell 쪽에서 flex:1로 뷰포트 높이를 채우지만, 그 값은
      flex-grow로만 정해져서(명시적 height 아님) 자식의 퍼센트 height(예: 100%)가 먹지
      않는다 - .admin-main을 flex column으로 바꿔 활성 뷰가 flex-grow로 남은 세로

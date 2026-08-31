@@ -734,6 +734,43 @@ async function handleAdminRefreshEvent(scopes) {
   }
 }
 
+// ============ 상단 고정 바 (#redesign) ============
+// 뷰마다 제목/뒤로가기/우측 액션이 다르므로 정적 마크업 대신 switchAdminView가 뷰를 바꿀
+// 때마다 여기서 다시 채운다. member-detail은 제목이 동적(회원 이름)이라 여기 없고
+// renderMemberDetail()이 따로 채운다(#admin-header-title 직접 갱신).
+const ADMIN_HEADER_CONFIG = {
+  home: { title: "소망페이 관리자" },
+  search: {
+    title: "사용자 관리",
+    actions: [
+      { icon: "nfc", label: "NFC/QR 검색", onclick: "openScannerModal('SEARCH')" },
+      { icon: "plus", label: "회원 등록", onclick: "openProxyRegisterModal()" },
+    ],
+  },
+  inbox: { title: "충전함 관리" },
+  kiosk: { title: "키오스크 관리" },
+  settings: { title: "설정" },
+  "member-detail": { back: true },
+};
+
+function updateAdminHeader(viewName) {
+  const config = ADMIN_HEADER_CONFIG[viewName] || {};
+
+  const titleEl = document.getElementById("admin-header-title");
+  if (titleEl && config.title !== undefined) titleEl.innerText = config.title;
+
+  const backBtn = document.getElementById("admin-header-back-btn");
+  if (backBtn) backBtn.classList.toggle("is-visible", !!config.back);
+
+  const actionsEl = document.getElementById("admin-header-actions");
+  if (actionsEl) {
+    actionsEl.innerHTML = (config.actions || []).map(a =>
+      `<button type="button" class="admin-page-title-action" onclick="${a.onclick}" title="${a.label}" aria-label="${a.label}"><span data-icon="${a.icon}"></span></button>`
+    ).join("");
+    hydrateIconPlaceholders(actionsEl);
+  }
+}
+
 // ============ 탭 내비게이션 (트위터 스타일) ============
 let currentDetailUserId = null;
 let detailReturnView = "search";
@@ -742,6 +779,7 @@ function switchAdminView(viewName, inboxFilter) {
   document.querySelectorAll(".admin-view").forEach(el => el.classList.remove("active"));
   const target = document.getElementById(`admin-view-${viewName}`);
   if (target) target.classList.add("active");
+  updateAdminHeader(viewName);
 
   const tabViews = ["home", "search", "inbox", "kiosk", "settings"];
   if (tabViews.includes(viewName)) {
@@ -1672,6 +1710,7 @@ function renderMemberDetail() {
 
   const isActive = user.status === "ACTIVE";
   document.getElementById("detail-member-name").innerText = user.name;
+  document.getElementById("admin-header-title").innerText = user.name; // 상단 고정 바 제목(#redesign)
   const badge = document.getElementById("detail-member-badge");
   badge.innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
   badge.className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;

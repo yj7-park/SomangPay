@@ -19,6 +19,21 @@ document.addEventListener("DOMContentLoaded", () => {
   initUserTheme();
 });
 
+// 상단 고정 바 실제 높이 → --header-h(#redesign) - .admin-shell의 min-height 계산이
+// 이 값을 쓴다(style.css, admin.js의 동명 로직과 동일한 이유). 로그인 전엔 헤더가
+// display:none이라 0을 재게 되므로, onLoginSuccess가 헤더를 보여준 직후에도 한 번 더
+// 불러야 한다(user.js의 onLoginSuccess 참고).
+function updateUserHeaderHeightVar() {
+  const header = document.getElementById("user-header");
+  if (header && header.style.display !== "none") {
+    document.documentElement.style.setProperty("--header-h", `${header.getBoundingClientRect().height}px`);
+  }
+}
+window.addEventListener("resize", () => {
+  clearTimeout(window._userHeaderResizeTimer);
+  window._userHeaderResizeTimer = setTimeout(updateUserHeaderHeightVar, 150);
+});
+
 // ============ 화면 테마(시스템/라이트/다크) - kiosk.js와 동일한 패턴 ============
 const USER_THEME_KEY = "user_theme_pref";
 
@@ -194,6 +209,16 @@ function userLogout() {
 }
 
 // ============ 탭 전환(홈/이용내역/문의/마이프로필) - admin.js switchAdminView()와 같은 패턴 ============
+// 상단 고정 바 제목(#redesign) - USER는 뒤로가기가 필요한 드릴다운 화면이 없는 평면 탭
+// 5개뿐이라 ADMIN의 updateAdminHeader와 달리 제목만 갱신하면 된다.
+const USER_HEADER_TITLES = {
+  home: "소망페이",
+  history: "이용 내역",
+  qr: "QR 결제",
+  inquiry: "문의",
+  profile: "마이 프로필",
+};
+
 function switchUserView(viewName) {
   document.querySelectorAll("#user-shell .admin-view").forEach(el => el.classList.remove("active"));
   const target = document.getElementById(`user-view-${viewName}`);
@@ -201,11 +226,15 @@ function switchUserView(viewName) {
   document.querySelectorAll("#user-shell .admin-tab-btn").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === viewName);
   });
+  const titleEl = document.getElementById("user-header-title");
+  if (titleEl && USER_HEADER_TITLES[viewName]) titleEl.innerText = USER_HEADER_TITLES[viewName];
   if (viewName === "profile") refreshPushButtonUI();
 }
 
 function onLoginSuccess(user) {
   document.getElementById("user-login-wrapper").style.display = "none";
+  document.getElementById("user-header").style.display = "grid"; // 로그인 전엔 숨겨둔 상단 고정 바(#redesign)
+  updateUserHeaderHeightVar();
   document.getElementById("user-shell").style.display = "flex";
   document.getElementById("charge-guide-section").style.display = "block";
 
