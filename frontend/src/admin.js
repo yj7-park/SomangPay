@@ -3125,9 +3125,12 @@ function renderKioskDetail() {
       </div>
 
       <label class="form-label" style="display: block; margin-top: 1rem;">기본 결제 메뉴</label>
+      <!-- 옵션에 가격도 같이 표시(#redesign, 사용자 요청: "kiosk처럼 가격도 옆에 같이
+           보여주는게 좋겠어 - 둘이 똑같게") - kiosk.js의 k-default-product-select
+           렌더링(populateKioskMenuData)과 동일한 문구 포맷으로 맞춘다. -->
       <select class="form-control kiosk-default-product-select" style="margin-bottom: 0;" onchange="autoSaveKiosk(${k.id})">
-        <option value="">-- 기본 결제 없음 --</option>
-        ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        <option value="">-- 기본 결제 없음 (메뉴 선택 필수) --</option>
+        ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${escapeHtml(p.name)} (일반: ${p.price_general.toLocaleString()}원 / 시니어: ${p.price_senior.toLocaleString()}원)</option>`).join('')}
       </select>
     </div>
 
