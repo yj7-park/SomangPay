@@ -3093,7 +3093,9 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   border: 1px solid var(--border-glass);
   background: var(--surface-1);
   color: var(--text-main);
-  font-size: 1.3rem;
+  /* #redesign(사용자 피드백: "숫자버튼이랑 핀 입력 창 폰트가 너무 큰 것 같애") -
+     1.3rem → 1.1rem. */
+  font-size: 1.1rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -3121,11 +3123,19 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
    입력칸도 같은 버그라 이 공용 클래스로 함께 고친다. */
 .pin-code-input {
   text-align: center;
-  font-size: 1.8rem;
+  /* #redesign(사용자 피드백: "숫자버튼이랑 핀 입력 창 폰트가 너무 큰 것 같애") -
+     1.8rem → 1.5rem. */
+  font-size: 1.5rem;
   letter-spacing: 0.4rem;
 }
 .pin-code-input:placeholder-shown {
   letter-spacing: normal;
+}
+/* 키패드와 아래 취소/인증하기 버튼 사이 여백(#redesign, 사용자 피드백: "그 아래 인증/
+   취소 버튼이랑 여백도 좀 넣고") - .pin-lock-actions를 각 모달 인라인 margin-top 대신
+   공용 클래스로 뺐을 때 기본(3열) 모드용 값을 안 챙겨서 여백이 아예 없어졌었다. */
+.pin-lock-actions {
+  margin-top: 1.2rem;
 }
 
 /* 가로 방향(랜드스케이프)이면서 세로 공간이 부족한 화면 전용 - 원 크기를 줄이는 대신
