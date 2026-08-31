@@ -2248,7 +2248,10 @@ function depositNameMatchQuality(name, query) {
 function bestDepositCandidate() {
   const query = (document.getElementById("dd-user-search").value || "").trim();
   let best = null, bestRank = 0;
+  // 정지 회원은 충전 대상으로 잘못 골라 붙이기 쉬우니 후보에서 아예 뺀다 - 사용자
+  // 관리 탭 검색 목록과 같은 기준(users.js의 활성 회원 필터, admin.js 1560행 참고).
   for (const u of users) {
+    if (u.status === "SUSPENDED") continue;
     const quality = depositNameMatchQuality(u.name, query);
     const rank = quality === "exact" ? 2 : quality === "similar" ? 1 : 0;
     if (rank > bestRank) { bestRank = rank; best = u; }
@@ -2263,6 +2266,7 @@ function renderDepositUserOptions() {
   const queryLower = query.toLowerCase();
   const matchQualityRank = { exact: 2, similar: 1 };
   const matches = users
+    .filter(u => u.status !== "SUSPENDED")
     .filter(u => !queryLower || u.name.toLowerCase().includes(queryLower) || (u.phone || "").includes(queryLower))
     .map(u => ({ u, quality: depositNameMatchQuality(u.name, query) }))
     .sort((a, b) => (matchQualityRank[b.quality] || 0) - (matchQualityRank[a.quality] || 0))
