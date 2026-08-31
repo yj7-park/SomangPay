@@ -38,12 +38,14 @@
   --brand-navy: #1f1e59;
   --brand-blue: #6781c0;
   --brand-sky: #adc0e2;
-  /* USER 잔액 카드/QR FAB 배경(#redesign) 전용 - --brand-navy보다 살짝 어둡게. 로고 마크
-     SVG(logo-mark-user.svg)가 정확히 --brand-navy(#1f1e59) 색 사각형을 포함하고 있어서,
-     배경을 --brand-navy 그대로 쓰면 그 부분 워터마크가 배경과 완전히 같은 색이 되어
-     안 보였다(사용자 리포트로 발견) - 라이트/다크 공통, 여기 한 번만 선언해도 두
-     테마 스코프 모두 상속받는다(둘 다 --brand-navy 값 자체가 테마 불문 고정인 것과 동일 이유). */
-  --user-card-bg: #16153f;
+  /* USER 잔액 카드/QR FAB 배경(#redesign) 전용. 로고 마크 SVG(logo-mark-user.svg)엔
+     4가지 톤이 있는데 그중 가장 진한 색(#131532)과 두 번째로 진한 색(--brand-navy,
+     #1f1e59) 사이 값으로 잡았다 - --brand-navy를 그대로 쓰면 로고의 그 색 사각형들이
+     배경과 완전히 같아져 워터마크에서 그 부분만 안 보였다(사용자 리포트로 발견,
+     처음엔 #16153f로 너무 어둡게 잡았다가 조정). 라이트/다크 공통, 여기 한 번만
+     선언해도 두 테마 스코프 모두 상속받는다(--brand-navy 자체가 테마 불문 고정인 것과
+     동일 이유). */
+  --user-card-bg: #1d1c51;
 
   --accent-cyan: #6781c0;    /* 메인 액센트 (버튼/링크/포커스) - 로고 중간 톤 */
   --accent-cyan-glow: rgba(103, 129, 192, 0.18);
