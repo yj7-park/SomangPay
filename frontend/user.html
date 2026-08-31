@@ -243,7 +243,7 @@
         </div>
 
         <div class="settings-group-label">계정</div>
-        <div class="glass-container" style="padding: 1.2rem;">
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
           <!-- 비활성 <input> 대신 읽기전용 행(#redesign) - 어차피 못 바꾸는 값을 입력칸처럼
                보여줘 헷갈리게 하지 않는다. -->
           <div style="display: flex; align-items: center; gap: 0.6rem;">
@@ -264,9 +264,9 @@
         </div>
 
         <div class="settings-group-label">화면</div>
-        <div class="glass-container" style="padding: 1.2rem;">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-size: 0.92rem; color: var(--text-main);">화면 테마</span>
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
+          <div class="settings-row">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">화면 테마</span>
             <div class="seg-control" style="margin-left: auto;">
               <button id="u-theme-system-btn" type="button" onclick="setUserTheme('system')">시스템</button>
               <button id="u-theme-light-btn" type="button" onclick="setUserTheme('light')">라이트</button>
@@ -279,11 +279,11 @@
              설치된 앱 컨텍스트가 아니면(user.js의 isInstalledUserAppContext) 그룹 전체
              (캡션+카드)를 감춘다 - #redesign 전엔 이 id가 카드 안쪽 행 하나에만 걸려 있어서
              캡션만 카드 없이 덩그러니 남았다(refreshPushButtonUI도 같이 손봄, "block"으로). -->
-        <div id="u-push-section">
+        <div id="u-push-section" style="margin-bottom: 1.2rem;">
           <div class="settings-group-label">알림</div>
-          <div class="glass-container" style="padding: 1.2rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 0.92rem; color: var(--text-main);">푸시 알림</span>
+          <div class="glass-container" style="padding: 1.5rem;">
+            <div class="settings-row">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">푸시 알림</span>
               <span id="u-push-status" class="switch-status"></span>
               <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
             </div>
@@ -295,9 +295,9 @@
              전체(캡션+카드)를 감춘다. -->
         <div id="user-app-version-row">
           <div class="settings-group-label">앱</div>
-          <div class="glass-container" style="padding: 1.2rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-size: 0.92rem; color: var(--text-main);">앱 버전</span>
+          <div class="glass-container" style="padding: 1.5rem;">
+            <div class="settings-row">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">앱 버전</span>
               <span id="update-widget-root" style="display: inline-flex; align-items: center; margin-left: auto;"></span>
             </div>
           </div>
