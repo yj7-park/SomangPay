@@ -88,6 +88,10 @@
   --accent-emerald: #10b981; /* --accent-success의 별칭 - admin.js/admin.html이 이 이름으로도 참조함 */
   --accent-success: #10b981;
   --accent-danger: #ef4444;
+  /* 차감/삭제 같은 "위험한" 액션 버튼의 옅은 배경(#redesign) - 예전엔 각 버튼마다
+     rgba(239,68,68,0.15)를 인라인으로 반복해서 박아뒀다. --accent-cyan-glow와 같은
+     패턴으로 토큰화 - instagram-theme.css에서 테마별로 다시 정의. */
+  --accent-danger-glow: rgba(239, 68, 68, 0.15);
   --accent-rose: #f43f5e; /* kiosk.html의 로그 "비우기" 버튼이 참조하는데 정의가 빠져있었음(라이트 테마 작업 중 발견) */
 
   --text-main: #f8fafc;
@@ -350,7 +354,7 @@ body {
 }
 
 /* Global Mobile Touch & Button Protection against Event Blocking */
-button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, select, input, .nav-item {
+button, .btn, .btn-action, .btn-primary, .btn-senior, select, input, .nav-item {
   touch-action: manipulation !important; /* Eliminate 300ms touch delay */
   -webkit-tap-highlight-color: rgba(6, 182, 212, 0.3) !important;
   pointer-events: auto !important; /* Force click/touchability */
@@ -359,7 +363,7 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald, select, inpu
   z-index: 20 !important;
 }
 
-button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
+button, .btn, .btn-action, .btn-primary, .btn-senior {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -390,9 +394,14 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   background: linear-gradient(135deg, #f59e0b, #d97706);
 }
 
-.btn-emerald {
-  background: linear-gradient(135deg, #10b981, #059669);
-}
+/* #redesign(사용자 피드백: "초록색 버튼들이 안예쁘다") - 충전 관련 주 액션에만 쓰던
+   그라디언트 초록(.btn-emerald)을 없애고 .btn-primary(브랜드 블루)를 그대로 재사용한다.
+   Toss/Revolut/N26 등 주요 핀테크 앱들이 "성공/positive" 액션에도 브랜드 고유색 하나만
+   쓰고 초록은 실제 잔액 증감 같은 상태 표시에만 남겨두는 것과 같은 방향 - 이 파일 위
+   instagram-theme.css 주석("결제 성공/오류 등 상태색은 의미 전달용이라 유지")과도
+   일치한다. 초록/빨강 토큰(--accent-emerald/--accent-danger) 자체는 상태 배지·금액
+   증감 표시에 그대로 쓰이므로 안 건드림 - 버튼 배경으로 "장식"되던 자리만 뺐다.
+   admin.html의 기존 .btn-emerald 클래스 사용처는 .btn-primary로 교체 완료. */
 
 .form-control {
   width: 100%;

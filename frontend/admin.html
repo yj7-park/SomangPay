@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1930">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1930">
+  <link rel="stylesheet" href="src/style.css?v=20260831_2118">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2118">
   <script src="jsQR.min.js"></script>
   <script>
     // 푸시 알림(Web Push)을 받으려면 서비스 워커 등록이 필요함 - kiosk.html/user.html과 동일한 패턴.
@@ -345,7 +345,7 @@
               <h4 style="font-size: 0.92rem; margin: 0; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
                 <span data-icon="receipt"></span>수신 로그 <span id="sms-log-count" style="font-weight: normal;"></span>
               </h4>
-              <button class="btn-action" style="width: auto; padding: 0.3rem 0.7rem; font-size: 0.78rem; background: rgba(239,68,68,0.15); color: #fca5a5;" onclick="clearSmsLog()">로그 지우기</button>
+              <button class="btn-action" style="width: auto; padding: 0.3rem 0.7rem; font-size: 0.78rem; background: var(--accent-danger-glow); color: var(--icon-danger);" onclick="clearSmsLog()">로그 지우기</button>
             </div>
             <div id="sms-log-list" class="sms-log-scroll"></div>
           </div>
@@ -400,8 +400,8 @@
             생년월일: <strong id="detail-member-birth-date" style="color: var(--text-main);">-</strong>
           </div>
           <div style="display: flex; gap: 0.6rem; margin-top: 0.9rem;">
-            <button class="btn-action btn-emerald" style="flex: 1;" onclick="openDetailRechargeModal()"><span data-icon="plus"></span> 금액 충전</button>
-            <button class="btn-action" style="flex: 1; background: rgba(239,68,68,0.15); color: var(--icon-danger);" onclick="openDetailDeductModal()"><span data-icon="minus"></span> 금액 차감</button>
+            <button class="btn-action btn-primary" style="flex: 1;" onclick="openDetailRechargeModal()"><span data-icon="plus"></span> 금액 충전</button>
+            <button class="btn-action" style="flex: 1; background: var(--accent-danger-glow); color: var(--icon-danger);" onclick="openDetailDeductModal()"><span data-icon="minus"></span> 금액 차감</button>
           </div>
         </div>
 
@@ -463,7 +463,7 @@
             <label class="form-label">메모 (선택)</label>
             <input type="text" id="dd-resolve-memo" class="form-control" placeholder="예: 전화로 확인 후 대신 처리">
           </div>
-          <button id="dd-resolve-btn" class="btn-action btn-emerald" style="width: 100%;" onclick="submitDepositResolve(this)">선택한 회원으로 충전 처리(완료)</button>
+          <button id="dd-resolve-btn" class="btn-action btn-primary" style="width: 100%;" onclick="submitDepositResolve(this)">선택한 회원으로 충전 처리(완료)</button>
 
           <!-- 기본 접힘 - "기타로 처리"는 예외 경로라 눌러야만 사유 입력이 펼쳐진다. -->
           <div style="text-align: center; margin-top: 0.9rem;">
@@ -678,7 +678,7 @@
         </div>
         <div style="display: flex; gap: 0.6rem;">
           <button id="edit-user-status-btn" class="btn-action" style="flex: 1;" onclick="toggleDetailUserStatus()">계정 정지</button>
-          <button class="btn-action" style="flex: 1; background: rgba(239,68,68,0.15); color: var(--icon-danger);" onclick="deleteDetailUser()">계정 삭제</button>
+          <button class="btn-action" style="flex: 1; background: var(--accent-danger-glow); color: var(--icon-danger);" onclick="deleteDetailUser()">계정 삭제</button>
         </div>
       </div>
 
@@ -705,7 +705,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeDetailRechargeModal()">취소</button>
-        <button class="btn-action btn-emerald" onclick="submitDetailRecharge(this)">충전 실행</button>
+        <button class="btn-action btn-primary" onclick="submitDetailRecharge(this)">충전 실행</button>
       </div>
     </div>
   </div>
@@ -726,7 +726,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeDetailDeductModal()">취소</button>
-        <button class="btn-action" style="background: rgba(239,68,68,0.15); color: var(--icon-danger);" onclick="submitDetailDeduct(this)">차감 실행</button>
+        <button class="btn-action" style="background: var(--accent-danger-glow); color: var(--icon-danger);" onclick="submitDetailDeduct(this)">차감 실행</button>
       </div>
     </div>
   </div>
@@ -799,6 +799,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_1700"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/admin.js?v=20260831_2104"></script>
+  <script src="src/admin.js?v=20260831_2118"></script>
 </body>
 </html>

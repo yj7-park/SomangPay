@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1930">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1930">
+  <link rel="stylesheet" href="src/style.css?v=20260831_2118">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2118">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -303,7 +303,10 @@
           </div>
         </div>
 
-        <button onclick="userLogout()" style="margin-top: 0.4rem; width: 100%; padding: 0.7rem 0.8rem; font-size: 0.85rem; background: rgba(239,68,68,0.15); border: 1px solid var(--icon-danger); color: var(--icon-danger); border-radius: 8px; cursor: pointer;">로그아웃</button>
+        <!-- #redesign(사용자 피드백: "빨간색 버튼들이 안예쁘다") - 로그아웃은 계정 삭제 같은
+             위험/파괴적 액션이 아니라 평범한 탐색 동작이라 경고색을 쓸 이유가 없다.
+             다른 중립 보조 버튼(모달 "닫기" 등)과 같은 무채색 톤으로. -->
+        <button onclick="userLogout()" style="margin-top: 0.4rem; width: 100%; padding: 0.7rem 0.8rem; font-size: 0.85rem; background: var(--surface-2); border: 1px solid var(--border-glass); color: var(--text-main); border-radius: 8px; cursor: pointer;">로그아웃</button>
       </div>
 
     </main>

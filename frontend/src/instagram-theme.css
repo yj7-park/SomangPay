@@ -57,6 +57,7 @@
   --accent-success: #10b981;
   --accent-danger: #ef4444;  /* 오류/경고 - 상태색이라 유지 */
   --icon-danger: #fca5a5;    /* 삭제 아이콘 색 - 어두운 배경에서는 옅은 톤이 잘 보임 */
+  --accent-danger-glow: rgba(239, 68, 68, 0.15); /* 차감/삭제 버튼 옅은 배경(#redesign) */
 
   --text-main: #fafafa;
   --text-muted: #a8a8a8;
@@ -125,6 +126,7 @@
     --accent-success: #0e9f6e;
     --accent-danger: #dc2626;
     --icon-danger: #b91c1c;    /* 흰 배경 위 옅은 분홍 배경과 대비를 주기 위해 진하게 */
+    --accent-danger-glow: rgba(239, 68, 68, 0.15);
 
     --text-main: #262626;
     --text-muted: #737373;
@@ -178,6 +180,7 @@ body[data-theme="light"] {
   --accent-success: #0e9f6e;
   --accent-danger: #dc2626;
   --icon-danger: #b91c1c;
+  --accent-danger-glow: rgba(239, 68, 68, 0.15);
 
   --text-main: #262626;
   --text-muted: #737373;
@@ -309,12 +312,16 @@ body {
 }
 
 /* ---------------- Buttons ---------------- */
+/* #redesign(사용자 피드백: "초록/빨강 버튼들이 안예쁘다") - .btn-emerald(충전류 주 액션에
+   쓰던 초록 버튼)를 없애고 .btn-primary(브랜드 블루)로 통일했다. admin.html/index.html의
+   실제 사용처는 전부 .btn-primary로 교체 완료 - 아래 목록에서도 뺀다(더 이상 아무 데서도
+   안 쓰이는 클래스). 초록(--accent-emerald)/빨강(--accent-danger) 자체는 상태 배지·금액
+   증감 표시에는 그대로 쓰이므로 토큰은 안 건드림. */
 button,
 .btn,
 .btn-action,
 .btn-primary,
-.btn-senior,
-.btn-emerald {
+.btn-senior {
   background: var(--accent-cyan);
   background-image: none;
   border-radius: var(--radius-sm);
@@ -335,12 +342,6 @@ button:hover,
 
 .btn-senior {
   background: var(--accent-senior);
-  background-image: none;
-  color: #000;
-}
-
-.btn-emerald {
-  background: var(--accent-emerald);
   background-image: none;
   color: #000;
 }

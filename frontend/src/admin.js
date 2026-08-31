@@ -1842,7 +1842,7 @@ function renderCardSlot(cardType, containerId, label) {
           <div class="card-slot-uid">${card.card_uid}</div>
         </div>
         <div style="display:flex; gap:0.4rem;">
-          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: rgba(239,68,68,0.2); color: var(--icon-danger);" onclick="deleteDetailCard(${card.id})">삭제</button>
+          <button class="btn-action" style="width:auto; padding:0.4rem 0.7rem; font-size:0.82rem; background: var(--accent-danger-glow); color: var(--icon-danger);" onclick="deleteDetailCard(${card.id})">삭제</button>
         </div>
       </div>
     `;
@@ -3080,7 +3080,7 @@ function renderKioskDetail() {
         <label class="form-label" style="margin-bottom: 0;">키오스크 이름</label>
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           <span id="kiosk-detail-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
-          <button type="button" class="btn-action" style="width: 32px; height: 32px; min-height: 32px; padding: 0; flex: none; background: rgba(239,68,68,0.15); color: var(--icon-danger, #fca5a5);" onclick="confirmDeleteKiosk(${k.id})" title="키오스크 삭제">
+          <button type="button" class="btn-action" style="width: 32px; height: 32px; min-height: 32px; padding: 0; flex: none; background: var(--accent-danger-glow, rgba(239,68,68,0.15)); color: var(--icon-danger, #fca5a5);" onclick="confirmDeleteKiosk(${k.id})" title="키오스크 삭제">
             <span data-icon="trash"></span>
           </button>
         </div>

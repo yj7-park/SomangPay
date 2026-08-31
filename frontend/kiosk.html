@@ -15,8 +15,8 @@
   <link rel="alternate icon" href="/favicon-kiosk.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-kiosk.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1930">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1930">
+  <link rel="stylesheet" href="src/style.css?v=20260831_2118">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2118">
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -114,9 +114,12 @@
           <div id="kiosk-camera-test-overlay" style="display: none; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; position: absolute; inset: 0; z-index: 20; background: rgba(9,14,26,0.94); padding: 0.6rem; text-align: center; overflow-y: auto;">
             <div style="color: #fbbf24; font-weight: 800; font-size: 0.9em;">🧪 테스트 모드 — 결제 시뮬레이션</div>
             <div id="kiosk-test-mode-btn-grid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; width: 100%;">
-              <button class="btn-action btn-primary" style="min-height: 44px; font-size: 0.82em; padding: 0.4rem; white-space: normal !important; background: linear-gradient(135deg, #10b981, #059669);" onclick="simulateKioskPayment('SUCCESS')">✅ 결제 성공</button>
-              <button class="btn-action btn-primary" style="min-height: 44px; font-size: 0.82em; padding: 0.4rem; white-space: normal !important; background: linear-gradient(135deg, #f59e0b, #d97706);" onclick="simulateKioskPayment('INSUFFICIENT_BALANCE')">⚠️ 잔액 부족</button>
-              <button class="btn-action btn-primary" style="min-height: 44px; font-size: 0.82em; padding: 0.4rem; white-space: normal !important; background: linear-gradient(135deg, #ef4444, #dc2626);" onclick="simulateKioskPayment('UNREGISTERED_CARD')">❌ 미등록 카드</button>
+              <!-- #redesign(사용자 피드백: "초록/빨강 버튼들이 안예쁘다") - 대각선 2톤
+                   그라디언트 대신 플랫 단색. 성공/경고/오류 3색 구분 자체는 시뮬레이션
+                   결과를 한눈에 구별하는 용도라 의미 있어서 유지. -->
+              <button class="btn-action btn-primary" style="min-height: 44px; font-size: 0.82em; padding: 0.4rem; white-space: normal !important; background: var(--accent-emerald);" onclick="simulateKioskPayment('SUCCESS')">✅ 결제 성공</button>
+              <button class="btn-action btn-primary" style="min-height: 44px; font-size: 0.82em; padding: 0.4rem; white-space: normal !important; background: var(--accent-amber); color: #000;" onclick="simulateKioskPayment('INSUFFICIENT_BALANCE')">⚠️ 잔액 부족</button>
+              <button class="btn-action btn-primary" style="min-height: 44px; font-size: 0.82em; padding: 0.4rem; white-space: normal !important; background: var(--accent-danger);" onclick="simulateKioskPayment('UNREGISTERED_CARD')">❌ 미등록 카드</button>
             </div>
           </div>
         </div>
