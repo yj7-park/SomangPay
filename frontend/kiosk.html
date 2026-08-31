@@ -15,7 +15,7 @@
   <link rel="alternate icon" href="/favicon-kiosk.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-kiosk.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260831_1400">
+  <link rel="stylesheet" href="src/style.css?v=20260831_1500">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_1100">
   <script src="jsQR.min.js"></script>
   <script>
@@ -54,13 +54,14 @@
     <!-- Top Header -->
     <header class="kiosk-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; width: 100%; max-width: 100%; box-sizing: border-box;">
       <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
-        <span style="font-size: clamp(1.4rem, 2.5vw, 2rem);">💳</span>
+        <span style="display: inline-flex; color: var(--accent-cyan); font-size: clamp(1.3rem, 2.2vw, 1.8rem);" data-icon="card"></span>
         <div style="min-width: 0;">
+          <!-- 장비 ID는 운영자용 식별자라 고객 화면 헤더에서는 뺐다(#redesign) - 설정
+               모달(kiosk-admin-modal) "단말기" 그룹에서만 보여준다(updateDeviceHeaderUI 참고). -->
           <h1 id="kiosk-device-title-display" style="font-size: clamp(1rem, 2.2vw, 1.5rem); font-weight: 900; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 0.5rem;">
             <span id="kiosk-device-title-text">소망페이 무인 결제 단말기</span>
             <span id="kiosk-test-mode-badge" style="display: none; font-size: 0.7em; font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #fbbf24); padding: 0.15em 0.6em; border-radius: 999px; white-space: nowrap;">🧪 테스트 모드</span>
           </h1>
-          <p id="kiosk-device-uuid-display" style="font-size: clamp(0.7rem, 1vw, 0.8rem); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">장비 ID: 로딩 중...</p>
         </div>
       </div>
       <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; max-width: 100%;">
@@ -78,12 +79,8 @@
         <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
         <!-- 전용 키오스크 락다운 빌드에서만 보인다(initKioskPinToggle) - 화면 고정 중이면 🔒(눌러서
              해제), 꺼져 있으면 🔓(눌러서 고정)로 상태를 그대로 아이콘에 반영한다. -->
-        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="화면 고정">
-          🔒
-        </button>
-        <button onclick="openKioskAdminPinModal()" style="background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정">
-          ⚙️
-        </button>
+        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; align-items: center; justify-content: center; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="화면 고정"></button>
+        <button onclick="openKioskAdminPinModal()" style="display: inline-flex; align-items: center; justify-content: center; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정" data-icon="settings"></button>
       </div>
     </header>
 
@@ -132,7 +129,7 @@
             <h2 class="section-title" style="margin: 0;">결제 금액</h2>
             <button type="button" onclick="resetCart()" title="메뉴 선택 초기화"
               style="display: flex; align-items: center; justify-content: center; gap: 0.3rem; height: 1.38rem; min-height: 1.38rem; background: rgba(103,129,192,0.12); color: var(--accent-cyan); border: 1px solid rgba(103,129,192,0.35); border-radius: 999px; padding: 0 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; line-height: 1;">
-              ↺ 초기화
+              <span style="display: inline-flex; font-size: 0.9em;" data-icon="undo"></span> 초기화
             </button>
           </div>
 
@@ -144,6 +141,12 @@
               <div id="cart-items-container" class="cart-list" style="max-height: 110px; overflow-y: auto;">
                 <p style="color: var(--text-muted); text-align: center; margin-top: 1rem; font-size: 0.8rem;">선택된 메뉴가 없습니다.</p>
               </div>
+              <!-- 메뉴를 안 담고 카드를 대려 할 때 잠깐 보였다 사라지는 인라인 힌트 - 예전엔 전체
+                   화면 팝업(🍽️ "메뉴를 선택해주세요")으로 막았는데, 가벼운 안내치고 과했다
+                   (#redesign, kiosk.js의 flashNoMenuHint 참고). -->
+              <div id="kiosk-no-menu-hint" style="display: none; align-items: center; gap: 0.4rem; margin-top: 0.4rem; font-size: 0.82rem; color: var(--accent-amber); font-weight: 600;">
+                <span style="display: inline-flex;" data-icon="alert"></span> 메뉴를 먼저 골라주세요
+              </div>
             </div>
 
             <!-- Bottom Sub-panel: Total Price Display (fixed height, never stretches with the list above) -->
@@ -151,6 +154,15 @@
               <div style="color: var(--text-muted); font-size: 1rem; font-weight: 500;">결제 금액</div>
               <div id="kiosk-total-price" class="total-price-text" style="font-size: clamp(1.4rem, 2.3vw, 1.85rem); font-weight: 900; color: var(--accent-cyan);">0원</div>
             </div>
+          </div>
+
+          <!-- "카드를 대주세요" 결제 유도 패널(#redesign) - 메뉴를 담아도 다음에 뭘 해야 하는지
+               안내가 없었다(작은 헤더 구석 NFC/QR 배지가 유일한 단서). 장바구니가 비어있지 않으면
+               강조되어 켜진다 (kiosk.js updateCheckoutSummary 참고). NFC/QR 자체 on/off는
+               여전히 헤더 배지로 조작한다 - 이 패널은 안내 전용. -->
+          <div id="kiosk-tap-card-panel" class="kiosk-tap-card-panel">
+            <span class="kiosk-tap-card-icon" data-icon="card"></span>
+            <span class="kiosk-tap-card-text">카드를 대주세요</span>
           </div>
         </div>
 
@@ -165,7 +177,7 @@
         <div id="kiosk-checkout-recent-block" style="margin-top: 0.5rem;">
           <div id="recent-payments-container" style="background: var(--surface-2); border-radius: 10px; border: 1px solid var(--border-glass); padding: 0.45rem 0.55rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-              <span class="recent-payments-title" style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: bold;">📋 최근 결제 내역</span>
+              <span class="recent-payments-title" style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--accent-cyan); font-weight: bold;"><span style="display: inline-flex;" data-icon="receipt"></span> 최근 결제 내역</span>
               <span class="recent-payments-subtitle" style="font-size: 0.68rem; color: var(--text-muted);">실시간 갱신</span>
             </div>
             <div id="recent-payments-list" style="display: flex; flex-direction: column; gap: 0.25rem; max-height: 80px; overflow-y: auto;">
@@ -198,55 +210,76 @@
     </div>
   </div>
 
-  <!-- Custom Repeat Payment Confirm Popup (replaces window.confirm blocked in Android WebView) -->
+  <!-- Custom Repeat Payment Confirm Popup (replaces window.confirm blocked in Android WebView)
+       #redesign - 경고(⚠️ + 앰버/빨강 그라디언트)로 보이던 걸 차분한 확인으로. 30초 이내
+       같은 회원이 재태그한 것뿐인 정상 시나리오라 경고가 아니라 확인이 맞다. -->
   <div id="repeat-pay-modal" class="modal-overlay" style="display: none; z-index: 9999;" onclick="if (event.target === this) closeRepeatPayModal(false)">
-    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: var(--accent-amber); padding: 3rem 4rem;">
-      <div style="font-size: 5rem; margin-bottom: 0.8rem;">⚠️</div>
-      <h2 style="font-size: 2.2rem; color: var(--accent-amber); margin-bottom: 0.8rem;">추가 결제 하시겠습니까?</h2>
+    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: var(--accent-cyan); padding: 3rem 4rem;">
+      <div class="pin-lock-icon" style="width: 88px; height: 88px; font-size: 2.8rem; margin-bottom: 1.2rem;" data-icon="card"></div>
+      <h2 style="font-size: 2.2rem; color: var(--text-main); margin-bottom: 0.8rem;">추가 결제 하시겠습니까?</h2>
       <p id="repeat-pay-msg" style="font-size: 1.4rem; color: var(--text-muted); margin: 1rem 0 2rem;">방금 결제하셨습니다.</p>
       <div style="display: flex; gap: 1rem; justify-content: center;">
-        <button class="btn-action" style="flex: 1; background: var(--surface-1); color: var(--text-main); font-size: 1.4rem; min-height: 68px;" onclick="closeRepeatPayModal(false)">✕ 취소</button>
-        <button class="btn-action btn-primary" style="flex: 1; background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 1.4rem; font-weight: 800; min-height: 68px;" onclick="closeRepeatPayModal(true)">✓ 추가 결제</button>
+        <button class="btn-action" style="flex: 1; background: var(--surface-1); color: var(--text-main); font-size: 1.4rem; min-height: 68px;" onclick="closeRepeatPayModal(false)">취소</button>
+        <button class="btn-action btn-primary" style="flex: 1; font-size: 1.4rem; font-weight: 800; min-height: 68px;" onclick="closeRepeatPayModal(true)">추가 결제</button>
       </div>
     </div>
   </div>
 
-  <!-- Custom No-Menu-Selected Notice Popup (replaces window.alert blocked in Android WebView) -->
-  <div id="no-menu-modal" class="modal-overlay" style="display: none; z-index: 9999;">
-    <div class="modal-box-large" style="max-width: 900px; text-align: center; border-color: var(--accent-amber); padding: 3rem 4rem;">
-      <div style="font-size: 5rem; margin-bottom: 0.8rem;">🍽️</div>
-      <h2 style="font-size: 2.2rem; color: var(--accent-amber); margin-bottom: 0.8rem;">메뉴를 선택해주세요</h2>
-      <p style="font-size: 1.4rem; color: var(--text-muted); margin: 1rem 0 2rem;">결제하실 메뉴의 수량을 먼저 선택해주세요.</p>
-      <div style="display: flex; gap: 1rem; justify-content: center;">
-        <button class="btn-action btn-primary" style="flex: 1; background: linear-gradient(135deg, #f59e0b, #ef4444); font-size: 1.4rem; font-weight: 800; min-height: 68px;" onclick="closeNoMenuModal()">✓ 확인</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Kiosk Registration Required Modal (미등록 단말기 - 등록 전까지 다른 모든 화면/기능 차단) -->
+  <!-- Kiosk Registration Required Modal (미등록 단말기 - 등록 전까지 다른 모든 화면/기능 차단)
+       #redesign - ADMIN PIN 잠금 화면과 같은 공용 컴포넌트(.pin-lock-box/.pin-keypad, style.css)
+       재사용 + 숫자 키패드 추가(kiosk.js initKioskRegisterPinKeypad). 입력칸은 letter-spacing
+       버그 수정을 위해 .pin-code-input 공유 클래스로(placeholder까지 안 벌어지게, style.css). -->
   <div id="kiosk-register-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large" style="max-width: 420px; border-color: var(--primary); padding: 1.8rem;">
-      <div style="font-size: 3rem; margin-bottom: 0.5rem;">📋</div>
+    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary); padding: 1.8rem;">
+      <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 0.5rem;">키오스크 등록이 필요합니다</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">이 단말기는 아직 등록되지 않았습니다.<br>관리자 PIN을 입력해 등록해 주세요.</p>
       <div class="form-group" style="margin-bottom: 0;">
-        <input type="password" inputmode="numeric" pattern="[0-9]*" id="kiosk-register-pin-input" class="form-control" placeholder="PIN 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.4rem; min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') registerKioskDevice();">
+        <input type="password" inputmode="numeric" pattern="[0-9]*" id="kiosk-register-pin-input" class="form-control pin-code-input" placeholder="PIN 입력" style="min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') registerKioskDevice();">
       </div>
-      <div id="kiosk-register-status" style="font-size: 0.8rem; color: #ef4444; margin-top: 0.6rem; min-height: 1.2em;"></div>
+      <div class="pin-keypad" id="kiosk-register-pin-keypad">
+        <button type="button" class="pin-key" data-digit="1">1</button>
+        <button type="button" class="pin-key" data-digit="2">2</button>
+        <button type="button" class="pin-key" data-digit="3">3</button>
+        <button type="button" class="pin-key" data-digit="4">4</button>
+        <button type="button" class="pin-key" data-digit="5">5</button>
+        <button type="button" class="pin-key" data-digit="6">6</button>
+        <button type="button" class="pin-key" data-digit="7">7</button>
+        <button type="button" class="pin-key" data-digit="8">8</button>
+        <button type="button" class="pin-key" data-digit="9">9</button>
+        <span class="pin-key pin-key-spacer" aria-hidden="true"></span>
+        <button type="button" class="pin-key" data-digit="0">0</button>
+        <button type="button" class="pin-key pin-key-backspace" id="kiosk-register-pin-backspace" aria-label="한 글자 지우기" data-icon="backspace"></button>
+      </div>
+      <div id="kiosk-register-status" style="font-size: 0.8rem; color: var(--accent-rose); margin-top: 0.8rem; min-height: 1.2em;"></div>
       <div style="display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1rem;">
         <button class="btn-action btn-primary" style="flex: 1; min-height: 44px;" onclick="registerKioskDevice()">등록하기</button>
       </div>
     </div>
   </div>
 
-  <!-- Kiosk PIN Auth Modal -->
+  <!-- Kiosk PIN Auth Modal (#redesign - 위 등록 모달과 동일한 공용 잠금화면+키패드) -->
   <div id="kiosk-pin-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box-large" style="max-width: 400px; border-color: var(--primary); padding: 1.8rem;">
-      <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔒</div>
+    <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary); padding: 1.8rem;">
+      <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 0.5rem;">키오스크 관리자 인증</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">키오스크 설정을 변경하려면 PIN을 입력하세요.</p>
       <div class="form-group" style="margin-bottom: 0;">
-        <input type="password" inputmode="numeric" pattern="[0-9]*" id="kiosk-pin-input" class="form-control" placeholder="PIN 입력" style="text-align: center; font-size: 1.8rem; letter-spacing: 0.4rem; min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
+        <input type="password" inputmode="numeric" pattern="[0-9]*" id="kiosk-pin-input" class="form-control pin-code-input" placeholder="PIN 입력" style="min-height: 52px;" maxlength="8" onkeyup="if(event.key==='Enter') verifyKioskAdminPin();">
+      </div>
+      <div class="pin-keypad" id="kiosk-pin-keypad">
+        <button type="button" class="pin-key" data-digit="1">1</button>
+        <button type="button" class="pin-key" data-digit="2">2</button>
+        <button type="button" class="pin-key" data-digit="3">3</button>
+        <button type="button" class="pin-key" data-digit="4">4</button>
+        <button type="button" class="pin-key" data-digit="5">5</button>
+        <button type="button" class="pin-key" data-digit="6">6</button>
+        <button type="button" class="pin-key" data-digit="7">7</button>
+        <button type="button" class="pin-key" data-digit="8">8</button>
+        <button type="button" class="pin-key" data-digit="9">9</button>
+        <span class="pin-key pin-key-spacer" aria-hidden="true"></span>
+        <button type="button" class="pin-key" data-digit="0">0</button>
+        <button type="button" class="pin-key pin-key-backspace" id="kiosk-pin-backspace" aria-label="한 글자 지우기" data-icon="backspace"></button>
       </div>
       <div style="display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1.5rem;">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main); flex: 1; min-height: 44px;" onclick="closeKioskPinModal()">취소</button>
@@ -255,27 +288,30 @@
     </div>
   </div>
 
-  <!-- Kiosk Admin Settings & Debug Modal -->
+  <!-- Kiosk Admin Settings & Debug Modal (#redesign - USER·ADMIN 설정과 같은 그룹드 리스트
+       패턴: 카드 하나에 다 몰아넣지 않고 단말기/화면/결제/노출 메뉴로 캡션 분리) -->
   <div id="kiosk-admin-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 750px; text-align: left; padding: 1.2rem; max-height: 86vh; max-height: 86dvh; display: flex; flex-direction: column; overflow: hidden;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-shrink: 0;">
-        <h2 style="font-size: 1.3rem; color: var(--accent-cyan);">⚙️ 설정</h2>
-        <button class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; background: var(--surface-1); color: var(--text-main); min-height: 34px;" onclick="closeKioskAdminModal()">✕ 닫기</button>
+        <h2 style="font-size: 1.3rem; color: var(--text-main); margin: 0;">설정</h2>
+        <button class="btn-action" style="width: auto; padding: 0.35rem 0.8rem; background: var(--surface-1); color: var(--text-main); min-height: 34px; display: inline-flex; align-items: center; gap: 0.3rem;" onclick="closeKioskAdminModal()"><span data-icon="x" style="display: inline-flex; font-size: 0.85em;"></span> 닫기</button>
       </div>
 
       <!-- Scrollable Inner Content Area -->
       <div style="overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; padding-right: 0.25rem;">
-        <!-- Settings Sub-Tabs -->
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-          <button id="kiosk-tab-btn-menu" class="btn-action kiosk-settings-tab-btn btn-primary" style="flex: 1; padding: 0.6rem;" onclick="switchKioskAdminTab('menu')">메뉴 설정</button>
-          <button id="kiosk-tab-btn-debug" class="btn-action kiosk-settings-tab-btn" style="flex: 1; padding: 0.6rem;" onclick="switchKioskAdminTab('debug')">로그 확인</button>
+        <!-- Settings Sub-Tabs - 활성 탭 하나만 명확하게 구분되도록 세그먼트 컨트롤로
+             (예전엔 버튼 둘 다 비슷하게 강조돼 보여 헷갈렸다). -->
+        <div class="seg-control" id="kiosk-settings-tabs" style="width: 100%; margin-bottom: 1.1rem;">
+          <button type="button" id="kiosk-tab-btn-menu" class="is-on" style="flex: 1;" onclick="switchKioskAdminTab('menu')">메뉴 설정</button>
+          <button type="button" id="kiosk-tab-btn-debug" style="flex: 1;" onclick="switchKioskAdminTab('debug')">로그 확인</button>
         </div>
 
       <!-- Tab 1: Menu Management & Device Settings -->
       <div id="kiosk-admin-menu-sec">
-        <div style="background: var(--surface-1); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+        <div class="settings-group-label">단말기</div>
+        <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem;">
-            <h4 id="kiosk-settings-title" style="color: var(--accent-cyan); margin-bottom: 0;">기본 결제 설정</h4>
+            <h4 style="color: var(--text-main); margin-bottom: 0;">단말기 명칭 · 기본 결제</h4>
             <span id="k-device-save-status" style="font-size: 0.78rem; font-weight: bold; opacity: 0; transition: opacity 0.3s;"></span>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; align-items: center; margin-bottom: 0.5rem;">
@@ -290,35 +326,46 @@
               </select>
             </div>
           </div>
+          <!-- 장비 ID - 고객 화면 헤더에서는 빠지고 여기 설정에서만 보인다(운영자용, #redesign). -->
+          <p id="kiosk-device-uuid-display" style="font-size: 0.76rem; color: var(--text-muted); margin: 0.4rem 0 0; font-family: monospace;">장비 ID: 로딩 중...</p>
+        </div>
 
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
-            <input type="checkbox" id="k-test-mode-input" onchange="toggleKioskTestMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="k-test-mode-input" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">테스트 모드</label>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+        <div class="settings-group-label">화면</div>
+        <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="font-size: 0.85rem; color: var(--text-main);">화면 방향</span>
-            <div style="display: flex; gap: 0.4rem; margin-left: auto;">
-              <button id="k-orientation-portrait-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskOrientation('portrait')">📱 세로</button>
-              <button id="k-orientation-landscape-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskOrientation('landscape')">💻 가로</button>
+            <div class="seg-control" id="kiosk-orientation-seg" style="margin-left: auto;">
+              <button type="button" id="k-orientation-portrait-btn" onclick="setKioskOrientation('portrait')">세로</button>
+              <button type="button" id="k-orientation-landscape-btn" onclick="setKioskOrientation('landscape')">가로</button>
             </div>
           </div>
 
           <!-- 화면 테마 - 시스템(기기 설정을 따름, 기본값)/라이트/다크. initKioskTheme/
-               setKioskTheme(kiosk.js)가 localStorage에 저장하고 .kiosk-wrapper의
+               setKioskTheme(kiosk.js)가 localStorage에 저장하고 body의
                data-theme 속성으로 반영한다(style.css 참고). -->
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border-glass);">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid var(--border-glass);">
             <span style="font-size: 0.85rem; color: var(--text-main);">화면 테마</span>
-            <div style="display: flex; gap: 0.4rem; margin-left: auto;">
-              <button id="k-theme-system-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskTheme('system')">🔁 시스템</button>
-              <button id="k-theme-light-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskTheme('light')">☀️ 라이트</button>
-              <button id="k-theme-dark-btn" class="btn-action" style="width: auto; padding: 0.35rem 0.9rem; font-size: 0.8rem; background: var(--surface-1); color: var(--text-main);" onclick="setKioskTheme('dark')">🌙 다크</button>
+            <div class="seg-control" id="kiosk-theme-seg" style="margin-left: auto;">
+              <button type="button" id="k-theme-system-btn" onclick="setKioskTheme('system')">시스템</button>
+              <button type="button" id="k-theme-light-btn" onclick="setKioskTheme('light')">라이트</button>
+              <button type="button" id="k-theme-dark-btn" onclick="setKioskTheme('dark')">다크</button>
             </div>
           </div>
         </div>
 
-        <div style="background: var(--surface-1); padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
-          <h4 style="color: var(--accent-cyan); margin-bottom: 0.5rem;">노출 메뉴</h4>
+        <div class="settings-group-label">고급</div>
+        <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+          <!-- 일반 체크박스 대신 스위치 + "켜짐" 배지(#redesign) - 실서비스 설정 옆에서 켠 채
+               방치하기 쉬운 항목이라 켜져 있을 때 눈에 띄어야 한다. -->
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="font-size: 0.85rem; color: var(--text-main);">테스트 모드</span>
+            <span id="k-test-mode-on-badge" style="display: none; font-size: 0.68rem; font-weight: 700; color: var(--accent-amber); background: rgba(245,158,11,0.15); border: 1px solid var(--accent-amber); border-radius: 999px; padding: 0.1rem 0.5rem;">켜짐</span>
+            <button type="button" id="k-test-mode-input" class="switch-toggle" role="switch" aria-checked="false" aria-label="테스트 모드" style="margin-left: auto;" onclick="toggleKioskTestMode(!kioskTestMode)"><span class="switch-knob"></span></button>
+          </div>
+        </div>
+
+        <div class="settings-group-label">노출 메뉴</div>
+        <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">카드를 눌러 선택한 메뉴만 이 단말기의 고객 화면에 표시됩니다. 전부 해제하면(기본값) 전체 메뉴가 표시됩니다.</p>
           <div id="k-assigned-products-checklist" class="kiosk-menu-assign-grid"></div>
         </div>
@@ -343,6 +390,10 @@
   <script src="src/update-widget.js?v=20260823_0001"></script>
   <script src="src/version-check.js" data-mode="auto" data-check="/kiosk.html,/src/kiosk.js" data-idle-check="isKioskIdleForReload"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/kiosk.js?v=20260830_9001"></script>
+  <!-- 최근 결제 시각 표기(초 제거, "오전/오후 h:mm")를 USER/ADMIN과 같은 공용 헬퍼로
+       통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
+       addRecentPayment 참고. -->
+  <script src="src/history-render.js?v=20260831_1000"></script>
+  <script src="src/kiosk.js?v=20260831_1500"></script>
 </body>
 </html>

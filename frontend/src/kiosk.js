@@ -1,5 +1,31 @@
 const API_BASE = "/api";
 
+// ============ 아이콘 (admin.js의 인스타그램류 단색 라인 아이콘과 동일한 패턴) ============
+// 컬러풀한 이모지(💳✅⚠️🔒⚙️📱💻🔁☀️🌙 등) 대신 currentColor 스트로크의 단순한 선 아이콘을
+// 쓴다(#redesign). kiosk.html에 <span data-icon="lock"></span> 형태로 심어둔 자리를
+// hydrateIconPlaceholders()가 채운다 - admin.js와 별도 파일이라 이 안에서만 쓰는 것만 최소로
+// 들고 있는다(공용 모듈로 분리하는 건 3개 앱 전체를 손대야 하는 더 큰 작업이라 범위 밖).
+const KIOSK_ICON_SVGS = {
+  card: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>',
+  check: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 6 6L20 6"/></svg>',
+  alert: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  lock: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  unlock: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.75-1.5"/></svg>',
+  settings: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+  receipt: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>',
+  undo: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
+  x: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  backspace: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-7-8Z"/><path d="M14.5 9.5l4 5M18.5 9.5l-4 5"/></svg>',
+};
+function kioskIcon(name) {
+  return KIOSK_ICON_SVGS[name] || "";
+}
+function hydrateIconPlaceholders(root) {
+  (root || document).querySelectorAll("[data-icon]").forEach(el => {
+    el.innerHTML = kioskIcon(el.dataset.icon);
+  });
+}
+
 let products = [];
 let cart = {};
 let currentDeviceUuid = "";
@@ -94,11 +120,18 @@ function toggleKioskTestMode(enabled) {
   }
 }
 
+// #redesign - 일반 체크박스 대신 iOS식 스위치(.switch-toggle, style.css) + "켜짐" 배지로.
+// 켜져 있을 때 눈에 띄어야 실서비스 설정 옆에서 켠 채 방치되는 걸 줄일 수 있다.
 function updateKioskTestModeUI() {
   const badge = document.getElementById("kiosk-test-mode-badge");
   if (badge) badge.style.display = kioskTestMode ? "inline-flex" : "none";
-  const checkbox = document.getElementById("k-test-mode-input");
-  if (checkbox) checkbox.checked = kioskTestMode;
+  const toggle = document.getElementById("k-test-mode-input");
+  if (toggle) {
+    toggle.classList.toggle("is-on", kioskTestMode);
+    toggle.setAttribute("aria-checked", kioskTestMode ? "true" : "false");
+  }
+  const onBadge = document.getElementById("k-test-mode-on-badge");
+  if (onBadge) onBadge.style.display = kioskTestMode ? "inline-block" : "none";
 }
 
 // 리더 활성 모드에 따라 상단 NFC 상태 배지 문구/색상을 갱신한다.
@@ -131,6 +164,11 @@ window.onCardReaderModeChanged = function (mode) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   appendDebugLog("[SYSTEM] 키오스크 단말기 모듈 초기화 완료.");
+  // 등록 모달도 data-icon 자리를 쓰므로(kiosk-register-modal) 등록 여부 분기보다 먼저
+  // 아이콘/키패드를 준비해둔다.
+  hydrateIconPlaceholders(document);
+  initKioskRegisterPinKeypad();
+  initKioskPinKeypad();
   initKioskTestMode();
   const isRegistered = await initDeviceUUID();
   if (!isRegistered) {
@@ -464,6 +502,32 @@ async function registerKioskDevice() {
   }
 }
 
+// 등록 화면 숫자 키패드(#redesign) - ADMIN PIN 인증(admin.js의 initAdminPinKeypad)과 동일한
+// 패턴: 텍스트 입력칸(kiosk-register-pin-input)에 직접 채워 넣어, 물리 키보드 타이핑과도
+// 그대로 병행된다.
+function initKioskRegisterPinKeypad() {
+  const keypad = document.getElementById("kiosk-register-pin-keypad");
+  if (!keypad) return;
+  keypad.querySelectorAll(".pin-key[data-digit]").forEach(btn => {
+    btn.addEventListener("click", () => appendKioskPinDigit("kiosk-register-pin-input", btn.dataset.digit));
+  });
+  document.getElementById("kiosk-register-pin-backspace")?.addEventListener("click", () => removeKioskPinDigit("kiosk-register-pin-input"));
+}
+
+function appendKioskPinDigit(inputId, digit) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const max = Number(input.getAttribute("maxlength")) || 8;
+  if (input.value.length >= max) return;
+  input.value += digit;
+}
+
+function removeKioskPinDigit(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = input.value.slice(0, -1);
+}
+
 function updateDeviceHeaderUI() {
   const titleElem = document.getElementById("kiosk-device-title-text");
   const uuidElem = document.getElementById("kiosk-device-uuid-display");
@@ -707,6 +771,10 @@ function updateCheckoutSummary() {
   } else {
     totalDisplay.innerText = `${totalMax.toLocaleString()}원`;
   }
+
+  // "카드를 대주세요" 패널(#redesign) - 메뉴가 담기면 강조해서 다음 동작을 안내한다.
+  const tapCardPanel = document.getElementById("kiosk-tap-card-panel");
+  if (tapCardPanel) tapCardPanel.classList.toggle("is-active", count > 0);
 }
 
 // 테스트 모드 결제 시뮬레이션 - 실제 서버 API를 호출하지 않고 성공/실패 UI만 재현한다.
@@ -729,21 +797,25 @@ function simulateKioskPayment(outcome) {
     appendDebugLog(`🧪 [테스트 모드] 결제 성공 시뮬레이션 (${total.toLocaleString()}원)`, "SUCCESS");
     triggerSuccessEdgeGlow();
     playSpeech("감사합니다.");
-    addRecentPayment({
+    const simData = {
       user_name: "테스트 사용자",
       user_type: "일반",
       total_amount: total,
       balance_after: Math.max(0, 50000 - total)
-    });
+    };
+    addRecentPayment(simData);
+    showModal(true, simData);
     resetCart();
   } else if (outcome === "INSUFFICIENT_BALANCE") {
     appendDebugLog(`🧪 [테스트 모드] 잔액 부족 시뮬레이션`, "WARN");
     triggerWarningEdgeGlow();
     playSpeech("잔액이 부족합니다.");
+    showModal(false, { title: "잔액이 부족해요", message: "충전이 필요합니다." });
   } else if (outcome === "UNREGISTERED_CARD") {
     appendDebugLog(`🧪 [테스트 모드] 미등록 카드 시뮬레이션`, "WARN");
     triggerErrorEdgeGlow();
     playSpeech("등록되지 않은 카드입니다.");
+    showModal(false, { title: "등록되지 않은 카드예요", message: "사무실에서 카드를 등록해 주세요." });
   }
 }
 
@@ -768,7 +840,7 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
   // 값이다 - 사용자가 수량을 직접 0으로 바꿔 장바구니를 비운 경우까지 결제 시점에
   // 기본 메뉴로 되돌려 대신 결제해버리면 안 된다. 비어있으면 그냥 선택을 요구한다.
   if (items.length === 0) {
-    showNoMenuModal();
+    flashNoMenuHint();
     return;
   }
 
@@ -814,17 +886,20 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
       if (detail.includes("등록되지 않") || detail.includes("비활성화") || detail.includes("유효하지 않")) {
         playSpeech("등록되지 않은 카드입니다.");
         triggerErrorEdgeGlow();
+        showModal(false, { title: "등록되지 않은 카드예요", message: "사무실에서 카드를 등록해 주세요." });
       }
       // ─── 잔액 부족 ───
       else if (detail.includes("잔액")) {
         playSpeech("잔액이 부족합니다.");
         triggerWarningEdgeGlow();
+        showModal(false, { title: "잔액이 부족해요", message: "충전이 필요합니다." });
         resetCart(); // 다음 고객을 위해 메뉴 선택을 기본 메뉴로 복원
       }
       // ─── 그 외 오류 ───
       else {
         playSpeech("결제에 실패했습니다.");
         triggerErrorEdgeGlow();
+        showModal(false, { title: "결제에 실패했어요", message: detail });
       }
 
       isKioskPaymentProcessing = false;
@@ -840,6 +915,7 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
       console.error("Kiosk Payment unexpected response:", data);
       playSpeech("결제에 실패했습니다.");
       triggerErrorEdgeGlow();
+      showModal(false, { title: "결제에 실패했어요", message: "잠시 후 다시 시도해 주세요." });
       isKioskPaymentProcessing = false;
       return;
     }
@@ -848,6 +924,7 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     triggerSuccessEdgeGlow();
     playSpeech("감사합니다.");
     addRecentPayment(data);
+    showModal(true, data);
 
     // Clear cart & restore default product
     resetCart();
@@ -856,6 +933,7 @@ async function triggerKioskPayment(cardUid, forceConfirm = false) {
     console.error("Kiosk Payment error:", err);
     triggerErrorEdgeGlow();
     playSpeech("서버 연결에 실패했습니다.");
+    showModal(false, { title: "결제에 실패했어요", message: "서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요." });
   } finally {
     isKioskPaymentProcessing = false;
   }
@@ -891,15 +969,17 @@ function closeRepeatPayModal(confirmed) {
   }
 }
 
-function showNoMenuModal() {
-  const modal = document.getElementById("no-menu-modal");
-  if (modal) { modal.style.display = "flex"; modal.classList.add("active"); }
+// #redesign - 전체화면 팝업(🍽️ "메뉴를 선택해주세요" + 확인 버튼) 대신 결제 영역 안에서
+// 잠깐 떴다 사라지는 인라인 힌트로(kiosk.html의 kiosk-no-menu-hint, style.css의
+// kioskHintPop 애니메이션). 가벼운 안내치고 전체화면 확인 팝업은 과했다.
+function flashNoMenuHint() {
+  const hint = document.getElementById("kiosk-no-menu-hint");
+  if (hint) {
+    hint.classList.remove("is-active");
+    void hint.offsetWidth; // 연속으로 다시 트리거될 때도 애니메이션이 재시작되도록
+    hint.classList.add("is-active");
+  }
   playSpeech("메뉴를 선택하세요.");
-}
-
-function closeNoMenuModal() {
-  const modal = document.getElementById("no-menu-modal");
-  if (modal) { modal.style.display = "none"; modal.classList.remove("active"); }
   resetCart(); // 다음 시도를 위해 메뉴 선택을 기본 메뉴로 복원
 }
 
@@ -946,7 +1026,9 @@ async function loadRecentPaymentsHistory() {
     if (!res.ok) return;
     const data = await res.json();
     recentPaymentsList = data.items.map(item => ({
-      time: new Date(item.event_time).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      // #redesign - "00:39:45"(시:분:초) 대신 USER/ADMIN과 같은 공용 헬퍼로 초 제거
+      // (history-render.js의 formatHistoryTime, "오전/오후 h:mm").
+      time: formatHistoryTime(new Date(item.event_time)),
       userName: item.user_name,
       userType: item.user_type,
       amount: item.amount,
@@ -959,8 +1041,7 @@ async function loadRecentPaymentsHistory() {
 }
 
 function addRecentPayment(data) {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const timeStr = formatHistoryTime(new Date());
   recentPaymentsList.unshift({
     time: timeStr,
     userName: data.user_name || "회원",
@@ -1086,6 +1167,8 @@ function updateKioskThemeColorMeta() {
   meta.setAttribute("content", isLight ? "#eef1f7" : "#000000");
 }
 
+// #redesign - ADMIN 화면 테마 스위처와 동일한 .seg-control(style.css)로 교체, JS는
+// .is-on 클래스만 토글.
 function updateKioskThemeButtonsUI(activePref) {
   const buttons = {
     system: document.getElementById("k-theme-system-btn"),
@@ -1094,9 +1177,7 @@ function updateKioskThemeButtonsUI(activePref) {
   };
   Object.entries(buttons).forEach(([pref, btn]) => {
     if (!btn) return;
-    const active = pref === activePref;
-    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
-    btn.style.color = active ? "#001318" : "var(--text-main)";
+    btn.classList.toggle("is-on", pref === activePref);
   });
 }
 
@@ -1119,7 +1200,7 @@ function refreshKioskPinButtonUi() {
   if (!btn || btn.style.display === "none") return;
   if (!window.AndroidInterface || typeof window.AndroidInterface.isScreenPinningActive !== "function") return;
   const active = window.AndroidInterface.isScreenPinningActive();
-  btn.textContent = active ? "🔒" : "🔓";
+  btn.innerHTML = kioskIcon(active ? "lock" : "unlock");
   btn.title = active ? "화면 고정 중 (눌러서 해제)" : "화면 고정 꺼짐 (눌러서 다시 고정)";
 }
 
@@ -1136,6 +1217,17 @@ function toggleKioskScreenPinning() {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshKioskPinButtonUi();
 });
+
+// 설정 진입 PIN 화면 숫자 키패드(#redesign) - 위 등록 화면 키패드(initKioskRegisterPinKeypad)와
+// 동일한 패턴.
+function initKioskPinKeypad() {
+  const keypad = document.getElementById("kiosk-pin-keypad");
+  if (!keypad) return;
+  keypad.querySelectorAll(".pin-key[data-digit]").forEach(btn => {
+    btn.addEventListener("click", () => appendKioskPinDigit("kiosk-pin-input", btn.dataset.digit));
+  });
+  document.getElementById("kiosk-pin-backspace")?.addEventListener("click", () => removeKioskPinDigit("kiosk-pin-input"));
+}
 
 function openKioskAdminPinModal() {
   // 설정 화면으로 들어가는 동안엔 QR이 켜져 있으면 꺼둔다 (다시 쓰려면 닫은 뒤 QR 배지를 다시 탭)
@@ -1222,14 +1314,13 @@ function setKioskOrientation(mode) {
   });
 }
 
+// #redesign - 화면 테마와 동일한 .seg-control 패턴으로.
 function updateKioskOrientationButtonsUI(activeMode) {
   const portraitBtn = document.getElementById("k-orientation-portrait-btn");
   const landscapeBtn = document.getElementById("k-orientation-landscape-btn");
   [[portraitBtn, "portrait"], [landscapeBtn, "landscape"]].forEach(([btn, mode]) => {
     if (!btn) return;
-    const active = mode === activeMode;
-    btn.style.background = active ? "var(--accent-cyan)" : "var(--surface-1)";
-    btn.style.color = active ? "#001318" : "var(--text-main)";
+    btn.classList.toggle("is-on", mode === activeMode);
   });
 }
 
@@ -1254,8 +1345,9 @@ function switchKioskAdminTab(tabName) {
   const isMenu = tabName === 'menu';
   menuSec.style.display = isMenu ? "block" : "none";
   debugSec.style.display = isMenu ? "none" : "block";
-  btnMenu.classList.toggle("btn-primary", isMenu);
-  btnDebug.classList.toggle("btn-primary", !isMenu);
+  // #redesign - .seg-control(style.css)로 교체, 활성 탭만 .is-on.
+  btnMenu.classList.toggle("is-on", isMenu);
+  btnDebug.classList.toggle("is-on", !isMenu);
 }
 
 // 이 단말기에 노출할 메뉴 그리드 (전체 카탈로그 기준 - 메뉴 자체는 어느 단말기에서든
@@ -1388,6 +1480,15 @@ async function issueKioskCardToUser() {
   }
 }
 
+// 결제 결과 팝업(#redesign) - 예전엔 이 함수를 어디서도 호출하지 않아 죽은 코드였다: 실제
+// 결제 성공/실패는 화면 가장자리 글로우 + 음성 안내뿐이었는데, 시끄러운 매장이라 음성을
+// 놓치거나 볼륨이 꺼져 있으면 실패 사유를 알 방법이 전혀 없었다(맨 위 triggerKioskPayment의
+// "결과 팝업이 열려 있으면 태깅 무시" 가드도 이 모달을 전제로 짜여 있었다 - 실제로는 한 번도
+// 안 열려서 항상 무효였음). triggerKioskPayment/simulateKioskPayment에서 다시 연결하면서,
+// 라이트 테마에서 안 보이던 하드코딩 다크 전용 색(성공 박스 rgba(15,23,42,.8), 실패 글자
+// #f8fafc - 실패 사유가 안 읽히는 버그였다)도 테마 토큰으로 바꿨다.
+// data: 성공 시 결제 API 응답 그대로({user_type,user_name,total_amount,balance_after}),
+// 실패 시 {title, message} - 유형별 안내(잔액 부족/미등록 카드/기타)는 호출부에서 결정한다.
 function showModal(isSuccess, data) {
   const modal = document.getElementById("payment-modal");
   const modalBox = document.getElementById("modal-box");
@@ -1396,46 +1497,59 @@ function showModal(isSuccess, data) {
     modal.classList.add("active");
   }
 
+  clearTimeout(window._kioskModalAutoCloseTimer);
+  clearInterval(window._kioskModalCountdownTimer);
+
   if (isSuccess) {
-    modalBox.style.borderColor = "#10b981";
+    modalBox.style.borderColor = "var(--accent-emerald)";
     modalBox.innerHTML = `
-      <div style="font-size: 4.5rem; color: #10b981; margin-bottom: 0.5rem;">✅</div>
-      <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem;">결제 승인 완료</h1>
+      <div style="display: flex; justify-content: center; color: var(--accent-emerald); font-size: 4rem; margin-bottom: 0.5rem;" data-icon="check"></div>
+      <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem; color: var(--text-main);">결제 승인 완료</h1>
       <div style="margin-bottom: 1.2rem;">
         <span class="badge-tag ${data.user_type === '시니어' ? 'badge-senior' : 'badge-general'}">${data.user_type} 회원</span>
-        <strong style="font-size: 1.5rem; margin-left: 0.5rem;">${data.user_name}님</strong>
+        <strong style="font-size: 1.5rem; margin-left: 0.5rem; color: var(--text-main);">${data.user_name}님</strong>
       </div>
-      <div style="background: rgba(15,23,42,0.8); padding: 1.5rem; border-radius: 18px; margin: 1.2rem 0;">
-        <div style="color: var(--text-muted); font-size: 1.1rem;">결제 차감 금액</div>
-        <div style="font-size: 2.2rem; font-weight: 900; color: #7c3aed;">${data.total_amount.toLocaleString()}원</div>
-        <div style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.8rem;">결제 후 남은 잔액</div>
-        <div style="font-size: 1.8rem; font-weight: 900; color: #10b981;">${data.balance_after.toLocaleString()}원</div>
+      <!-- 이용자가 가장 궁금한 건 "내 잔액이 얼마 남았나"라 잔액을 먼저, 차감액과 같은 크기로
+           둔다(#redesign - 예전엔 차감액이 더 크고 팔레트 밖 보라색이었다). -->
+      <div style="background: var(--surface-2); padding: 1.5rem; border-radius: 18px; margin: 1.2rem 0;">
+        <div style="color: var(--text-muted); font-size: 1.1rem;">결제 후 남은 잔액</div>
+        <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-emerald);">${data.balance_after.toLocaleString()}원</div>
+        <div style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.8rem;">결제 차감 금액</div>
+        <div style="font-size: 1.8rem; font-weight: 900; color: var(--text-main);">${data.total_amount.toLocaleString()}원</div>
       </div>
-      <p id="kiosk-modal-timer" style="color: var(--text-muted); font-size: 1.1rem;">3초 후 대기 화면으로 자동 전환됩니다.</p>
+      <p id="kiosk-modal-timer" style="color: var(--text-muted); font-size: 1.1rem;">5초 후 대기 화면으로 자동 전환됩니다.</p>
     `;
+    hydrateIconPlaceholders(modalBox);
 
-    let seconds = 3;
-    const interval = setInterval(() => {
+    // 고령 이용자가 잔액을 읽을 시간을 고려해 3초 → 5초로 늘리고, 카운트다운을 눈에 보이게
+    // 남겨둔다(#redesign).
+    let seconds = 5;
+    window._kioskModalCountdownTimer = setInterval(() => {
       seconds--;
       const timerElem = document.getElementById("kiosk-modal-timer");
       if (timerElem) timerElem.innerText = `${seconds}초 후 대기 화면으로 자동 전환됩니다.`;
       if (seconds <= 0) {
-        clearInterval(interval);
+        clearInterval(window._kioskModalCountdownTimer);
         closeModal();
       }
     }, 1000);
   } else {
-    modalBox.style.borderColor = "#f43f5e";
+    modalBox.style.borderColor = "var(--accent-rose)";
     modalBox.innerHTML = `
-      <div style="font-size: 4.5rem; color: #f43f5e; margin-bottom: 0.5rem;">⚠️</div>
-      <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem; color: #f43f5e;">결제 실패</h1>
-      <p style="font-size: 1.4rem; margin: 1.5rem 0; color: #f8fafc;">${data}</p>
-      <button class="btn-action btn-primary" onclick="closeModal()">닫기</button>
+      <div style="display: flex; justify-content: center; color: var(--accent-rose); font-size: 4rem; margin-bottom: 0.5rem;" data-icon="alert"></div>
+      <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem; color: var(--accent-rose);">${data.title}</h1>
+      <p style="font-size: 1.4rem; margin: 1.5rem 0; color: var(--text-main);">${data.message}</p>
+      <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeModal()">닫기</button>
     `;
+    hydrateIconPlaceholders(modalBox);
+    // 자동 닫힘(#redesign) - 손님이 못 눌러도 다음 손님을 위해 화면이 저절로 복귀한다.
+    window._kioskModalAutoCloseTimer = setTimeout(closeModal, 5000);
   }
 }
 
 function closeModal() {
+  clearTimeout(window._kioskModalAutoCloseTimer);
+  clearInterval(window._kioskModalCountdownTimer);
   const modal = document.getElementById("payment-modal");
   if (modal) {
     modal.style.display = 'none';

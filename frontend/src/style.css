@@ -1739,20 +1739,6 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   height: 86dvh !important;
 }
 
-/* 관리자 설정 모달의 메뉴 설정/로그 확인 탭 버튼 - 선택 여부는 JS가 .btn-primary
-   클래스만 토글해서 표시하고(인라인 style은 건드리지 않는다), 비선택 상태의 배경/글자색은
-   여기서 고정해둔다. 예전엔 JS가 비활성 탭에 style.background를 직접 덮어썼는데, 탭을
-   다시 활성화할 때 그 인라인 값을 지우지 않아 .btn-primary보다 우선 적용되면서 흰 글자가
-   거의 흰 배경 위에 남아 안 보이는 버그가 있었다. */
-.kiosk-settings-tab-btn {
-  background: var(--surface-1);
-  color: var(--text-main);
-}
-.kiosk-settings-tab-btn.btn-primary {
-  background: linear-gradient(135deg, #06b6d4, #3b82f6);
-  color: #fff;
-}
-
 .modal-body {
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
@@ -1965,6 +1951,52 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
 .cart-item {
   color: var(--text-muted);
   padding: 0.2rem 0;
+}
+
+/* "카드를 대주세요" 결제 유도 패널(#redesign, kiosk.html의 kiosk-tap-card-panel) - 메뉴를
+   담아도 다음에 뭘 해야 하는지 안내가 없다는 게 실제 셀프 키오스크 대조 리뷰의 가장 큰
+   지적이었다. 장바구니가 비어있으면 눈에 덜 띄게 죽여두고(.is-active 없음), 담기는 순간
+   kiosk.js updateCheckoutSummary가 .is-active를 얹어 강조한다. */
+.kiosk-tap-card-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-glass);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.kiosk-tap-card-panel .kiosk-tap-card-icon {
+  display: inline-flex;
+  font-size: 1.15em;
+}
+.kiosk-tap-card-panel.is-active {
+  background: var(--accent-cyan-glow);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  animation: kioskTapCardPulse 1.8s ease-in-out infinite;
+}
+@keyframes kioskTapCardPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 메뉴 미선택 상태로 카드를 대려 할 때 잠깐 보였다 사라지는 인라인 힌트
+   (kiosk.html의 kiosk-no-menu-hint, kiosk.js의 flashNoMenuHint 참고). */
+@keyframes kioskHintPop {
+  0% { opacity: 0; transform: translateY(-2px); }
+  15%, 85% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; }
+}
+#kiosk-no-menu-hint.is-active {
+  display: flex !important;
+  animation: kioskHintPop 2.4s ease;
 }
 
 .checkout-scan-box {
@@ -2844,6 +2876,19 @@ button, .btn, .btn-action, .btn-primary, .btn-senior, .btn-emerald {
   background: none;
   color: var(--text-muted);
   font-size: 1.1rem;
+}
+
+/* PIN 입력칸 공용 자간(#redesign) - 값이 있을 때만 자릿수를 벌려 보이게. :placeholder-shown일
+   때도 자간을 그대로 두면 짧은 플레이스홀더("PIN 입력" 등)까지 같이 벌어져 "P I N   입 력"
+   처럼 깨져 보인다(버그, 키오스크 등록/PIN 화면 실기기 리뷰로 발견) - ADMIN PIN 인증
+   입력칸도 같은 버그라 이 공용 클래스로 함께 고친다. */
+.pin-code-input {
+  text-align: center;
+  font-size: 1.8rem;
+  letter-spacing: 0.4rem;
+}
+.pin-code-input:placeholder-shown {
+  letter-spacing: normal;
 }
 
 /* 설정 탭 그룹 캡션(#redesign) - iOS 설정 앱처럼 각 카드 그룹 위에 작은 대문자 라벨을 둬서
