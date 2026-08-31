@@ -1464,6 +1464,11 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   flex-shrink: 0;
   width: var(--sw-w);
   height: var(--sw-h);
+  /* 전역 button 규칙(위쪽, min-height: 42px)이 이 버튼에도 걸려 26px로 지정한 높이를
+     42px로 밀어 올리는 바람에 knob이 캡슐 위쪽에 붙어 초승달처럼 보이는 버그가 있었다
+     (#settings-redesign, ADMIN 알림 스위치를 22px로 줄이며 발견 - USER 프로필 푸시
+     스위치도 같은 문제를 안고 있었을 것). 여기서 그 하한을 무효화한다. */
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 1px solid var(--border-glass);
@@ -3012,5 +3017,85 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   color: var(--text-muted);
   text-transform: uppercase;
   margin: 0 0.3rem 0.4rem;
+}
+
+/* 설정 탭 공용 행(#settings-redesign) - 좌측 라벨 + 우측 컨트롤(스위치 등), 화면 테마
+   세그먼트 행과 같은 가로 정렬을 클래스로 뽑았다. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* 알림 항목 3개처럼 마스터 토글 아래 딸린 하위 행 그룹 - 위쪽 hairline으로 한 묶음임을
+   보여준다(#settings-redesign, 리뷰 지적: "이모지 푸시 버튼 + 맨 체크박스 3개 → 스위치
+   행 그룹"). */
+.settings-subrows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-glass);
+}
+.settings-subrow {
+  font-size: 0.8rem;
+  color: var(--text-main);
+}
+.settings-subrow .switch-toggle {
+  margin-left: auto;
+  --sw-w: 38px;
+  --sw-h: 22px;
+}
+
+/* 앱 다운로드 리스트(#settings-redesign) - 풀폭 pill 버튼 3개 대신 플랫폼 아이콘 + "버전 ·
+   용량" + 우측 다운로드 아이콘 한 줄(리뷰 지적: "APK 다운로드 풀폭 pill 3개 → 플랫폼 ·
+   버전 · 용량 리스트"). 버전/용량 텍스트는 admin.js hydrateApkDownloadMeta()가 채운다. */
+.settings-dl-list {
+  display: flex;
+  flex-direction: column;
+}
+.settings-dl-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.2rem;
+  border-bottom: 1px solid var(--border-glass);
+  color: var(--text-main);
+  text-decoration: none;
+}
+.settings-dl-row:last-child {
+  border-bottom: 0;
+}
+.settings-dl-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+.settings-dl-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.settings-dl-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.settings-dl-meta {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+.settings-dl-arrow {
+  flex: none;
+  color: var(--accent-cyan);
+  font-size: 1.1rem;
 }
 

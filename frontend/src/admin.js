@@ -29,6 +29,10 @@ const ICON_SVGS = {
   minus: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>',
   copy: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   alert: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  // "개발자 메뉴" 헤더 - 예전엔 🔔(벨) 아이콘이라 은유가 안 맞았다(#settings-redesign, 리뷰 지적).
+  wrench: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94Z"/></svg>',
+  // 앱 다운로드 리스트 행 우측 화살표(#settings-redesign) - 풀폭 pill 버튼 3개 대신.
+  download: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>',
 };
 function icon(name) {
   return ICON_SVGS[name] || "";
@@ -40,6 +44,32 @@ function hydrateIconPlaceholders(root) {
   (root || document).querySelectorAll("[data-icon]").forEach(el => {
     el.innerHTML = icon(el.dataset.icon);
   });
+}
+
+// 설정 탭 "앱 다운로드" 행의 버전/용량 텍스트(#settings-redesign, 리뷰 지적: "풀폭 pill 3개
+// → 플랫폼 · 버전 · 용량 리스트") - href/download 속성 자체는 release-apk.yml이 릴리스마다
+// sed로 직접 덮어쓰는 값이라 여기서 건드리지 않고, download="SomangPayKiosk-1.0.40.apk"
+// 형태에서 버전만 정규식으로 뽑아 쓴다. 용량은 정적 파일 HEAD 요청의 Content-Length로
+// 구한다 - 실패해도(오프라인 등) 버전 텍스트는 남는다.
+async function hydrateApkDownloadMeta() {
+  const rows = document.querySelectorAll(".settings-dl-row");
+  for (const row of rows) {
+    const metaEl = row.querySelector(".settings-dl-meta");
+    if (!metaEl) continue;
+    const m = /-(.+)\.apk$/.exec(row.getAttribute("download") || "");
+    const version = m ? m[1] : null;
+    metaEl.textContent = version ? `버전 ${version}` : "";
+    try {
+      const res = await fetch(row.getAttribute("href"), { method: "HEAD", cache: "no-store" });
+      const len = res.headers.get("Content-Length");
+      if (len) {
+        const mb = (parseInt(len, 10) / (1024 * 1024)).toFixed(1);
+        metaEl.textContent = version ? `버전 ${version} · ${mb}MB` : `${mb}MB`;
+      }
+    } catch (err) {
+      // 오프라인 등 - 버전만 표시된 채로 둔다
+    }
+  }
 }
 
 // 외부(수신 문자 본문 등 신뢰할 수 없는) 텍스트를 innerHTML에 꽂을 때 XSS를 막는 이스케이프.
@@ -169,6 +199,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // 이라는 걸 안내한다 - 웹 브라우저 세션에서는 백그라운드 자동감지 자체가 의미 없어 숨긴다.
     const detectNotice = document.getElementById("admin-pin-detect-notice");
     if (detectNotice) detectNotice.style.display = "block";
+  } else {
+    hydrateApkDownloadMeta();
   }
 
   // admin_token/admin_auth는 (sessionStorage가 아니라) localStorage에 저장한다 - 입금 문자/알림
@@ -279,11 +311,15 @@ function urlBase64ToUint8ArrayAdmin(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
+// 알림 항목 3개(#a-push-cat-*)는 원래 <input type="checkbox">였는데(#settings-redesign,
+// 리뷰 지적: "이모지 푸시 버튼 + 맨 체크박스 3개 → 스위치 행 그룹") USER 프로필 push
+// 토글과 같은 .switch-toggle 버튼으로 통일했다 - .checked 대신 "is-on" 클래스로 켜짐/꺼짐을
+// 표시한다.
 function readAdminPushCategoryCheckboxes() {
   const result = {};
   ADMIN_PUSH_CATEGORIES.forEach((cat) => {
     const el = document.getElementById(`a-push-cat-${cat}`);
-    result[`notify_${cat}`] = el ? el.checked : true;
+    result[`notify_${cat}`] = el ? el.classList.contains("is-on") : true;
   });
   return result;
 }
@@ -297,15 +333,29 @@ function setAdminPushCategoryCheckboxesEnabled(enabled) {
   });
 }
 
-// 체크박스는 HTML에 항상 checked로 박혀 있어서, 서버에 저장된 실제 값으로 동기화해주지
+// 버튼은 HTML에 항상 is-on으로 박혀 있어서, 서버에 저장된 실제 값으로 동기화해주지
 // 않으면 새로고침할 때마다 이전에 꺼둔 항목이 다시 켜진 것처럼 보인다.
 function writeAdminPushCategoryCheckboxes(categories) {
   ADMIN_PUSH_CATEGORIES.forEach((cat) => {
     const el = document.getElementById(`a-push-cat-${cat}`);
-    if (el && categories[`notify_${cat}`] !== undefined) {
-      el.checked = categories[`notify_${cat}`];
+    const value = categories[`notify_${cat}`];
+    if (el && value !== undefined) {
+      el.classList.toggle("is-on", !!value);
+      el.setAttribute("aria-checked", value ? "true" : "false");
     }
   });
+}
+
+// 알림 항목 스위치 하나를 탭했을 때 - 즉시 시각 상태를 뒤집고 전체 상태를 저장한다
+// (updateAdminPushCategories가 readAdminPushCategoryCheckboxes로 현재 3개 상태를 전부 다시
+// 읽어 PUT하므로 여기선 클래스만 뒤집으면 된다).
+function toggleAdminPushCategory(cat) {
+  const el = document.getElementById(`a-push-cat-${cat}`);
+  if (!el || el.disabled) return;
+  const next = !el.classList.contains("is-on");
+  el.classList.toggle("is-on", next);
+  el.setAttribute("aria-checked", next ? "true" : "false");
+  updateAdminPushCategories();
 }
 
 async function getCurrentAdminPushSubscription() {
@@ -331,16 +381,21 @@ async function refreshAdminPushButtonUI() {
   await ensureAdminPushSubscriptionFresh();
 
   const btn = document.getElementById("a-push-toggle-btn");
+  const status = document.getElementById("a-push-status");
   if (!btn) return;
   if (!adminPushSupported()) {
-    btn.innerText = "🔕 미지원 브라우저";
     btn.disabled = true;
+    btn.classList.remove("is-on");
+    btn.setAttribute("aria-checked", "false");
+    if (status) status.innerText = "미지원 브라우저";
     setAdminPushCategoryCheckboxesEnabled(false);
     return;
   }
   const sub = await getCurrentAdminPushSubscription();
   btn.disabled = false;
-  btn.innerText = sub ? "🔔 켜짐" : "🔕 꺼짐";
+  if (status) status.innerText = "";
+  btn.classList.toggle("is-on", !!sub);
+  btn.setAttribute("aria-checked", sub ? "true" : "false");
   setAdminPushCategoryCheckboxesEnabled(!!sub);
   if (sub) {
     try {
@@ -354,7 +409,9 @@ async function refreshAdminPushButtonUI() {
 
 async function toggleAdminPushNotifications() {
   const btn = document.getElementById("a-push-toggle-btn");
-  if (btn) { btn.disabled = true; btn.innerText = "⏳ 처리 중..."; }
+  const status = document.getElementById("a-push-status");
+  if (btn) btn.disabled = true;
+  if (status) status.innerText = "처리 중…";
   try {
     const sub = await getCurrentAdminPushSubscription();
     if (sub) {
