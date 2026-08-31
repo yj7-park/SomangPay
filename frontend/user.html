@@ -106,13 +106,13 @@
            빈도가 높은 "충전"으로 바꾸고, 이용내역과 자리를 맞바꿔 QR결제 바로 옆(홈 다음)
            으로 당겼다 - 잔액 확인 다음으로 자주 하는 동작이라 이용내역(결과를 나중에
            들여다보는 동작)보다 앞에 두는 게 맞다.
-           아이콘은 원래 아래쪽 화살표(다운로드/받기로 읽혀 어색하다는 피드백)였다 -
-           PayPal/Cash App/구글페이 등 대부분의 지갑 앱이 "충전/카드에 돈 추가"를
-           카드(또는 지갑)+플러스 조합으로 표현하길래(#redesign) 같은 패턴으로,
-           이미 쓰던 카드 아이콘(admin.js ICONS.card와 같은 모양)에 +를 얹었다 - 이
-           앱이 실제로 NFC 카드에 충전하는 서비스라 의미도 더 맞는다. -->
+           아이콘은 원래 아래쪽 화살표(다운로드/받기로 읽혀 어색하다는 피드백) → 카드+플러스
+           (PayPal/Cash App 등 지갑 앱 조사 참고)로 바꿨다가, 사용자 피드백으로 플러스를
+           빼고 카드 모양만 남겼다 - 이 앱 로고 마크(icons/logo-mark-user.svg) 우측 하단
+           카드 뱃지와 같은 모티프라 브랜드와도 맞고, admin.js ICONS.card와 동일한 rect+
+           가로줄 모양이라 "충전 = 내 카드에 채운다"는 의미도 그대로 산다. -->
       <button class="admin-tab-btn" data-view="charge" onclick="switchUserView('charge')">
-        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M12 10.5v5M9.5 13h5"/></svg></span>
+        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg></span>
         <span>충전</span>
       </button>
       <!-- 다른 탭과 동일한 탭 전환 버튼(#user-update) - 팝업 모달 대신 QR 전용 페이지로
@@ -157,7 +157,7 @@
             <span>QR 결제</span>
           </button>
           <button type="button" onclick="switchUserView('charge')">
-            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M12 10.5v5M9.5 13h5"/></svg>
+            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>
             <span>충전</span>
           </button>
           <button type="button" onclick="switchUserView('history')">
