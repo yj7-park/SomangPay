@@ -216,6 +216,15 @@ function userLogout() {
   document.getElementById("login-password").value = "";
 }
 
+// 마이프로필 "로그아웃" 버튼 전용(#redesign, 사용자 피드백: "로그아웃 버튼은 컨펌 모달이
+// 필요해") - 세션 만료(401)/복원 실패 시 자동 로그아웃(위 userLogout() 직접 호출, 두 곳)은
+// 사용자 조작이 아니라 확인 없이 바로 처리해야 하므로 그대로 두고, 사람이 직접 누르는
+// 경우에만 이 래퍼를 거치게 한다.
+async function confirmUserLogout() {
+  if (!(await showConfirmModal("로그아웃 하시겠습니까?"))) return;
+  userLogout();
+}
+
 // ============ 탭 전환(홈/충전/QR결제/이용내역/마이프로필) - admin.js switchAdminView()와 같은 패턴 ============
 // 상단 고정 바 제목(#redesign) - USER는 뒤로가기가 필요한 드릴다운 화면이 없는 평면 탭
 // 5개뿐이라 ADMIN의 updateAdminHeader와 달리 제목만 갱신하면 된다.

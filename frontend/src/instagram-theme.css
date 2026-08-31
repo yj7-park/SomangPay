@@ -645,10 +645,25 @@ body[data-theme="light"] .ig-login-logo {
 
 /* 플로팅 라벨: input에 placeholder=" "(공백)을 둬서 :placeholder-shown으로
    "비어 있음"을 판별한다. 비어 있으면 라벨이 입력칸 세로 가운데, 포커스되거나
-   값이 있으면 위로 올라가며 축소된다. */
+   값이 있으면 위로 올라가며 축소된다.
+   버그(사용자 리포트: "입력칸 안내가 안 보여") - 카드 배경/테두리를 .ig-input에
+   직접 줬더니, position:absolute인 .ig-field-label(뒤 형제, z-index로도 못 이김)
+   보다 <input>이 항상 위에 그려져 라벨이 통째로 가려졌다. Chromium이 폼 컨트롤을
+   네이티브 위젯 레이어로 별도 합성해서 형제 스태킹 규칙을 벗어나는 것으로 보임
+   (input background를 투명으로 바꾸면 라벨이 바로 보이는 것으로 확인). 카드
+   배경/테두리를 래퍼(.ig-field)로 옮기고 .ig-input 자체는 투명하게 둬서 라벨이
+   항상 보이게 한다 - 포커스 링도 :focus-within으로 래퍼에 건다. */
 .ig-field {
   position: relative;
   display: block;
+  background: var(--surface-1);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease;
+}
+.ig-field:focus-within {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(103, 129, 192, 0.22);
 }
 .ig-input {
   width: 100%;
@@ -658,23 +673,17 @@ body[data-theme="light"] .ig-login-logo {
   font: inherit;
   font-size: 0.95rem;
   color: var(--text-main);
-  background: var(--surface-1);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
   outline: none;
-  transition: border-color 0.15s ease;
-}
-.ig-input:focus {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 3px rgba(103, 129, 192, 0.22);
 }
 /* 라이트 모드에서 입력칸 배경(--surface-1 = navy 3.5%)이 흰 카드와 거의 구분이 안 돼
    대비를 올린다(#redesign) - 보더는 --border-glass가 이미 #dbdbdb라 그대로 둔다. */
-body[data-theme="light"] .ig-input {
+body[data-theme="light"] .ig-field {
   background: #fafafa;
 }
 @media (prefers-color-scheme: light) {
-  body:not([data-theme="dark"]) .ig-input {
+  body:not([data-theme="dark"]) .ig-field {
     background: #fafafa;
   }
 }
