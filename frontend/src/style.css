@@ -905,7 +905,7 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   padding: 0.3em;
   /* 위쪽 잔액 카드(.user-card-widget)와 같은 배경으로 통일 - "같은 카드에서 온 버튼"처럼
      보이도록(#redesign - 카드가 그라디언트→플랫 남색으로 바뀌어 여기도 맞춤). */
-  background: var(--user-card-bg, #1d1c51);
+  background: var(--user-card-bg, #2d326e);
   color: #fff;
   border-radius: var(--radius-md);
 }
@@ -1546,7 +1546,7 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   position: relative;
   z-index: 0;
   overflow: hidden;
-  background: var(--user-card-bg, #1d1c51);
+  background: var(--user-card-bg, #2d326e);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   margin-bottom: 1.2rem;

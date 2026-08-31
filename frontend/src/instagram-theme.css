@@ -38,14 +38,14 @@
   --brand-navy: #1f1e59;
   --brand-blue: #6781c0;
   --brand-sky: #adc0e2;
-  /* USER 잔액 카드/QR FAB 배경(#redesign) 전용. 로고 마크 SVG(logo-mark-user.svg)엔
-     4가지 톤이 있는데 그중 가장 진한 색(#131532)과 두 번째로 진한 색(--brand-navy,
-     #1f1e59) 사이 값으로 잡았다 - --brand-navy를 그대로 쓰면 로고의 그 색 사각형들이
-     배경과 완전히 같아져 워터마크에서 그 부분만 안 보였다(사용자 리포트로 발견,
-     처음엔 #16153f로 너무 어둡게 잡았다가 조정). 라이트/다크 공통, 여기 한 번만
-     선언해도 두 테마 스코프 모두 상속받는다(--brand-navy 자체가 테마 불문 고정인 것과
-     동일 이유). */
-  --user-card-bg: #1d1c51;
+  /* USER 잔액 카드/QR FAB 배경(#redesign) 전용. --brand-navy(#1f1e59, 로고에서 두 번째로
+     진한 색)를 그대로 쓰면 로고 마크 SVG(logo-mark-user.svg)의 그 색 사각형들이 배경과
+     완전히 같아져 워터마크에서 그 부분만 안 보였다(사용자 리포트로 발견) - --brand-navy와
+     그다음 톤(--brand-blue, #6781c0) 사이로 옮겨 워터마크 전체가 배경과 구분되면서도
+     카드가 너무 밝은 파랑으로 튀지 않게 했다(#16153f → #1d1c51 → 여기, 밝기 피드백 반영해
+     단계적으로 조정). 라이트/다크 공통, 여기 한 번만 선언해도 두 테마 스코프 모두
+     상속받는다(--brand-navy 자체가 테마 불문 고정인 것과 동일 이유). */
+  --user-card-bg: #2d326e;
 
   --accent-cyan: #6781c0;    /* 메인 액센트 (버튼/링크/포커스) - 로고 중간 톤 */
   --accent-cyan-glow: rgba(103, 129, 192, 0.18);
@@ -507,7 +507,7 @@ button:hover,
    플랫 배경으로 다시 맞춘다(style.css .user-card-widget 참고, --user-card-bg 정의는
    위 :root 참고). */
 .user-card-widget {
-  background: var(--user-card-bg, #16153f);
+  background: var(--user-card-bg, #2d326e);
 }
 
 /* ---------------- Tables ---------------- */
