@@ -106,18 +106,18 @@
            빈도가 높은 "충전"으로 바꾸고, 이용내역과 자리를 맞바꿔 QR결제 바로 옆(홈 다음)
            으로 당겼다 - 잔액 확인 다음으로 자주 하는 동작이라 이용내역(결과를 나중에
            들여다보는 동작)보다 앞에 두는 게 맞다.
-           아이콘 변천사(사용자 피드백 반복 반영): 아래쪽 화살표(다운로드/받기로 읽힘) →
-           카드+가운데 플러스 → 플러스 빼고 카드만(로고 마크 icons/logo-mark-user.svg
-           우측 하단 카드 뱃지, admin.js ICONS.card와 같은 모티프, 단 "충전" 동작성이
-           약하다는 지적) → 카드를 키우고 위에 플러스(십자가+상자로 보여 "교회 같다"는
-           피드백) → 카드 자체를 키움("네모로 보인다"는 피드백 - 19x14 카드 비율이
-           21x16으로 정사각形에 가까워지며 카드보다 상자처럼 보였다) → 현재: 카드는
-           처음 그 모양(19x14, x=2.5 y=5) 그대로 두고 안에 플러스만 넣음. "조금 더
-           크게"는 카드 비율을 바꾸는 대신 바깥 em(1em→1.15em/1.4em→1.5em)만 키워서
-           해결 - 다른 탭 아이콘은 박스를 거의 꽉 채우는 도형이라 카드만 상대적으로
-           작고 마르게 보이는 문제였다. -->
+           아이콘 변천사(사용자 피드백 반복 반영, 마지막엔 스크린샷에 손으로 그려서 전달):
+           아래쪽 화살표(다운로드/받기로 읽힘) → 카드+가운데 플러스(줄무늬 없음) → 플러스
+           빼고 카드만(로고 마크 icons/logo-mark-user.svg 우측 하단 카드 뱃지, admin.js
+           ICONS.card와 같은 모티프, 단 "충전" 동작성이 약하다는 지적) → 카드를 키우고
+           위에 플러스(십자가+상자로 보여 "교회 같다"는 피드백) → 카드 자체를 키움
+           ("네모로 보인다"는 피드백) → 현재: 카드는 처음 모양(19x14, x=2.5 y=5) 그대로,
+           위쪽에 카드 줄무늬(admin.js ICONS.card와 동일한 M2.5 10h19)를 다시 넣고 그
+           아래 남는 몸통 공간 중앙에 플러스 배치 - "카드"라는 사물성과 "충전(더한다)"
+           동작성을 함께 담아달라는 사용자의 손그림 요청 그대로. 크기는 바깥 em
+           (1em→1.15em/1.4em→1.5em)로 다른 탭 아이콘과 맞춤. -->
       <button class="admin-tab-btn" data-view="charge" onclick="switchUserView('charge')">
-        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M12 9v6M9 12h6"/></svg></span>
+        <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/><path d="M12 11.5v6M9 14.5h6"/></svg></span>
         <span>충전</span>
       </button>
       <!-- 다른 탭과 동일한 탭 전환 버튼(#user-update) - 팝업 모달 대신 QR 전용 페이지로
@@ -162,7 +162,7 @@
             <span>QR 결제</span>
           </button>
           <button type="button" onclick="switchUserView('charge')">
-            <svg class="icon-line" viewBox="0 0 24 24" width="1.5em" height="1.5em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M12 9v6M9 12h6"/></svg>
+            <svg class="icon-line" viewBox="0 0 24 24" width="1.5em" height="1.5em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/><path d="M12 11.5v6M9 14.5h6"/></svg>
             <span>충전</span>
           </button>
           <button type="button" onclick="switchUserView('history')">
