@@ -25,15 +25,15 @@ def _bank_items(db: Session, user_id: int, before: Optional[datetime.datetime], 
     items = []
     for t in rows:
         if t.status == "OTHER":
-            label, badge_class = "보류", "status-rejected"
+            label, badge_class, category = "보류", "status-rejected", "pending"
             amount_text, amount_class = f"{t.amount:,}원", "amount-neutral"
             reason = t.resolution_memo or "처리 보류(관리자 문의)"
         else:
-            label, badge_class = "금액 충전", "status-done"
+            label, badge_class, category = "금액 충전", "status-done", "bank_charge"
             amount_text, amount_class = f"+{t.amount:,}원", "amount-positive"
             reason = "본인 확인 후 충전" if t.status == "CREDITED" else (t.resolution_memo or "관리자가 대신 충전 처리")
         items.append(schemas.HistoryItemResponse(
-            label=label, badge_class=badge_class, amount=t.amount,
+            label=label, badge_class=badge_class, category=category, amount=t.amount,
             amount_text=amount_text, amount_class=amount_class,
             balance_after=t.balance_after, reason=reason, event_time=t.resolved_at or t.created_at,
         ))
@@ -55,11 +55,12 @@ def _admin_deposit_items(db: Session, user_id: int, before: Optional[datetime.da
         is_deduct = h.deposit_type == "ADMIN_MANUAL_DEDUCT"
         label = "금액 차감" if is_deduct else "금액 충전"
         badge_class = "status-rejected" if is_deduct else "status-done"
+        category = "admin_deduct" if is_deduct else "admin_charge"
         amount_class = "amount-negative" if is_deduct else "amount-positive"
         sign = "" if h.amount < 0 else "+"
         reason = h.memo or ("관리자 직권 차감" if is_deduct else "관리자 직권 충전")
         items.append(schemas.HistoryItemResponse(
-            label=label, badge_class=badge_class, amount=h.amount,
+            label=label, badge_class=badge_class, category=category, amount=h.amount,
             amount_text=f"{sign}{h.amount:,}원", amount_class=amount_class,
             balance_after=h.balance_after, reason=reason, event_time=h.created_at,
         ))
@@ -77,6 +78,7 @@ def _payment_items(db: Session, user_id: int, before: Optional[datetime.datetime
         is_failed = p.status == "FAILED"
         label = "결제 실패" if is_failed else "결제 성공"
         badge_class = "status-rejected" if is_failed else "status-payment"
+        category = "payment_failed" if is_failed else "payment"
         amount_class = "amount-neutral" if is_failed else "amount-negative"
         if is_failed:
             reason = p.failure_reason or "결제 실패"
@@ -87,7 +89,7 @@ def _payment_items(db: Session, user_id: int, before: Optional[datetime.datetime
                 kiosk_name = kiosk.device_name if kiosk else None
             reason = " · ".join(filter(None, [kiosk_name, p.product_details])) or "-"
         items.append(schemas.HistoryItemResponse(
-            label=label, badge_class=badge_class, amount=-p.amount,
+            label=label, badge_class=badge_class, category=category, amount=-p.amount,
             amount_text=f"-{p.amount:,}원", amount_class=amount_class,
             balance_after=p.balance_after, reason=reason, event_time=p.created_at,
         ))

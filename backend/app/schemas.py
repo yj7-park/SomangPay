@@ -255,6 +255,10 @@ class ChargeGuideResponse(BaseModel):
 class HistoryItemResponse(BaseModel):
     label: str  # "금액 충전" / "금액 차감" / "결제 성공" / "결제 실패" / "보류"
     badge_class: str  # "status-done" | "status-rejected" | "status-payment"
+    # 카드 좌측 원형 아이콘/틴트를 고르는 값(#history-redesign) - label만으로는 계좌이체
+    # 자동충전과 관리자 직권충전이 둘 다 "금액 충전"이라 구분이 안 돼 따로 뽑았다.
+    # "payment" | "payment_failed" | "bank_charge" | "pending" | "admin_charge" | "admin_deduct"
+    category: str
     amount: int  # 부호 있는 원래 금액값 (참고용 - 화면 표시는 amount_text/amount_class 사용)
     amount_text: str  # 화면에 그대로 넣을 문자열(부호/천단위 콤마 포함, 예: "+10,000원")
     amount_class: str  # "amount-positive" | "amount-negative" | "amount-neutral"

@@ -2011,7 +2011,7 @@ async function loadMoreDetailHistory() {
     if (data.items.length === 0) {
       _detailHistoryHasMore = false;
       if (box.children.length === 0) {
-        box.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem 0;">이력이 없습니다.</p>`;
+        box.innerHTML = historyEmptyStateHtml("이력이 없습니다.");
       }
       return;
     }
@@ -3063,13 +3063,14 @@ async function loadMoreKioskDetailHistory() {
     if (data.items.length === 0) {
       _kioskHistoryHasMore = false;
       if (box.children.length === 0) {
-        box.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem 0;">결제 이력이 없습니다.</p>`;
+        box.innerHTML = historyEmptyStateHtml("결제 이력이 없습니다.");
       }
       return;
     }
     const mapped = data.items.map(item => ({
       label: "결제",
       badge_class: "status-payment",
+      category: "payment",
       reason: `${item.user_name} (${item.user_type})${item.product_details ? " · " + item.product_details : ""}`,
       amount: -item.amount,
       amount_text: `-${item.amount.toLocaleString()}원`,

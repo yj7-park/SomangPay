@@ -1252,42 +1252,68 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   padding: 0.2rem 0.6rem;
 }
 
-/* 충전/결제 통합 이력 카드 - 어드민 회원상세와 유저 앱 이용내역이 동일한 레이아웃을
-   쓴다(#19): 좌상단 종류 배지, 좌하단 사유(충전 메모/실패 사유/결제 목록), 우상단
-   금액(+/-), 우하단 잔액. */
+/* 충전/결제 통합 이력 행(#19, #history-redesign) - 어드민 회원상세/키오스크상세와 유저 앱
+   이용내역이 동일한 레이아웃을 쓴다: 좌측 카테고리 아이콘, 그 옆 제목/부제(2줄), 우측
+   금액(+/-) + 잔액. 예전엔 감싸는 .glass-container 안에서 행마다 다시 --surface-2로
+   배경을 채워 "카드 안 카드"로 겹쳐 보였다는 리뷰 지적으로, 행 자체는 배경 없이 hairline
+   구분선만 넣는 flat 목록으로 바꿨다. */
 .history-item {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
-  background: var(--surface-2);
-  border-radius: 10px;
-  padding: 0.8rem 1rem;
-  margin-bottom: 0.6rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.1rem;
+  border-bottom: 1px solid var(--border-glass);
 }
 .history-item:last-child {
-  margin-bottom: 0;
+  border-bottom: 0;
+}
+.history-item-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+/* 아이콘 색은 상태(성공/실패)가 아니라 "누가 일으킨 이벤트인가"를 나타낸다(history-render.js
+   HISTORY_CATEGORY_META 참고) - 계좌이체 자동충전만 초록(pos), 관리자 개입은 브랜드
+   액센트(accent)/경고(warn)/위험(danger)으로 구분한다. 배경 rgba는 .activity-status pill과
+   같은 값을 그대로 재사용해 라이트/다크 양쪽에서 이미 검증된 대비를 유지한다. */
+.history-item-icon.pos {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+}
+.history-item-icon.accent {
+  background: var(--accent-cyan-glow);
+  color: var(--accent-cyan);
+}
+.history-item-icon.warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+}
+.history-item-icon.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-danger);
 }
 .history-item-left {
   min-width: 0;
+  flex: 1;
 }
-.history-item-top {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.history-item-top .activity-status {
-  margin-top: 0;
-}
-.history-item-date {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+.history-item-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.history-item-reason {
-  font-size: 0.85rem;
+.history-item-subtitle {
+  font-size: 0.78rem;
   color: var(--text-muted);
-  margin-top: 0.3rem;
+  margin-top: 0.15rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1296,46 +1322,48 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   text-align: right;
   flex-shrink: 0;
 }
+/* 지출까지 빨강이면 화면이 온통 빨강이라 불안하게 읽힌다는 리뷰 지적으로, 입금
+   (amount-positive)만 초록으로 두고 지출/실패/보류는 전부 기본 잉크색을 쓴다. */
 .history-item-amount {
   font-weight: 800;
   font-size: 1.05rem;
   white-space: nowrap;
+  color: var(--text-main);
 }
 .history-item-amount.amount-positive {
   color: var(--accent-emerald);
 }
-.history-item-amount.amount-negative {
-  color: var(--accent-danger);
-}
-.history-item-amount.amount-neutral {
-  color: var(--text-muted);
-}
-/* 이용내역 날짜 구분선(#33) - 카드를 날짜별로 묶어 이 줄로 나누고, 카드 자체에는
-   시간만 남긴다(historyItemHtml 참고). */
+/* 이용내역 날짜 구분선(#33, #history-redesign) - 행을 날짜별로 묶어 이 줄로 나누고, 행
+   자체에는 시간만 남긴다(historyItemHtml 참고). 예전 "2026년 8월 30일 일요일" 가운데
+   정렬 풀 문장을 "오늘/어제/8월 28일 (금)"처럼 줄이고 좌측 정렬로 바꿨다. */
 .history-date-divider {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
-  margin: 1rem 0 0.6rem;
+  margin: 1rem 0 0.4rem;
 }
 .history-date-divider:first-child {
   margin-top: 0;
-}
-.history-date-divider::before,
-.history-date-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border-glass);
 }
 
 .history-item-balance {
   font-size: 0.78rem;
   color: var(--text-muted);
   margin-top: 0.15rem;
+}
+
+/* 이용내역 빈 상태(#history-redesign) - 회색 텍스트 한 줄 대신 아이콘 + 카피. */
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-muted);
+  padding: 2rem 0;
+  text-align: center;
+}
+.history-empty p {
+  font-size: 0.85rem;
 }
 
 /* Member detail view (회원 상세 - 트위터 프로필 페이지 격) */

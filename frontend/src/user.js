@@ -681,7 +681,7 @@ async function loadMoreHistory(reset) {
     if (data.items.length === 0) {
       _historyHasMore = false;
       if (box.children.length === 0) {
-        box.innerHTML = `<p style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0;">아직 이용 내역이 없습니다.</p>`;
+        box.innerHTML = historyEmptyStateHtml("아직 이용 내역이 없습니다.");
       }
       return;
     }
