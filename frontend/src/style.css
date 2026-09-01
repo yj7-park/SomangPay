@@ -3061,29 +3061,28 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   flex-shrink: 0;
 }
 .pin-lock-icon {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 0.7rem;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: var(--surface-2);
   color: var(--accent-cyan);
-  font-size: 1.6rem;
+  font-size: 1.4rem;
 }
-/* 원 지름을 100px로 캡 - 모달 자체는 최대 480px까지 넓어질 수 있어(.modal-box-large),
+/* 원 지름을 84px로 캡 - 모달 자체는 최대 480px까지 넓어질 수 있어(.modal-box-large),
    폭 기준 1fr 그대로 두면 넓은 화면에서 원이 134px까지 커지면서 정작 3열 배열에
-   필요한 세로 공간도 그만큼 늘어 아래 5열 전환 기준(max-height)을 무의미하게 크게
-   잡아야 했다(실측: 1000x701처럼 "넓지만 아주 짧진 않은" 화면에서도 넘침). 100px는
-   실제 세로형 폰 폭(대략 380~430px)에서 3열로 나눴을 때 자연스럽게 나오는 크기와
-   비슷해 "포트레이트일 때 정도"라는 요청과도 맞는다. */
+   필요한 세로 공간도 그만큼 늘어 아래 6열 전환 기준(max-height)을 무의미하게 크게
+   잡아야 했다. (사용자 피드백: "세로모드는 좀 줄이고 가로모드는 더 키워서" 두 방향
+   버튼/글씨 크기를 비슷하게 - 세로 100→84px, 아래 랜드스케이프 6열은 반대로 키움.) */
 .pin-keypad {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 100px));
+  grid-template-columns: repeat(3, minmax(0, 84px));
   justify-content: center;
-  gap: 0.6rem;
-  margin-top: 1.1rem;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
 }
 .pin-key {
   /* 전역 button { min-height: 42px } 규칙(위쪽)이 이 버튼에도 걸려서 aspect-ratio로
@@ -3128,8 +3127,8 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 .pin-code-input {
   text-align: center;
   /* #redesign(사용자 피드백: "숫자버튼이랑 핀 입력 창 폰트가 너무 큰 것 같애") -
-     1.8rem → 1.5rem. */
-  font-size: 1.5rem;
+     1.8rem → 1.5rem, 이후 세로모드 축소 요청으로 1.5 → 1.4rem. */
+  font-size: 1.4rem;
   letter-spacing: 0.4rem;
 }
 .pin-code-input:placeholder-shown {
@@ -3139,7 +3138,7 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
    취소 버튼이랑 여백도 좀 넣고") - .pin-lock-actions를 각 모달 인라인 margin-top 대신
    공용 클래스로 뺐을 때 기본(3열) 모드용 값을 안 챙겨서 여백이 아예 없어졌었다. */
 .pin-lock-actions {
-  margin-top: 1.2rem;
+  margin-top: 0.9rem;
 }
 
 /* 가로 방향(랜드스케이프)이면서 세로 공간이 부족한 화면 전용 - 원 크기를 줄이는 대신
@@ -3161,48 +3160,51 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
      줄 수를 줄이는 게 목적이지, 원을 포트레이트만큼 키우는 게 목적이 아니다). 나머지
      여백(아이콘/제목/설명/입력칸/버튼)을 최대한 눌러서 키패드가 쓸 수 있는 높이를
      넓혀준다. */
-  /* #redesign(사용자 피드백: "이건 모바일 상황인데, 이때는 전체적으로 모달이 좀 더
-     커도 되겠어") - 랜드스케이프에선 가로 공간이 남으니 모달/키패드 폭을 넓히고 안쪽
-     요소(아이콘/제목/입력칸/키/버튼)도 눌렀던 걸 다시 키운다. 세로가 극단적으로 짧은
-     화면은 아래 overflow-y:auto 안전망이 받는다. */
+  /* #redesign(사용자 피드백: "최대한 크게 해. 가로 세로가 버튼이나 글씨 크기가 최대한
+     비슷하도록. 세로모드는 좀 줄이고 가로모드는 더 키워야겠어") - 세로(3열) 원을 100→84px로
+     줄인 것과 짝을 맞춰, 랜드스케이프(6열)도 원/글씨를 세로와 거의 같은 크기까지 키운다.
+     세로 공간이 극단적으로 짧은 화면은 아래 overflow-y:auto 안전망이 받는다(그런 기기에선
+     스크롤이 생길 수 있음 - 크기 우선 트레이드오프). */
   .pin-lock-box {
     overflow-y: auto !important; /* 그래도 안 맞는 극단값을 위한 안전망 */
-    width: min(94vw, 600px) !important;
-    padding: 0.7rem 1.5rem !important;
+    width: min(94vw, 620px) !important;
+    padding: 0.8rem 1.4rem !important;
   }
   .pin-lock-icon {
-    width: 32px;
-    height: 32px;
-    margin-bottom: 0.3rem;
-    font-size: 1rem;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 0.4rem;
+    font-size: 1.3rem;
   }
   .pin-lock-box h2 {
-    font-size: 1.18rem !important;
-    margin-bottom: 0.15rem !important;
+    font-size: 1.4rem !important;
+    margin-bottom: 0.2rem !important;
   }
   .pin-lock-box p {
-    font-size: 0.78rem !important;
-    line-height: 1.2;
-    margin-bottom: 0.4rem !important;
+    font-size: 0.88rem !important;
+    line-height: 1.25;
+    margin-bottom: 0.5rem !important;
   }
   .pin-lock-box .form-group {
     margin-bottom: 0 !important;
   }
   .pin-lock-box .pin-code-input {
-    font-size: 1.3rem !important;
-    padding-top: 0.3rem !important;
-    padding-bottom: 0.3rem !important;
-    min-height: 38px !important;
+    font-size: 1.4rem !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+    min-height: 46px !important;
   }
   .pin-keypad {
-    /* 모달 자체는 600px까지 넓어질 수 있는데(위 .pin-lock-box 오버라이드), 그 너비
-       그대로 6등분하면 원이 3열일 때보다 커져서 2줄로도 키패드가 세로 공간을 다
-       먹어버린다. 키패드 폭만 따로 470px로 좁혀 원 지름을 적당히 낮춘다 - "5열은
-       줄 수를 줄이는 게 목적, 원을 최대한 키우는 게 목적이 아니다". (모달을 더
-       키워달라는 후속 피드백에 맞춰 360→470px.) */
-    max-width: 470px;
-    margin-left: auto;
-    margin-right: auto;
+    /* 세로(3열)와 버튼 크기를 맞추려고 키패드 폭을 6*84px + gap 정도로 잡는다 - 모달
+       자체는 660px까지 넓어질 수 있으니(위 .pin-lock-box) 그 안에 여유 있게 들어간다.
+       (사용자 피드백에 맞춰 360→470→548px.)
+       주의: .pin-lock-box는 flex column이라 자식이 기본 stretch로 늘어나는데, 여기에
+       margin-inline:auto를 주면 cross축 auto 마진이 stretch를 무력화해서 키패드가
+       content 폭(~327px)으로 쪼그라든다(실측). 그래서 auto 마진 대신 width를 명시하고
+       align-self:center로 가운데 정렬한다. */
+    width: min(548px, 100%);
+    max-width: 548px;
+    align-self: center;
     /* 숫자 1-5 / 6-0 두 줄(5개씩 정렬) + 지우기는 6번째 칸에 따로 배치(요청: "지우기
        버튼도 둘째줄 오른쪽에, 번호는 5개 5개 줄 맞추고 삭제는 그 오른쪽에") - 그래서
        6열이지만 1번째 줄의 6번째 칸은 비워둔다. 아래 각 키를 data-digit/클래스로
@@ -3210,11 +3212,11 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
        .pin-key-spacer의 display:none 여부와 무관하게 항상 이 배치가 된다. */
     grid-template-columns: repeat(6, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 0.45rem;
-    margin-top: 0.6rem;
+    gap: 0.55rem;
+    margin-top: 0.8rem;
   }
   .pin-key {
-    font-size: 1.15rem;
+    font-size: 1.25rem;
   }
   .pin-key-spacer {
     display: none;
@@ -3234,15 +3236,15 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
     grid-row: 2;
   }
   .pin-lock-actions {
-    margin-top: 0.5rem !important;
+    margin-top: 0.7rem !important;
   }
   .pin-lock-actions .btn-action {
-    min-height: 40px !important;
+    min-height: 46px !important;
   }
   #kiosk-register-status {
-    margin-top: 0.25rem !important;
+    margin-top: 0.35rem !important;
     min-height: 0.9em !important;
-    font-size: 0.72rem !important;
+    font-size: 0.8rem !important;
   }
 }
 
