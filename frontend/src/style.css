@@ -1726,13 +1726,15 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 }
 
 /* 충전 대기 카드(#18) - 메인 잔액 카드 바로 아래, 비슷한 크기로 강조 표시해 눈에 띄게 한다.
-   확정은 별도 모달 대신 행 안에 버튼을 오버레이해서 처리(모달 사용성이 안 좋다는 요청). */
+   확정은 별도 모달 대신 행 안에 버튼을 오버레이해서 처리(모달 사용성이 안 좋다는 요청).
+   #redesign(홈 UI 어드민 이식) - 색 처리를 어드민 홈의 "처리 대기" 배너(.pending-action-
+   banner)와 같은 톤(앰버 풀 테두리 + rgba 앰버 워시 배경)으로 맞췄다. 좌측 스트립만
+   있던 이전 방식(무한 펄스 글로우를 뺀 자리)보다 어드민 배너와 나란히 봤을 때 "같은
+   경고"로 읽힌다. 안에 행 목록을 펼쳐 그 자리에서 바로 확정하는 동작은 그대로 유지 -
+   어드민 배너처럼 통째로 클릭-이동하는 배너로 바꾼 게 아니다. */
 .pending-deposit-card {
-  background: var(--surface-1);
-  border: 1px solid var(--border-glass);
-  /* 무한 펄스 글로우(2.6s infinite)는 경고/에러로 읽혀서 뺐다(#redesign) - 대신 정적
-     앰버 좌측 스트립 + 등장 시 1회 페이드로 "새로 생긴 대기 건"만 부드럽게 알린다. */
-  border-left: 3px solid var(--accent-amber);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid var(--accent-amber);
   border-radius: var(--radius-lg);
   padding: 1.3rem 1.4rem;
   margin-bottom: 1.2rem;
@@ -1758,10 +1760,12 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   margin-top: 0.15rem;
 }
 
+/* 제목 자체 색은 어드민 배너(.pending-action-title)처럼 본문색으로 - 경고 신호는 이제
+   카드 배경/테두리(위 .pending-deposit-card)와 아이콘 색이 맡는다. */
 .pending-deposit-title {
   font-weight: 800;
   font-size: 1.02rem;
-  color: var(--accent-amber);
+  color: var(--text-main);
 }
 
 .pending-deposit-subtitle {

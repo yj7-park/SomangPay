@@ -354,3 +354,8 @@ class StatsSummaryResponse(BaseModel):
     today: StatsPeriod
     this_week: StatsPeriod
     this_month: StatsPeriod
+
+class UserStatsSummaryResponse(BaseModel):
+    """유저 앱 홈 화면 기간 통계(오늘/이번달) - StatsSummaryResponse의 본인 전용 축소판."""
+    today: StatsPeriod
+    this_month: StatsPeriod

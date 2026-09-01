@@ -268,6 +268,7 @@ function onLoginSuccess(user) {
   loadChargeGuide();
   loadMyDeposits();
   loadUserQrCard();
+  loadUserStatsSummary();
   connectUserWebSocket();
   ensurePushSubscriptionFresh();
   registerPeriodicPushRefresh();
@@ -582,11 +583,13 @@ const userRealtime = createRealtimeClient({
     if ((data.scopes || []).includes("me")) {
       refreshMyInfo();
       loadMyDeposits();
+      loadUserStatsSummary();
     }
   },
   onResume: () => {
     refreshMyInfo();
     loadMyDeposits();
+    loadUserStatsSummary();
     ensurePushSubscriptionFresh();
   },
 });
@@ -661,6 +664,43 @@ async function loadMyDeposits() {
   }
   setupHistoryInfiniteScroll();
   loadMoreHistory(true);
+}
+
+// ============ 홈 화면 기간 통계(오늘/이번달) ============
+// #redesign(홈 UI 어드민 이식) - 어드민 홈의 기간 통계 블록(admin.js의
+// selectHomeStatsPeriod/renderHomePeriodStats/statAmountHtml)을 본인 데이터 기준으로
+// 그대로 옮겨왔다. admin.js를 이 페이지가 로드하지 않으므로(별도 문서) 헬퍼째로 복사 -
+// ICON_SVGS를 admin.js/kiosk.js가 각자 갖고 있는 것과 같은 패턴.
+function statAmountHtml(value, unit = "원") {
+  return `${Number(value).toLocaleString()}<small class="stat-unit">${unit}</small>`;
+}
+
+let _lastUserStats = null;
+let userHomeStatsPeriod = "today";
+
+function selectUserHomeStatsPeriod(period) {
+  userHomeStatsPeriod = period;
+  renderUserHomePeriodStats();
+}
+
+function renderUserHomePeriodStats() {
+  document.getElementById("user-home-period-today-btn")?.classList.toggle("is-on", userHomeStatsPeriod === "today");
+  document.getElementById("user-home-period-month-btn")?.classList.toggle("is-on", userHomeStatsPeriod === "this_month");
+  if (!_lastUserStats) return;
+  const period = _lastUserStats[userHomeStatsPeriod];
+  document.getElementById("user-stat-period-deposit").innerHTML = statAmountHtml(period.deposit_amount);
+  document.getElementById("user-stat-period-payment").innerHTML = statAmountHtml(period.payment_amount);
+}
+
+async function loadUserStatsSummary() {
+  try {
+    const res = await authFetch(`${API_BASE}/users/me/stats/summary`);
+    if (!res.ok) return;
+    _lastUserStats = await res.json();
+    renderUserHomePeriodStats();
+  } catch (err) {
+    console.error("loadUserStatsSummary error:", err);
+  }
 }
 
 // ============ 이용 내역 (계좌이체/결제/관리자충전 통합, 스크롤 지연 로딩) ============

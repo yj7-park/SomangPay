@@ -1303,6 +1303,30 @@ def get_deposit_histories(db: Session = Depends(get_db), _admin: models.User = D
 
 # ================= 관리자 - 통계 요약 =================
 
+def _stats_period_for(db: Session, start_utc, user_id: Optional[int] = None):
+    """기간 시작 시각(start_utc) 이후의 충전액/결제액 집계. user_id를 주면 해당 회원 한
+    명으로 좁힌다 - /api/admin/stats/summary(전체)와 /api/users/me/stats/summary(본인)가
+    같은 쿼리 모양을 공유한다."""
+    from sqlalchemy import func
+
+    deposit_query = db.query(func.coalesce(func.sum(models.DepositHistory.amount), 0)).filter(
+        models.DepositHistory.created_at >= start_utc
+    )
+    payment_query = db.query(
+        func.coalesce(func.sum(models.PaymentTransaction.amount), 0),
+        func.count(models.PaymentTransaction.id),
+    ).filter(
+        models.PaymentTransaction.status == "SUCCESS",
+        models.PaymentTransaction.created_at >= start_utc,
+    )
+    if user_id is not None:
+        deposit_query = deposit_query.filter(models.DepositHistory.user_id == user_id)
+        payment_query = payment_query.filter(models.PaymentTransaction.user_id == user_id)
+
+    deposit_amount = deposit_query.scalar()
+    payment_amount, payment_count = payment_query.first()
+    return schemas.StatsPeriod(deposit_amount=deposit_amount, payment_amount=payment_amount, payment_count=payment_count)
+
 @app.get("/api/admin/stats/summary", response_model=schemas.StatsSummaryResponse)
 def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
     from sqlalchemy import func
@@ -1317,28 +1341,25 @@ def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depen
 
     period_starts = _kst_period_starts_utc()
 
-    def period_stats(start_utc):
-        deposit_amount = db.query(func.coalesce(func.sum(models.DepositHistory.amount), 0)).filter(
-            models.DepositHistory.created_at >= start_utc
-        ).scalar()
-        payment_amount, payment_count = db.query(
-            func.coalesce(func.sum(models.PaymentTransaction.amount), 0),
-            func.count(models.PaymentTransaction.id),
-        ).filter(
-            models.PaymentTransaction.status == "SUCCESS",
-            models.PaymentTransaction.created_at >= start_utc,
-        ).first()
-        return schemas.StatsPeriod(deposit_amount=deposit_amount, payment_amount=payment_amount, payment_count=payment_count)
-
     return schemas.StatsSummaryResponse(
         total_users=total_users,
         total_balance=total_balance,
         users_with_balance=users_with_balance,
         pending_deposit_count=pending_deposit_count,
         error_deposit_count=error_deposit_count,
-        today=period_stats(period_starts["today"]),
-        this_week=period_stats(period_starts["this_week"]),
-        this_month=period_stats(period_starts["this_month"]),
+        today=_stats_period_for(db, period_starts["today"]),
+        this_week=_stats_period_for(db, period_starts["this_week"]),
+        this_month=_stats_period_for(db, period_starts["this_month"]),
+    )
+
+@app.get("/api/users/me/stats/summary", response_model=schemas.UserStatsSummaryResponse)
+def get_my_stats_summary(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
+    """로그인한 본인의 오늘/이번달 충전액·결제액 - 유저 앱 홈 화면 기간 통계 블록
+    (admin.js의 selectHomeStatsPeriod와 동일한 UX를 유저 쪽에 이식, #redesign)."""
+    period_starts = _kst_period_starts_utc()
+    return schemas.UserStatsSummaryResponse(
+        today=_stats_period_for(db, period_starts["today"], user_id=user.id),
+        this_month=_stats_period_for(db, period_starts["this_month"], user_id=user.id),
     )
 
 # ================= 실시간 알림 (WebSocket) =================
