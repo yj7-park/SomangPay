@@ -3161,40 +3161,46 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
      줄 수를 줄이는 게 목적이지, 원을 포트레이트만큼 키우는 게 목적이 아니다). 나머지
      여백(아이콘/제목/설명/입력칸/버튼)을 최대한 눌러서 키패드가 쓸 수 있는 높이를
      넓혀준다. */
+  /* #redesign(사용자 피드백: "이건 모바일 상황인데, 이때는 전체적으로 모달이 좀 더
+     커도 되겠어") - 랜드스케이프에선 가로 공간이 남으니 모달/키패드 폭을 넓히고 안쪽
+     요소(아이콘/제목/입력칸/키/버튼)도 눌렀던 걸 다시 키운다. 세로가 극단적으로 짧은
+     화면은 아래 overflow-y:auto 안전망이 받는다. */
   .pin-lock-box {
     overflow-y: auto !important; /* 그래도 안 맞는 극단값을 위한 안전망 */
-    padding: 0.5rem 0.9rem !important;
+    width: min(94vw, 600px) !important;
+    padding: 0.7rem 1.5rem !important;
   }
   .pin-lock-icon {
-    width: 26px;
-    height: 26px;
-    margin-bottom: 0.15rem;
-    font-size: 0.85rem;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 0.3rem;
+    font-size: 1rem;
   }
   .pin-lock-box h2 {
-    font-size: 1.05rem !important;
-    margin-bottom: 0.05rem !important;
+    font-size: 1.18rem !important;
+    margin-bottom: 0.15rem !important;
   }
   .pin-lock-box p {
-    font-size: 0.68rem !important;
+    font-size: 0.78rem !important;
     line-height: 1.2;
-    margin-bottom: 0.25rem !important;
+    margin-bottom: 0.4rem !important;
   }
   .pin-lock-box .form-group {
     margin-bottom: 0 !important;
   }
   .pin-lock-box .pin-code-input {
-    font-size: 1.1rem !important;
-    padding-top: 0.2rem !important;
-    padding-bottom: 0.2rem !important;
-    min-height: 30px !important;
+    font-size: 1.3rem !important;
+    padding-top: 0.3rem !important;
+    padding-bottom: 0.3rem !important;
+    min-height: 38px !important;
   }
   .pin-keypad {
-    /* 모달 자체는 480px까지 넓어질 수 있는데(.modal-box-large 규칙), 그 너비 그대로
-       6등분하면 원이 오히려 3열일 때보다 커져서 2줄로도 키패드가 세로 공간을 다
-       먹어버린다. 키패드 폭만 따로 360px로 좁혀서 원 지름을 적당히 낮춘다 - "5열은
-       줄 수를 줄이는 게 목적, 원을 최대한 키우는 게 목적이 아니다". */
-    max-width: 360px;
+    /* 모달 자체는 600px까지 넓어질 수 있는데(위 .pin-lock-box 오버라이드), 그 너비
+       그대로 6등분하면 원이 3열일 때보다 커져서 2줄로도 키패드가 세로 공간을 다
+       먹어버린다. 키패드 폭만 따로 470px로 좁혀 원 지름을 적당히 낮춘다 - "5열은
+       줄 수를 줄이는 게 목적, 원을 최대한 키우는 게 목적이 아니다". (모달을 더
+       키워달라는 후속 피드백에 맞춰 360→470px.) */
+    max-width: 470px;
     margin-left: auto;
     margin-right: auto;
     /* 숫자 1-5 / 6-0 두 줄(5개씩 정렬) + 지우기는 6번째 칸에 따로 배치(요청: "지우기
@@ -3204,11 +3210,11 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
        .pin-key-spacer의 display:none 여부와 무관하게 항상 이 배치가 된다. */
     grid-template-columns: repeat(6, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 0.3rem;
-    margin-top: 0.4rem;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
   }
   .pin-key {
-    font-size: 1rem;
+    font-size: 1.15rem;
   }
   .pin-key-spacer {
     display: none;
@@ -3228,15 +3234,15 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
     grid-row: 2;
   }
   .pin-lock-actions {
-    margin-top: 0.3rem !important;
+    margin-top: 0.5rem !important;
   }
   .pin-lock-actions .btn-action {
-    min-height: 34px !important;
+    min-height: 40px !important;
   }
   #kiosk-register-status {
-    margin-top: 0.15rem !important;
+    margin-top: 0.25rem !important;
     min-height: 0.9em !important;
-    font-size: 0.65rem !important;
+    font-size: 0.72rem !important;
   }
 }
 
