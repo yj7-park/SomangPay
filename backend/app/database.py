@@ -9,10 +9,13 @@ DB_URL = os.getenv("DATABASE_URL", DEFAULT_DB)
 connect_args = {"check_same_thread": False} if "sqlite" in DB_URL else {}
 
 # 부하 테스트(키오스크 5대 + 동시 접속 300명 시나리오)에서 기본 풀 크기(5+10=15)로는
-# 커넥션 대기가 지연시간의 절반 이상을 차지하는 게 확인되어 늘림 - postgres 컨테이너
-# 기본 max_connections(100)보다는 여유 있게 낮춰서 다른 접속(psql 점검 등)에도 여유를 둔다.
+# 커넥션 대기가 지연의 절반 이상을 차지해 30+30=60으로 늘렸었다(당시 uvicorn 워커 1개).
+# 이후(2026-09) A1.Flex(2 OCPU/12GB)로 이전 + uvicorn --workers 4로 올리면서, 이 풀은
+# "워커 프로세스마다" 따로 생기므로 워커당 10+10=20으로 잡는다 -> 4워커 x 20 = 80으로
+# postgres max_connections(100)를 넘지 않고 psql 점검 등 여유분(약 20)도 남긴다.
+# (postgres를 max_connections 200 / shared_buffers 2~3GB로 올리면 워커당 풀도 더 키울 수 있음)
 is_sqlite = "sqlite" in DB_URL
-pool_kwargs = {} if is_sqlite else {"pool_size": 30, "max_overflow": 30, "pool_timeout": 10}
+pool_kwargs = {} if is_sqlite else {"pool_size": 10, "max_overflow": 10, "pool_timeout": 10}
 
 engine = create_engine(
     DB_URL,
@@ -155,7 +158,7 @@ def _backfill_qr_uuids(db):
     print("QR UUID reissue complete.")
 
 
-def init_db():
+def _migrate_and_seed():
     from . import models
 
     # DB 컬럼/제약조건 안전 마이그레이션 (신규 컬럼은 ADD COLUMN IF NOT EXISTS로,
@@ -259,6 +262,29 @@ def init_db():
         print(f"Merchant init error: {e}")
     finally:
         db.close()
+
+
+def init_db():
+    """uvicorn --workers로 워커가 여러 개면 각 워커가 부팅 시 _migrate_and_seed()를 동시에
+    실행해 DDL 마이그레이션·백필(_backfill_qr_uuids 등)이 서로 레이스를 일으킨다(관찰됨:
+    uq_nfc_cards_user_type 중복키). postgres 어드바이저리 락으로 한 번에 한 워커만 돌도록
+    직렬화한다 - 뒤이어 락을 얻은 워커도 본문을 다시 돌지만 그땐 전부 IF NOT EXISTS /
+    조기 return이라 사실상 no-op. SQLite(테스트)엔 어드바이저리 락이 없어 바로 실행한다."""
+    if is_sqlite:
+        _migrate_and_seed()
+        return
+
+    from sqlalchemy import text
+    lock_conn = engine.connect()
+    try:
+        lock_conn.execute(text("SELECT pg_advisory_lock(731942)"))
+        _migrate_and_seed()
+    finally:
+        try:
+            lock_conn.execute(text("SELECT pg_advisory_unlock(731942)"))
+        finally:
+            lock_conn.close()
+
 
 def get_db():
     db = SessionLocal()

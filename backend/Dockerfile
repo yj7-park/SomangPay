@@ -17,4 +17,11 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 워커 4개: 조회 부하 테스트(2026-09)에서 워커 1개가 요청당 직렬 CPU(ORM 하이드레이션 +
+# Pydantic 직렬화)로 포화돼 처리율이 막히는 게 확인됨. 실서버가 VM.Standard.A1.Flex
+# (2 OCPU Arm / 12GB, swap 0)이라 RAM은 여유가 크고 2코어에 4워커는 DB I/O 대기 구간을
+# 겹쳐 쓰기 위한 적정 오버서브스크립션. DB 풀은 database.py에서 워커당 10+10=20으로 잡아
+# 4워커 x 20 = 80 <= postgres max_connections(100).
+# NOTE: --limit-max-requests(워커 주기적 재기동)는 옛 1GB 박스의 메모리 증가 방지용이었으나,
+# 부하 중 재기동 순간 nginx 502가 새는 게 확인돼(2026-09) 제거함 - 12GB/swap 0이라 불필요.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

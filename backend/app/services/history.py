@@ -73,6 +73,17 @@ def _payment_items(db: Session, user_id: int, before: Optional[datetime.datetime
         q = q.filter(models.PaymentTransaction.created_at < before)
     rows = q.order_by(models.PaymentTransaction.created_at.desc()).limit(limit).all()
 
+    # 키오스크명은 행마다 따로 조회하면 페이지당(limit개) N+1 쿼리가 나가므로
+    # (#부하테스트) 이 페이지에 등장하는 kiosk_device_id들을 한 번에 모아 배치 조회한다.
+    kiosk_ids = {p.kiosk_device_id for p in rows if p.kiosk_device_id}
+    kiosk_names = {}
+    if kiosk_ids:
+        kiosk_names = dict(
+            db.query(models.KioskDevice.id, models.KioskDevice.device_name)
+            .filter(models.KioskDevice.id.in_(kiosk_ids))
+            .all()
+        )
+
     items = []
     for p in rows:
         is_failed = p.status == "FAILED"
@@ -83,10 +94,7 @@ def _payment_items(db: Session, user_id: int, before: Optional[datetime.datetime
         if is_failed:
             reason = p.failure_reason or "결제 실패"
         else:
-            kiosk_name = None
-            if p.kiosk_device_id:
-                kiosk = db.query(models.KioskDevice).filter(models.KioskDevice.id == p.kiosk_device_id).first()
-                kiosk_name = kiosk.device_name if kiosk else None
+            kiosk_name = kiosk_names.get(p.kiosk_device_id)
             reason = " · ".join(filter(None, [kiosk_name, p.product_details])) or "-"
         items.append(schemas.HistoryItemResponse(
             label=label, badge_class=badge_class, category=category, amount=-p.amount,

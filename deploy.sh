@@ -5,8 +5,8 @@
 #         ./deploy.sh backend   (백엔드만 배포 - 이미지 재빌드 + 컨테이너 재시작)
 set -euo pipefail
 
-SSH_KEY="$HOME/.ssh/somangpay-oci.pem"
-SERVER="ubuntu@158.180.73.127"
+SSH_KEY="$HOME/.ssh/somangpay-new"
+SERVER="ubuntu@168.110.113.17"
 REMOTE_DIR="~/somangpay"
 DOMAIN="https://somangpay.duckdns.org"
 TARGET="${1:-all}"

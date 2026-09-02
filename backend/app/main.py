@@ -15,6 +15,7 @@ from anyio import to_thread
 from fastapi.concurrency import run_in_threadpool
 
 from app import models, schemas, security
+from app.cache import stats_cache
 from app.database import engine, get_db, init_db
 from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
@@ -518,6 +519,7 @@ async def admin_recharge_credit(
     ))
     db.commit()
     db.refresh(user)
+    stats_cache.bust(ADMIN_STATS_CACHE_KEY, _user_stats_cache_key(user.id))
 
     await notify_admins(["users", "stats", "deposits"])
     await notify_user(user.id, ["me"])
@@ -552,6 +554,7 @@ async def admin_deduct_credit(
     ))
     db.commit()
     db.refresh(user)
+    stats_cache.bust(ADMIN_STATS_CACHE_KEY, _user_stats_cache_key(user.id))
 
     await notify_admins(["users", "stats", "deposits"])
     await notify_user(user.id, ["me"])
@@ -1015,6 +1018,7 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
         return outcome[1]
 
     _, tx_success, user, total_amount, item_summaries = outcome
+    stats_cache.bust(ADMIN_STATS_CACHE_KEY, _user_stats_cache_key(user.id))
 
     # 결제로 잔액이 바뀌었으므로 관리자 대시보드와 결제한 회원 본인 화면을 갱신
     await notify_admins(["users", "stats"])
@@ -1327,8 +1331,22 @@ def _stats_period_for(db: Session, start_utc, user_id: Optional[int] = None):
     payment_amount, payment_count = payment_query.first()
     return schemas.StatsPeriod(deposit_amount=deposit_amount, payment_amount=payment_amount, payment_count=payment_count)
 
+ADMIN_STATS_CACHE_KEY = "admin_stats"
+
+
+def _user_stats_cache_key(user_id: int) -> str:
+    return f"user_stats:{user_id}"
+
+
 @app.get("/api/admin/stats/summary", response_model=schemas.StatsSummaryResponse)
 def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    """관리자 대시보드 통계 요약 - 회원수/집계 카운트 5개 + 기간별(오늘/이번주/이번달)
+    집계 6개, 요청당 쿼리 11개짜리 무거운 엔드포인트인데 어떤 관리자가 봐도 같은 값이라
+    20초 TTL로 캐시한다(#부하테스트). 결제/충전/차감 시 bust()로 즉시 무효화."""
+    cached = stats_cache.get(ADMIN_STATS_CACHE_KEY)
+    if cached is not None:
+        return cached
+
     from sqlalchemy import func
 
     total_users = db.query(models.User).filter(models.User.role == "USER").count()
@@ -1341,7 +1359,7 @@ def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depen
 
     period_starts = _kst_period_starts_utc()
 
-    return schemas.StatsSummaryResponse(
+    result = schemas.StatsSummaryResponse(
         total_users=total_users,
         total_balance=total_balance,
         users_with_balance=users_with_balance,
@@ -1351,16 +1369,26 @@ def get_stats_summary(db: Session = Depends(get_db), _admin: models.User = Depen
         this_week=_stats_period_for(db, period_starts["this_week"]),
         this_month=_stats_period_for(db, period_starts["this_month"]),
     )
+    stats_cache.set(ADMIN_STATS_CACHE_KEY, result)
+    return result
 
 @app.get("/api/users/me/stats/summary", response_model=schemas.UserStatsSummaryResponse)
 def get_my_stats_summary(db: Session = Depends(get_db), user: models.User = Depends(require_user_auth)):
     """로그인한 본인의 오늘/이번달 충전액·결제액 - 유저 앱 홈 화면 기간 통계 블록
-    (admin.js의 selectHomeStatsPeriod와 동일한 UX를 유저 쪽에 이식, #redesign)."""
+    (admin.js의 selectHomeStatsPeriod와 동일한 UX를 유저 쪽에 이식, #redesign).
+    요청당 집계 쿼리 4개라 20초 TTL로 캐시(#부하테스트) - 본인이 결제/충전하면 즉시 bust()."""
+    cache_key = _user_stats_cache_key(user.id)
+    cached = stats_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     period_starts = _kst_period_starts_utc()
-    return schemas.UserStatsSummaryResponse(
+    result = schemas.UserStatsSummaryResponse(
         today=_stats_period_for(db, period_starts["today"], user_id=user.id),
         this_month=_stats_period_for(db, period_starts["this_month"], user_id=user.id),
     )
+    stats_cache.set(cache_key, result)
+    return result
 
 # ================= 실시간 알림 (WebSocket) =================
 # 브라우저 WebSocket API는 커스텀 헤더를 못 보내므로, 기존 Bearer 토큰을 쿼리 파라미터로
