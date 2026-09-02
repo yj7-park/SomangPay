@@ -504,7 +504,8 @@ async def admin_recharge_credit(
 ):
     """관리자 수동 직권 크레딧 충전 API (현금 직접 충전 등, 계좌이체 매칭과 무관). amount는
     스키마에서 0 초과만 허용(직권 충전으로 위장한 잔액 차감/무한 충전을 막기 위함)."""
-    user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    # credit_balance는 read-modify-write라 동시 요청 시 lost update가 날 수 있어 FOR UPDATE로 잠근다.
+    user = db.query(models.User).filter(models.User.id == req.user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
 
@@ -537,7 +538,8 @@ async def admin_deduct_credit(
     admin: models.User = Depends(require_admin_auth),
 ):
     """관리자 수동 직권 크레딧 차감 API (오충전 정정, 환불 등). 잔액 부족 시 거부한다."""
-    user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    # credit_balance는 read-modify-write라 동시 요청 시 lost update가 날 수 있어 FOR UPDATE로 잠근다.
+    user = db.query(models.User).filter(models.User.id == req.user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
     if user.credit_balance < req.amount:
@@ -930,7 +932,17 @@ def _process_nfc_payment_sync(db: Session, req: schemas.PaymentRequest):
 
     merchant_id = merchant.id
 
-    user = db.query(models.User).filter(models.User.id == card.user_id).first()
+    # 잔액 차감 직전에 회원 row를 FOR UPDATE로 잠근다. 이 락이 없으면 같은 회원 결제가
+    # 동시에 들어올 때 둘 다 같은 credit_balance를 읽고 각자 빼서 커밋 -> 한쪽 차감이
+    # 사라진다(부하 테스트 2026-09에서 700건 중 2건 lost update 확인). populate_existing()
+    # 으로 락 획득 후의 최신 잔액을 다시 읽어와야 함(identity map의 오래된 값 방지).
+    user = (
+        db.query(models.User)
+        .filter(models.User.id == card.user_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
     if not user or user.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="유효하지 않은 회원입니다.")
 
@@ -1126,6 +1138,16 @@ async def claim_bank_transaction(
     txn.status = "CREDITED"
     txn.resolved_at = datetime.datetime.utcnow()
 
+    # 동시 처리 시 lost update 방지 - 잔액 갱신 직전에 회원 row를 FOR UPDATE로 잠그고
+    # 락 획득 후의 최신 잔액을 다시 읽는다(auth 의존성이 먼저 로드한 값이 오래됐을 수 있음).
+    user = (
+        db.query(models.User)
+        .filter(models.User.id == user.id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+
     user.credit_balance += txn.amount
     txn.balance_after = user.credit_balance
     db.add(models.DepositHistory(
@@ -1239,7 +1261,8 @@ async def admin_resolve_bank_transaction(
     if txn.status not in ("PENDING", "ERROR"):
         raise HTTPException(status_code=400, detail="이미 처리된 거래입니다.")
 
-    user = db.query(models.User).filter(models.User.id == req.user_id).first()
+    # 동시 처리 시 lost update 방지 - 잔액을 바꾸므로 회원 row를 FOR UPDATE로 잠근다.
+    user = db.query(models.User).filter(models.User.id == req.user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
 
