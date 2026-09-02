@@ -10,6 +10,35 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # 서버가 A1.Flex(2 OCPU / 12GB)로 이전되면서 postgres 기본값(shared_buffers=128MB,
+    # max_connections=100)이 사양에 한참 못 미쳐 튜닝. 값은 PGTune "web" 프로파일 기준을
+    # 백엔드/nginx와 박스를 공유하는 걸 감안해 보수적으로 잡음. shm_size는 shared_buffers를
+    # 키우면 병렬 쿼리용 동적 공유메모리(/dev/shm 기본 64MB)가 부족해질 수 있어 함께 올림.
+    shm_size: 512mb
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "effective_cache_size=6GB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "max_wal_size=2GB"
+      - "-c"
+      - "min_wal_size=512MB"
     restart: always
 
   backend:
