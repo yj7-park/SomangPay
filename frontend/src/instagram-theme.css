@@ -395,12 +395,15 @@ button:hover,
 }
 
 /* ---------------- 탭바/사이드바 (admin.html, user.html 공용 마크업 - kiosk 화면에는 없음) ---------------- */
-/* admin.html 최상단 타이틀바(.app-header)를 없앴으므로, 그 높이(60px)를 빼던 계산을
-   걷어내고 .admin-shell이 뷰포트 전체 높이를 쓰도록 한다. */
-.admin-shell {
-  min-height: 100vh;
-  min-height: 100dvh;
-}
+/* 예전엔 여기서 .admin-shell을 min-height:100dvh로 재정의했다(당시 상단 타이틀바가
+   없었을 때 기준) - 이후 커밋 225f638에서 ADMIN/USER에 sticky 상단 바(.app-header)가
+   부활하면서 style.css:.admin-shell이 calc(100dvh - var(--header-h))로 헤더 높이를
+   빼도록 바뀌었는데, 이 파일이 style.css보다 나중에 로드돼(admin.html/user.html의
+   <link> 순서) 같은 셀렉터 특이도에서 이 규칙이 다시 이겨버려 계산이 무효화됐었다.
+   그 결과 문서 전체 높이가 "헤더 실제 높이 + 100dvh"가 되어, 콘텐츠가 화면 안에 다
+   들어와도 헤더 높이만큼 바깥 스크롤이 생겼다(#38, 사용자 리포트 - 잔액/통계 카드
+   몇 개뿐인 홈 화면이 스크롤됨). 헤더 높이를 빼는 계산은 style.css 쪽 정의 하나로
+   충분하므로 여기선 재정의하지 않는다. */
 
 .admin-tabbar {
   background: rgba(0, 0, 0, 0.94);
