@@ -236,11 +236,9 @@ body[data-theme="light"] .admin-tab-btn:hover {
 body[data-theme="light"] .member-card:hover {
   background: rgba(31, 30, 89, 0.035);
 }
-body[data-theme="light"] .back-btn {
-  background: rgba(31, 30, 89, 0.06);
-}
+body[data-theme="light"] .back-btn,
 body[data-theme="light"] .back-btn:hover {
-  background: rgba(31, 30, 89, 0.1);
+  background: transparent;
 }
 @media (prefers-color-scheme: light) {
   body:not([data-theme="dark"]) .kiosk-header,
@@ -268,11 +266,9 @@ body[data-theme="light"] .back-btn:hover {
   body:not([data-theme="dark"]) .member-card:hover {
     background: rgba(31, 30, 89, 0.035);
   }
-  body:not([data-theme="dark"]) .back-btn {
-    background: rgba(31, 30, 89, 0.06);
-  }
+  body:not([data-theme="dark"]) .back-btn,
   body:not([data-theme="dark"]) .back-btn:hover {
-    background: rgba(31, 30, 89, 0.1);
+    background: transparent;
   }
 }
 
@@ -485,11 +481,13 @@ button:hover,
   align-items: center;
 }
 
-.back-btn {
-  background: rgba(255, 255, 255, 0.06);
-}
+/* #redesign(테두리 제거) - style.css .back-btn이 배경을 transparent로 바꿨는데(요청:
+   "아이콘만 있게"), 여기서 다시 배경을 얹으면 도로 원형 버튼처럼 보인다 - 아래 hover도
+   포함해서 완전히 비워둔다(이 파일이 style.css보다 나중에 로드돼 같은 특정성이면
+   이겼었음). */
+.back-btn,
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: transparent;
 }
 
 /* ---------------- Badges ---------------- */

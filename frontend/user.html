@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="src/style.css?v=20260901_0300">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2258">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260902_0107">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -90,11 +90,11 @@
        드릴다운 화면이 없어(평면 탭 5개) 뒤로가기 버튼은 항상 숨김 상태로 둔다.
        #redesign(앱바 크기 통일) - 원래 자리만 차지하는 빈 <span>이었는데, 어드민 쪽
        뒤로가기는 실제 <button class="back-btn ...">라 전역 button 규칙(style.css의
-       "button, .btn, ..." { min-height: 42px })까지 얹혀 .back-btn 자체 높이(40px)보다
-       2px 더 큰 42px로 렌더링된다 - <span>은 그 규칙을 안 타서 딱 40px이었고, 그 2px가
-       바 전체 높이 차이로 드러났다. 태그를 button으로 맞춰 같은 규칙을 그대로 타게
-       한다(항상 visibility:hidden이라 보이지도 클릭되지도 않음, tabindex/disabled로
-       포커스도 막음). -->
+       "button, .btn, ..." { min-height: 42px })이 얹히면 <span>과 렌더 높이가 어긋날
+       수 있다 - .back-btn이 자체 min-height: 0/padding: 0으로 그 규칙을 덮어써서 지금은
+       안 어긋나지만, 태그 자체를 button으로 맞춰 어드민과 동일 마크업을 유지한다(항상
+       visibility:hidden이라 보이지도 클릭되지도 않음, tabindex/disabled로 포커스도
+       막음). -->
   <header class="app-header" id="user-header" style="display: none;">
     <button type="button" class="back-btn app-header-back" tabindex="-1" disabled aria-hidden="true"></button>
     <h1 class="app-header-title" id="user-header-title">소망페이</h1>

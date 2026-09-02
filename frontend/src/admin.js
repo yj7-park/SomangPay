@@ -793,8 +793,9 @@ async function handleAdminRefreshEvent(scopes) {
 
 // ============ 상단 고정 바 (#redesign) ============
 // 뷰마다 제목/뒤로가기/우측 액션이 다르므로 정적 마크업 대신 switchAdminView가 뷰를 바꿀
-// 때마다 여기서 다시 채운다. member-detail은 제목이 동적(회원 이름)이라 여기 없고
-// renderMemberDetail()이 따로 채운다(#admin-header-title 직접 갱신).
+// 때마다 여기서 다시 채운다. member-detail/kiosk-detail은 제목이 동적(회원 이름/키오스크
+// 이름)이라 여기 없고 각각 renderMemberDetail()/renderKioskDetail()이 따로 채운다
+// (#admin-header-title 직접 갱신).
 const ADMIN_HEADER_CONFIG = {
   home: { title: "소망페이 관리자" },
   search: {
@@ -808,6 +809,7 @@ const ADMIN_HEADER_CONFIG = {
   kiosk: { title: "키오스크 관리" },
   settings: { title: "설정" },
   "member-detail": { back: true },
+  "kiosk-detail": { back: true },
 };
 
 function updateAdminHeader(viewName) {
@@ -826,6 +828,14 @@ function updateAdminHeader(viewName) {
     ).join("");
     hydrateIconPlaceholders(actionsEl);
   }
+}
+
+// 뒤로가기 버튼(#admin-header-back-btn) 하나를 모든 상세 화면이 같이 쓰므로, 지금 열린
+// 상세가 어느 목록으로 돌아가야 하는지는 이 핸들러로 넘긴다 - open*Detail()이 진입할 때
+// 자기 close 함수로 갈아끼운다.
+let currentBackHandler = closeMemberDetail;
+function adminHeaderBack() {
+  if (currentBackHandler) currentBackHandler();
 }
 
 // ============ 탭 내비게이션 (트위터 스타일) ============
@@ -849,16 +859,22 @@ function switchAdminView(viewName, inboxFilter) {
     if (viewName === "inbox") {
       if (inboxFilter) inboxDepositFilter = inboxFilter;
       activityFeedLimit = ACTIVITY_PAGE_SIZE;
-      updateFixedViewLayoutMetrics();
       renderInboxFilterSelector();
       renderInboxActivityFeed();
     }
   }
 }
 
-// 홈/회원 관리/충전함 탭 공용: "헤더/하단 탭바를 제외한 나머지 공간"만 차지하고 그 안에서만
-// 스크롤되는 레이아웃(style.css의 #admin-view-*.active)에 필요한 실제 렌더된 높이를 잰다.
-// 뷰가 display:none이면 getBoundingClientRect가 0을 주므로 활성 상태인 뷰만 계산한다.
+// 회원 관리 탭 전용: "헤더/하단 탭바를 제외한 나머지 공간"만 차지하고 그 안에서만 스크롤되는
+// 레이아웃(style.css의 #admin-view-search.active)에 필요한 실제 렌더된 높이를 잰다. 뷰가
+// display:none이면 getBoundingClientRect가 0을 주므로 활성 상태인 뷰만 계산한다.
+//
+// 충전함/키오스크 탭도 한때 같은 방식(전용 스크롤 박스 + 고정 높이)을 썼는데, 이 높이
+// 계산이 탭 전환 시점의 스크롤 위치나 뷰포트 변화에 따라 미세하게 어긋나면 바깥 페이지
+// 스크롤과 안쪽 목록 스크롤이 동시에 생기는 "2단 스크롤"이 됐다(#redesign3, 사용자 리포트).
+// 회원 상세/키오스크 상세처럼 전용 스크롤 박스 없이 그냥 window(페이지 전체)가 스크롤되게
+// 바꿔서 애초에 이중 스크롤 컨테이너가 생길 여지를 없앴다 - 아래 목록은 이제 이 함수가
+// 다루지 않는다.
 //
 // 하단 여백은 탭바 높이를 따로 재지 않고 .admin-main의 padding-bottom을 그대로 쓴다 -
 // 그 값 자체가 이미 "모바일은 하단 고정 탭바에 안 가리게 5.5rem, 데스크톱(>=900px)은
@@ -867,7 +883,6 @@ function switchAdminView(viewName, inboxFilter) {
 // 바깥 스크롤이 살짝 생기는 문제가 있었다(테스트 렌더로 확인).
 const FIXED_HEIGHT_VIEWS = [
   { id: "admin-view-search", cssVar: "--search-view-h" },
-  { id: "admin-view-inbox", cssVar: "--inbox-view-h" },
 ];
 
 function updateFixedViewLayoutMetrics() {
@@ -1597,9 +1612,10 @@ function renderSuspendedUserList() {
 
 // 홈 "최근 처리 내역" - 계좌 입금(bankTransactions) 전체를 시간순으로 보여주는 실시간
 // 피드. 카드를 누르면 openDepositDetailModal로 상세/처리 모달이 뜬다(카드 자체에는
-// 이름/시각+상태/금액만 보여준다). 고정 높이 영역(.activity-feed-scroll) 안에서만
-// 스크롤되고, 스크롤이 바닥에 가까워지면 setupActivityFeedInfiniteScroll이 다음 페이지를
-// 이어서 그린다.
+// 이름/시각+상태/금액만 보여준다). 회원상세/키오스크상세처럼 전용 스크롤 박스 없이
+// window(페이지 전체)가 스크롤되고, 바닥에 가까워지면 setupActivityFeedInfiniteScroll이
+// 다음 페이지를 이어서 그린다(#redesign3 - 예전엔 .activity-feed-scroll 안에서만 스크롤하는
+// 고정 높이 레이아웃이었는데, "2단 스크롤" 문제가 있어 다른 상세 뷰들과 같은 방식으로 통일).
 const ACTIVITY_PAGE_SIZE = 15;
 let activityFeedLimit = ACTIVITY_PAGE_SIZE;
 let activityFeedMergedCache = [];
@@ -1656,7 +1672,8 @@ function buildDepositEvents() {
       id: t.id,
       time: t.created_at,
       icon: icon("bank"),
-      title: (isSimulated ? "🧪 " : "") + (t.status === "ERROR" ? `⚠️ ${name}` : name),
+      title: name,
+      isSimulated,
       amount: t.amount,
       status: meta.text,
       statusClass: meta.cls,
@@ -1676,12 +1693,19 @@ function sortEventsBySeverity(events) {
 }
 
 function renderActivityLine(ev) {
+  // 대기/오류 배지는 이름 아래 줄이 아니라 이름 오른쪽에 나란히(#redesign) - 상태를 보려고
+  // 시선을 아래로 옮길 필요가 없게. 오류는 이미 이 배지 + 행 왼쪽 빨간 스트립(is-error)으로
+  // 표시되므로 이름 앞 ⚠️ 이모지는 중복이라 뺐고, 시뮬레이션 건 표시(구 🧪 이모지)도 같은
+  // 자리에 텍스트 배지로 바꿔 이 앱의 단색 라인 아이콘 컨셉과 안 맞는 이모지를 없앴다.
   return `
     <span class="activity-icon">${ev.icon}</span>
     <div class="activity-info">
-      <div class="activity-title">${ev.title}</div>
+      <div class="activity-title-row">
+        <span class="activity-title">${ev.title}</span>
+        <span class="activity-status ${ev.statusClass}">${ev.status}</span>
+        ${ev.isSimulated ? '<span class="activity-status status-other">테스트</span>' : ""}
+      </div>
       <div class="activity-sub">${formatDateTimeKST(ev.time)}</div>
-      <span class="activity-status ${ev.statusClass}">${ev.status}</span>
     </div>
     <div class="activity-amount-col">
       <div class="activity-amount${ev.isCredited ? " is-credited" : ""}">${ev.isCredited ? "+" : ""}${ev.amount.toLocaleString()}원</div>
@@ -1731,14 +1755,16 @@ function renderInboxActivityFeed() {
   });
 }
 
-// 스크롤이 하단 80px 이내로 들어오면 다음 페이지를 이어서 그린다 (드래그/휠 스크롤 모두 대응).
+// window가 하단 80px 이내로 들어오면 다음 페이지를 이어서 그린다 - setupDetailHistoryInfiniteScroll/
+// setupKioskDetailHistoryInfiniteScroll과 같은 패턴, 충전함 탭이 활성 상태일 때만 반응한다.
 function setupActivityFeedInfiniteScroll() {
-  const scrollBox = document.getElementById("inbox-activity-feed-scroll");
-  if (!scrollBox || scrollBox.dataset.scrollWired) return;
-  scrollBox.dataset.scrollWired = "1";
-  scrollBox.addEventListener("scroll", () => {
+  if (window._activityFeedScrollWired) return;
+  window._activityFeedScrollWired = true;
+  window.addEventListener("scroll", () => {
+    const view = document.getElementById("admin-view-inbox");
+    if (!view || !view.classList.contains("active")) return;
     if (activityFeedLimit >= activityFeedMergedCache.length) return;
-    if (scrollBox.scrollTop + scrollBox.clientHeight >= scrollBox.scrollHeight - 80) {
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80) {
       activityFeedLimit += ACTIVITY_PAGE_SIZE;
       renderInboxActivityFeed();
     }
@@ -1752,6 +1778,7 @@ function openMemberDetail(userId) {
   if (activeTab) detailReturnView = activeTab.dataset.view;
 
   currentDetailUserId = userId;
+  currentBackHandler = closeMemberDetail;
   switchAdminView("member-detail");
   renderMemberDetail();
 }
@@ -2923,10 +2950,12 @@ async function submitUserInfoEdit(btn) {
 // 메뉴 자체의 생성/삭제(전역 카탈로그 CRUD)는 "메뉴" 라벨 옆 수정 버튼 -> 메뉴 관리
 // 모달(openMenuManageModal 이하)에서 하고, 여기 상세 화면의 카드 그리드는 그 카탈로그
 // 중 이 키오스크에 노출할 항목만 고르는 배정 화면이다(메뉴는 키오스크마다 다르게 노출될
-// 수 있다). 단말기가 늘어도 화면이 한없이 길어지지 않도록 제목 옆 선택기로 한 번에
-// 하나만 펼쳐서 보여준다.
+// 수 있다). 목록/상세는 회원 관리 탭과 같은 패턴(카드 목록 -> 탭하면 상세, 뒤로가기로
+// 복귀)이라 단말기가 늘어도 목록 화면 자체는 카드 한 줄만큼씩만 늘어난다.
 
 let kiosks = [];
+// null이면 목록만 보이는 상태, 값이 있으면 그 키오스크의 상세 화면(admin-view-kiosk-detail)이
+// 열려 있다는 뜻 - currentDetailUserId와 같은 역할.
 let selectedKioskId = null;
 let kioskSalesPeriod = "today";
 let kioskSalesPeriodOpen = false;
@@ -2936,10 +2965,11 @@ async function loadKiosks() {
     const res = await adminFetch(`${API_BASE}/admin/kiosks`);
     if (!res.ok) return;
     kiosks = await res.json();
-    // 선택된 키오스크가 없거나(최초 진입) 지워졌다면 "선택하세요" 상태 대신 맨 위 키오스크를
-    // 기본으로 선택해 둔다.
-    if (!kiosks.some(k => k.id === selectedKioskId)) {
-      selectedKioskId = kiosks.length > 0 ? kiosks[0].id : null;
+    // 상세를 보고 있는 도중 그 키오스크가 사라졌다면(다른 관리자가 삭제하는 등) 목록으로
+    // 되돌아간다 - 존재하지 않는 키오스크의 상세를 계속 붙들고 있을 수 없다.
+    if (selectedKioskId && !kiosks.some(k => k.id === selectedKioskId)) {
+      closeKioskDetail();
+      return;
     }
     renderKioskList();
   } catch (err) {
@@ -3018,33 +3048,58 @@ function renderKioskSalesPeriodSelector() {
   fitDropdownVertically(list);
 }
 
-// ---------- 상단 선택기: 대수가 늘어나도 그대로 늘어나는 상시 노출 가로 스크롤 목록(#redesign) ----------
-function selectKiosk(id) {
+// ---------- 목록 -> 상세 (회원 관리 탭의 openMemberDetail/closeMemberDetail과 같은 패턴, #redesign2) ----------
+function openKioskDetail(id) {
+  const activeTab = document.querySelector(".admin-tab-btn.active");
+  if (activeTab) detailReturnView = activeTab.dataset.view;
+
   selectedKioskId = id;
   kioskSalesPeriod = "today";
   kioskSalesPeriodOpen = false;
-  renderKioskSelector();
+  currentBackHandler = closeKioskDetail;
+  switchAdminView("kiosk-detail");
   renderKioskDetail();
 }
 
-function renderKioskSelector() {
-  const strip = document.getElementById("kiosk-select-strip");
-  if (!strip) return;
+function closeKioskDetail() {
+  selectedKioskId = null;
+  switchAdminView(detailReturnView);
+}
 
-  // 목록에는 이름 + 온라인 상태 점만 보여준다 - UUID와 삭제 버튼은 상세 정보 쪽에 있다.
-  strip.innerHTML = kiosks.length === 0
+// 카드에는 이름 + 온라인 상태 + 오늘 매출을 보여준다 - UUID와 삭제 버튼, 기간별 상세 매출은
+// 상세 화면 쪽에 있다. 오늘 매출은 k.sales.today(메뉴별 배열, loadKiosks가 이미 받아온
+// 데이터)를 그대로 합산 - 카드 목록만으로 오늘 뭐가 잘 되고 있는지 훑어볼 수 있게 한다.
+function renderKioskFeed() {
+  const feed = document.getElementById("kiosk-feed");
+  if (!feed) return;
+
+  feed.innerHTML = kiosks.length === 0
     ? `<div class="kiosk-selector-empty">단말기에서 접속하면 자동으로 등록됩니다.</div>`
-    : kiosks.map(k => `
-      <button type="button" class="kiosk-select-chip ${k.id === selectedKioskId ? 'active' : ''}" onclick="selectKiosk(${k.id})">
-        <span class="kiosk-online-dot ${k.is_online ? 'is-online' : ''}"></span>
-        <span class="kiosk-select-chip-name">${escapeHtml(k.device_name || '이름 없는 단말기')}</span>
-      </button>
-    `).join('');
+    : kiosks.map(k => {
+      const todaySales = (k.sales?.today || []).reduce((sum, row) => sum + row.amount, 0);
+      return `
+      <div class="glass-container kiosk-card" onclick="openKioskDetail(${k.id})">
+        <div class="kiosk-card-info">
+          <div class="kiosk-card-name">
+            <span class="kiosk-online-dot ${k.is_online ? 'is-online' : ''}"></span>${escapeHtml(k.device_name || '이름 없는 단말기')}
+          </div>
+          <div class="kiosk-card-sub">${k.is_online ? '온라인' : (k.last_seen_at ? `마지막 접속 ${formatDateTimeKST(k.last_seen_at)}` : '접속 기록 없음')}</div>
+        </div>
+        <div class="kiosk-card-sales">
+          <div class="kiosk-card-sales-label">오늘 매출</div>
+          <div class="kiosk-card-sales-amount">${todaySales.toLocaleString()}원</div>
+        </div>
+      </div>
+    `;
+    }).join('');
 }
 
+// 목록은 항상 다시 그리고, 상세가 열려 있는 상태(selectedKioskId 있음)라면 그 상세도 최신
+// 데이터로 같이 다시 그린다 - loadKiosks/loadAdminProducts 같은 백그라운드 새로고침 지점,
+// "kiosk" 탭 진입(switchAdminView) 양쪽에서 이 함수 하나만 부르면 된다.
 function renderKioskList() {
-  renderKioskSelector();
-  renderKioskDetail();
+  renderKioskFeed();
+  if (selectedKioskId) renderKioskDetail();
 }
 
 // UUID 복사 칩(#redesign) - user.js의 copyAccountNumber와 같은 패턴: 클립보드에 쓰고
@@ -3077,6 +3132,8 @@ function renderKioskDetail() {
     wrap.innerHTML = "";
     return;
   }
+
+  document.getElementById("admin-header-title").innerText = k.device_name || "이름 없는 단말기"; // 상단 고정 바 제목(#redesign2)
 
   wrap.innerHTML = `
     <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
@@ -3224,7 +3281,10 @@ function setupKioskDetailHistoryInfiniteScroll() {
   if (window._kioskHistoryScrollWired) return;
   window._kioskHistoryScrollWired = true;
   window.addEventListener("scroll", () => {
-    const view = document.getElementById("admin-view-kiosk");
+    // 상세 화면은 admin-view-kiosk-detail이다(목록 화면 admin-view-kiosk와 분리된 뒤로
+    // 여기 참조도 같이 바뀌었어야 했는데 빠져 있었다 - #redesign2 후속 수정, 지금까지는
+    // 이 조건이 항상 false라 스크롤해도 다음 페이지가 안 불러와졌다).
+    const view = document.getElementById("admin-view-kiosk-detail");
     if (!view || !view.classList.contains("active")) return;
     if (!_kioskHistoryHasMore || _kioskHistoryLoading) return;
     if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80) {
@@ -3274,7 +3334,8 @@ async function autoSaveKiosk(kioskId) {
       k.device_name = deviceName;
       k.default_product_id = defaultProductVal ? parseInt(defaultProductVal) : null;
       flashKioskSaveStatus(true);
-      renderKioskSelector();
+      document.getElementById("admin-header-title").innerText = k.device_name || "이름 없는 단말기";
+      renderKioskFeed();
     } else {
       flashKioskSaveStatus(false);
     }
@@ -3305,7 +3366,9 @@ async function confirmDeleteKiosk(id) {
     const res = await adminFetch(`${API_BASE}/admin/kiosks/${id}`, { method: "DELETE" });
     if (res.ok) {
       showToast("키오스크를 삭제했습니다.");
-      if (selectedKioskId === id) selectedKioskId = null;
+      // 삭제 버튼은 상세 화면 안에만 있으므로 항상 그 키오스크를 보고 있는 중 - 목록으로
+      // 돌아간 뒤 최신 목록을 다시 받아온다.
+      closeKioskDetail();
       loadKiosks();
     } else {
       const data = await res.json().catch(() => ({}));

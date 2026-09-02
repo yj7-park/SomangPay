@@ -1089,7 +1089,9 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   flex-shrink: 0;
 }
 
-.member-card {
+/* 회원 카드와 키오스크 카드(#redesign2, 키오스크 관리 탭)는 같은 모양을 쓴다 - 규칙을
+   grouped selector로 공유한다. */
+.member-card, .kiosk-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1098,18 +1100,23 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.member-card:hover {
+.member-card:hover, .kiosk-card:hover {
   background: var(--bg-card-hover);
 }
-.member-card .member-card-name {
+.member-card .member-card-name, .kiosk-card .kiosk-card-name {
+  display: flex;
+  align-items: center;
   font-weight: 700;
   color: var(--text-main);
   font-size: 1.02rem;
 }
-.member-card .member-card-sub {
+.member-card .member-card-sub, .kiosk-card .kiosk-card-sub {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-top: 0.15rem;
+}
+.kiosk-card .kiosk-card-name .kiosk-online-dot {
+  margin-right: 0.4rem;
 }
 .member-card .member-card-balance {
   font-weight: 800;
@@ -1118,6 +1125,25 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   font-size: 1.05rem;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+/* 키오스크 카드 우측 오늘 매출 - 잔액과 달리 "오늘"이라는 기간이 붙는 숫자라 위에 작은
+   라벨을 하나 더 둔다(회원 카드 잔액엔 라벨이 없어도 문맥상 잔액임이 분명하지만, 이건
+   기간을 명시하지 않으면 오해할 수 있다). */
+.kiosk-card-sales {
+  flex-shrink: 0;
+  text-align: right;
+}
+.kiosk-card-sales-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.kiosk-card-sales-amount {
+  font-weight: 800;
+  color: var(--text-main);
+  font-size: 1.05rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.15rem;
 }
 .status-dot {
   display: inline-block;
@@ -1131,36 +1157,22 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   background: var(--accent-danger);
 }
 
-/* 충전함(Inbox) - 본문 제목 아래로 "최근 처리 내역" 피드(구 홈 탭 피드, 계좌 입금/충전
-   신청을 시간순으로 합친 목록)만 남은 공간을 차지하며 그 안에서 스크롤된다.
-   --inbox-view-h는 admin.js의 updateFixedViewLayoutMetrics()가 실제 렌더된 헤더/탭바
-   높이를 재서 채워준다(모바일 하단 고정 탭바 vs 데스크톱 사이드바 전환 때문에 고정 px로는
-   정확히 계산할 수 없어 런타임에 측정). 기존 계좌 입금/충전 신청 표(.inbox-half)는 지금
-   admin.html에서 주석 처리되어 있어 실제로는 렌더되지 않지만, 나중에 되살릴 수 있게
-   아래 스타일은 그대로 남겨둔다. */
+/* 충전함(Inbox) - "최근 처리 내역" 피드(구 홈 탭 피드, 계좌 입금/충전 신청을 시간순으로
+   합친 목록)를 보여준다. 예전엔 전용 스크롤 박스(.activity-feed-scroll)를 고정 높이로
+   잘라 그 안에서만 스크롤했는데(--inbox-view-h, admin.js의 updateFixedViewLayoutMetrics),
+   그 높이 계산이 어긋나면 바깥 페이지 스크롤과 안쪽 스크롤이 동시에 생기는 "2단 스크롤"이
+   됐다(#redesign3, 사용자 리포트) - 다른 탭(홈/설정)이나 회원상세/키오스크상세처럼 그냥
+   페이지(window) 전체가 스크롤되게 바꿔서 이중 스크롤 컨테이너 자체를 없앴다. */
 #admin-view-inbox.active {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  height: var(--inbox-view-h, 70vh);
-  overflow: hidden;
-}
-#admin-view-inbox.active > *:not(.activity-feed-scroll) {
-  flex-shrink: 0;
-}
-/* 제목 줄(.admin-page-title-row) 자체의 margin-bottom과 위 flex의 gap이 겹쳐 카드 시작
-   위치가 다른 탭보다 한 칸 더 내려가 있었다 - flex gap이 이미 간격을 주므로 여기서는 0으로. */
-#admin-view-inbox.active > .admin-page-title-row {
-  margin-bottom: 0;
 }
 
-/* "최근 처리 내역" 실시간 피드 - 남은 공간 안에서만 스크롤되고, 스크롤이
-   하단에 가까워지면 admin.js가 다음 페이지를 이어붙인다(무한 스크롤). */
+/* "최근 처리 내역" 실시간 피드 - 이제 그냥 평범한 블록이고, 페이지(window) 스크롤이
+   하단에 가까워지면 admin.js(setupActivityFeedInfiniteScroll)가 다음 페이지를 이어붙인다. */
 .activity-feed-scroll {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  display: block;
 }
 
 .activity-feed {
@@ -1186,10 +1198,25 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   flex: 1;
   min-width: 0;
 }
+/* 이름 + 대기/오류(/테스트) 배지를 한 줄에(#redesign) - 예전엔 배지가 날짜 아래 3번째
+   줄에 따로 있어서 상태를 보려면 시선을 한 번 더 내려야 했다. */
+.activity-row .activity-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
 .activity-row .activity-title {
   font-weight: 700;
   color: var(--text-main);
   font-size: 0.95rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-row .activity-title-row .activity-status {
+  margin-top: 0;
+  flex-shrink: 0;
 }
 .activity-row .activity-sub {
   font-size: 0.78rem;
@@ -1403,14 +1430,18 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   margin-bottom: 1rem;
 }
 .back-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--border-glass);
+  /* #redesign(테두리 제거) - 원 배경/테두리를 없애고 화살표만 보이게 해서(요청) 앱바가
+     차지하던 세로 공간을 줄인다. 전역 button 규칙(위쪽 "button, .btn, ..."의
+     min-height: 42px, padding)이 그대로 얹히면 다시 커지므로 여기서 덮어써야 함. */
+  background: transparent;
+  border: none;
   /* #27: 하드코딩 흰색이라 라이트 테마(옅은 배경 위 흰 화살표)에서 거의 안 보였다 -
      테마별로 이미 재정의되는 --text-main을 따라가게 해 라이트/다크 모두에서 보이게 함. */
   color: var(--text-main);
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
   font-size: 1.1rem;
   cursor: pointer;
   flex-shrink: 0;
@@ -2404,38 +2435,20 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   color: var(--text-muted);
 }
 
-/* 키오스크 선택 - 예전 드롭다운 대신 상시 노출 가로 스크롤 칩 목록(#redesign, admin.js의
-   renderKioskSelector 참고). 개수가 늘어나도 옆으로 스크롤될 뿐 목록 높이는 그대로다. */
-.kiosk-select-strip {
+/* 키오스크 관리 탭 - 카드 목록. 예전엔 상단에 칩을 늘어놓고 그 아래 상세를 같이 보여줬는데
+   (#redesign), 대수가 늘어나면 칩 줄이 계속 옆으로 밀려 알아보기 힘들었다 - 카드를 누르면
+   상세 화면으로 들어가게 바꿨다(#redesign2, admin.js의 renderKioskFeed/openKioskDetail
+   참고). 목록 자체는 한때 전용 스크롤 박스를 고정 높이로 잘라 그 안에서만 스크롤했는데
+   (--kiosk-view-h), 회원 관리 탭과 달리 이 탭은 그 높이 계산이 어긋나 바깥 페이지 스크롤과
+   같이 "2단 스크롤"이 되는 문제가 있었다(#redesign3, 사용자 리포트) - 전용 스크롤 박스
+   없이 그냥 페이지(window) 전체가 스크롤되게 바꿨다. */
+.kiosk-feed {
   display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 0.2rem;
-  margin-bottom: 1rem;
-  -webkit-overflow-scrolling: touch;
-}
-.kiosk-select-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-shrink: 0;
-  padding: 0.5rem 0.9rem;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border-glass);
-  background: var(--surface-1);
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.kiosk-select-chip.active {
-  border-color: var(--accent-cyan);
-  background: rgba(103, 129, 192, 0.14);
-  color: var(--text-main);
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-/* 온라인 상태 점 - 회색(오프라인)/초록(온라인, is-online). 선택 칩과 상세 패널
+/* 온라인 상태 점 - 회색(오프라인)/초록(온라인, is-online). 선택 목록 행과 상세 패널
    양쪽에서 재사용한다(#redesign). */
 .kiosk-online-dot {
   width: 8px;

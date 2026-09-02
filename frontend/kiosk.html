@@ -15,8 +15,18 @@
   <link rel="alternate icon" href="/favicon-kiosk.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-kiosk.png">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260901_0300">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260831_2258">
+  <link rel="stylesheet" href="src/style.css?v=20260902_0119">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20260902_0107">
+  <!-- 버전 배지는 update-widget.js가 admin/user 페이지와 공유하는 마크업이라 배지 스타일
+       (테두리/배경 pill)이 거기 박혀 있다 - 키오스크 헤더에서만 테두리 없이 텍스트만
+       보이도록 .kiosk-header 스코프로 여기서 덮어쓴다. -->
+  <style>
+    .kiosk-header #update-badge-btn {
+      background: none;
+      border: none;
+      padding: 0.35rem 0.2rem;
+    }
+  </style>
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -70,17 +80,17 @@
              뜨므로 탭이 필수고, 네이티브 앱(AndroidInterface)에서는 NFC 배지 탭은 무시되고
              상태 표시로만 쓰인다(하드웨어 리더는 앱이 자동 관리) - QR은 두 환경 모두 탭으로
              켜고 끌 수 있다. -->
+        <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
         <span id="nfc-activate-btn" onclick="toggleKioskNfcReader()" title="탭하여 NFC 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
         </span>
         <span id="qr-status-indicator" onclick="toggleKioskQrScanner()" title="탭하여 QR 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="qr-status-text">QR 스캔 비활성</span>
         </span>
-        <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
         <!-- 전용 키오스크 락다운 빌드에서만 보인다(initKioskPinToggle) - 화면 고정 중이면 🔒(눌러서
              해제), 꺼져 있으면 🔓(눌러서 고정)로 상태를 그대로 아이콘에 반영한다. -->
-        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; align-items: center; justify-content: center; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="화면 고정"></button>
-        <button onclick="openKioskAdminPinModal()" style="display: inline-flex; align-items: center; justify-content: center; background: var(--surface-1); border: 1px solid var(--border-glass); color: var(--text-main); padding: 0.4rem 0.7rem; border-radius: 12px; font-size: 1.1rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정" data-icon="settings"></button>
+        <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; align-items: center; justify-content: center; background: none; border: none; color: var(--text-main); padding: 0.4rem 0.5rem; font-size: 1.3rem; cursor: pointer; min-height: 38px;" title="화면 고정"></button>
+        <button onclick="openKioskAdminPinModal()" style="display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-main); padding: 0.4rem 0.5rem; font-size: 1.3rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정" data-icon="settings"></button>
       </div>
     </header>
 
