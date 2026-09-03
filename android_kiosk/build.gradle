@@ -4,10 +4,12 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.1.1'
+        // compileSdk 35(Android 15)를 쓰려면 AGP 8.6.0+ 필요. 8.6.0은 Gradle 8.7+와
+        // JDK 17을 요구한다(gradle-wrapper.properties / CI setup-java 참고).
+        classpath 'com.android.tools.build:gradle:8.6.0'
     }
 }
 
 task clean(type: Delete) {
-    delete rootProject.buildDir
+    delete rootProject.layout.buildDirectory
 }

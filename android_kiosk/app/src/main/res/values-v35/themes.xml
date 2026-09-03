@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 15(API 35): targetSdk 35 앱은 기본으로 edge-to-edge가 강제되어 WebView가
+         상태바/제스처 내비게이션 바 영역까지 그려진다. admin/user 플레이버는 상태바(시간/배터리)를
+         노출하는 방침이라, 강제되면 웹 헤더가 상태바 밑으로 겹쳐 보이고 하단도 내비바에 물린다.
+         네이티브에서 WindowInsets를 패딩으로 처리하는 대신, 이 플래그로 이전(비 edge-to-edge)
+         레이아웃 동작을 그대로 유지한다.
+
+         주의: 이 opt-out은 API 36(Android 16)에서 무시된다. targetSdk를 36으로 올릴 때는
+         이 파일 대신 rootLayout에 systemBars 인셋 패딩을 적용하는 코드를 넣어야 한다. -->
+    <style name="Theme.SomangPay" parent="@android:style/Theme.NoTitleBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

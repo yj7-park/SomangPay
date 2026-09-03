@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 앱 전용 테마. 동작은 예전에 매니페스트가 직접 가리키던 @android:style/Theme.NoTitleBar
+         그대로다(타이틀바 없음). 커스텀 테마로 뺀 이유는 targetSdk 35부터 강제되는
+         edge-to-edge를 values-v35에서 android:windowOptOutEdgeToEdgeEnforcement로 꺼야 하는데,
+         플랫폼 테마엔 그 속성을 얹을 수 없기 때문이다. MainActivity가 AppCompatActivity가
+         아니라 순수 android.app.Activity라서 부모도 플랫폼 테마로 둔다. -->
+    <style name="Theme.SomangPay" parent="@android:style/Theme.NoTitleBar" />
+</resources>

@@ -106,6 +106,13 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      # compileSdk 35 / build-tools 35는 AGP가 빌드 중 자동으로 받아오지만, 러너에
+      # 미리 깔아두면 첫 빌드에서 라이선스 프롬프트/다운로드 타임아웃으로 흔들리는 걸 막는다.
+      - name: Install Android SDK platform 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - name: Cache/setup Gradle
         uses: gradle/actions/setup-gradle@v3
 

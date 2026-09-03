@@ -14,10 +14,13 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <!-- AdminAlertService(관리자 앱 전용) - 서버 알림을 네이티브 알림으로 띄우는 데 필요.
          POST_NOTIFICATIONS는 안드로이드 13+, FOREGROUND_SERVICE*는 14+(API 34)부터 포그라운드
-         서비스 시작/타입 선언에 각각 필요하다. -->
+         서비스 시작/타입 선언에 각각 필요하다. 타입은 dataSync가 아니라 specialUse다 -
+         targetSdk 35부터 dataSync 포그라운드 서비스는 24시간 중 총 6시간으로 제한되는데
+         (초과 시 onTimeout 호출 후 강제 종료), 이 서비스는 /ws/admin에 24시간 상시 붙어
+         있어야 하므로 타임아웃이 없는 specialUse로 선언한다. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -29,7 +32,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.NoTitleBar"
+        android:theme="@style/Theme.SomangPay"
         android:usesCleartextTraffic="true">
 
         <activity
@@ -89,10 +92,15 @@
              Web Push를 지원하지 않아(admin.html 상단 주석) 서버가 보내는 관리자 알림을 받을
              방법이 없는 것을 우회한다. /ws/admin에 포그라운드 서비스로 계속 붙어 있다가
              "alert" 메시지가 오면 네이티브 알림으로 띄운다 - MainActivity가 시작한다. -->
+        <!-- foregroundServiceType=specialUse: dataSync는 targetSdk 35부터 24시간 중 6시간
+             제한이 걸려 상시 WS 연결이 끊긴다. 이 서비스는 명확히 다른 타입에 해당하지 않는
+             "서버 푸시 상시 수신" 용도라 specialUse로 둔다(타임아웃 없음). 스토어 업로드가
+             아니라 사이드로드 배포라 PROPERTY_SPECIAL_USE_FGS_SUBTYPE 선언은 생략한다
+             (Play Console 심사용이고 런타임 동작엔 영향 없음). -->
         <service
             android:name=".AdminAlertService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse" />
 
         <!-- 다운로드한 업데이트 APK 파일을 file:// 대신 content:// URI로 시스템 설치
              화면(PackageInstaller)에 안전하게 넘기기 위한 FileProvider - 세 플레이버가

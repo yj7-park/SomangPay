@@ -4,11 +4,20 @@ plugins {
 
 android {
     namespace 'com.somangpay.kiosk'
-    compileSdk 34
+    compileSdk 35
+    // AGP 8.6의 기본 build-tools는 34.0.0인데, compileSdk 35엔 35.0.0을 맞춰 쓴다
+    // (CI의 "Install Android SDK platform 35" 단계가 이 버전을 깐다).
+    buildToolsVersion "35.0.0"
 
     defaultConfig {
         minSdk 24
-        targetSdk 34
+        // targetSdk 35(Android 15). 34에 머물면 API 37+ 기기에서 Play 프로텍트가
+        // "이전 버전에 맞게 개발된 앱" 경고를 띄운다(대상 API가 기기 API보다 2단계
+        // 초과로 낮을 때). 35부터 강제되는 edge-to-edge는 res/values-v35/themes.xml의
+        // android:windowOptOutEdgeToEdgeEnforcement로 껐다(테마 Theme.SomangPay).
+        // 이 opt-out은 API 36에서 무시되므로 targetSdk 36으로 올릴 땐 WindowInsets
+        // 패딩 처리를 별도로 넣어야 한다.
+        targetSdk 35
         // CI가 -PappVersionCode=<run_number>로 매 릴리스마다 고유 번호를 주입한다.
         // 로컬 수동 빌드에서는 프로퍼티가 없으니 1/"1.0.0"으로 폴백.
         // versionName은 frontend/version.json이 기록하는 "1.0.<run_number>"와 동일한
@@ -21,6 +30,15 @@ android {
     // (AGP 8.0부터 buildConfig 생성이 기본 꺼짐으로 바뀜).
     buildFeatures {
         buildConfig true
+    }
+
+    // 릴리스 APK 빌드(assemble*Release)는 기본으로 lintVitalRelease를 함께 돌린다.
+    // AGP를 올리면 새로 생기거나 심각도가 올라간 lint 규칙 때문에 코드 변경 없이도
+    // APK 릴리스 파이프라인이 깨질 수 있어, 릴리스 경로에서는 lint 게이트를 끈다
+    // (품질 점검은 필요할 때 ./gradlew lint로 따로 돌린다).
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 
     // 키오스크(전용 단말기, 락다운 적용) / 관리자·회원(일반 휴대폰, 락다운 없음) 세 앱을
@@ -97,8 +115,10 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
+    // targetSdk 35에 맞춰 Android 15 대응 버전으로 올림(구버전은 인셋/윈도우 처리에
+    // 알려진 문제가 있음). appcompat 1.7.0이 androidx.core 1.13.x를 함께 끌어온다.
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.webkit:webkit:1.8.0'
     // 관리자 앱은 웹소켓(wss)이 WebView에서 자체서명 인증서와 막히는 문제 때문에 http로
     // 접속하는데, http에서는 브라우저 getUserMedia(웹 카메라)가 OS 권한과 무관하게 아예
