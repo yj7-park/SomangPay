@@ -38,7 +38,7 @@ android {
     //   ./gradlew assembleKioskDebug -PdevTargetHost=https://<새-서브도메인>.trycloudflare.com
     // 처럼 프로퍼티로 덮어쓴다(파일 수정 불필요). release 빌드는 이 값을 아예 쓰지 않는다.
     def devTargetHost = (project.findProperty('devTargetHost')
-            ?: 'https://republican-hits-kidney-apt.trycloudflare.com').toString().replaceAll('/+$', '')
+            ?: 'https://rescue-python-signature-grain.trycloudflare.com').toString().replaceAll('/+$', '')
 
     // 릴리스 APK 빌드(assemble*Release)는 기본으로 lintVitalRelease를 함께 돌린다.
     // AGP를 올리면 새로 생기거나 심각도가 올라간 lint 규칙 때문에 코드 변경 없이도
