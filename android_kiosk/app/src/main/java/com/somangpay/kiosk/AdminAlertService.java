@@ -151,7 +151,7 @@ public class AdminAlertService extends Service {
     // wss:// 기준 /ws/admin URL을 만든다 - DepositAutoDetector.apiBaseUrl()과 동일한 방식.
     private String buildWsUrl(String token) {
         try {
-            URI uri = new URI(BuildConfig.TARGET_URL);
+            URI uri = new URI(AppConfig.TARGET_URL);
             String scheme = "https".equals(uri.getScheme()) ? "wss" : "ws";
             String base = scheme + "://" + uri.getHost() + (uri.getPort() != -1 ? ":" + uri.getPort() : "");
             return base + "/ws/admin?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8.name());

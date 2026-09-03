@@ -46,6 +46,49 @@
 - `git add -A`/`git add .` 대신 관련 파일 경로를 명시해서 스테이징한다. 커밋 전
   `git status --short`로 의도한 파일만 올라갔는지 확인한다.
 
+## 개발/운영 환경 구분 (디버그 뱃지)
+
+개발 서버에서 뜨는 아이콘에는 빨간 "DEV" 리본이 붙어 운영과 눈으로 구분된다.
+판별 기준은 도메인이 아니라 **`frontend/app-env.js`** 한 파일이다.
+
+- `frontend/app-env.js`는 저장소에 `window.__APP_ENV__ = 'development'`로 커밋돼 있다.
+  개발 docker는 `frontend/`를 volume 마운트로 그대로 서빙하므로 항상 개발로 뜬다.
+- `deploy.sh`의 `deploy_frontend()`가 실서버의 `/var/www/somangpay/app-env.js`를
+  `'production'`으로 덮어쓴다. 즉 "운영"은 *deploy.sh를 거쳤다*는 사실로만 정의되고
+  코드 어디에도 도메인 문자열이 없다.
+- `frontend/src/env-badge.js`가 `<head>`에서 이 값을 읽어, 개발일 때만 favicon /
+  apple-touch-icon / `<link rel=manifest>` / `logo-mark*.svg`의 href 확장자 앞에
+  `-debug`를 끼워넣어 뱃지 버전(`*-debug.{ico,png,svg,json}`)으로 교체하고 `<title>`에
+  `[DEV]`를 붙인다. kiosk/user/admin/index 네 페이지 모두 `app-env.js` → `env-badge.js`
+  순서로 로드한다.
+- 뱃지 붙은 에셋은 `frontend/icons/*-debug.png`, `frontend/*-debug.ico`,
+  `frontend/manifest*-debug.json` 등으로 미리 커밋돼 있다. 원본 아이콘/매니페스트를
+  바꾸면 `python3 frontend/tools/gen-debug-icons.py`로 `-debug` 세트(+ 안드로이드
+  `ic_debug_ribbon.png`)를 다시 만든다.
+- **주의**: 실서버 nginx가 `/app-env.js`를 강하게 캐시하면 첫 배포 후 한동안 옛
+  development 값이 남아 운영 사이트에 뱃지가 보일 수 있다. 그럴 땐 실서버 nginx에
+  `/app-env.js` no-cache 규칙을 추가한다(이 저장소 `frontend/nginx.conf`는 개발
+  docker용이라 실서버엔 반영 안 됨).
+
+### 디버그 APK
+
+`android_kiosk`에 `debug` 빌드타입이 있다(`./gradlew assembleKioskDebug` 등).
+
+- `applicationId`에 `.debug` 접미사가 붙어(`com.somangpay.kiosk.debug`) 기기에 운영
+  APK와 나란히 설치된다. `versionName`엔 `-dev` 접미사.
+- 런처 아이콘은 `app/src/debug/res/` 오버레이가 각 플레이버 마크 위에 빨간 DEV 리본
+  (`ic_debug_ribbon.png`)을 얹어 운영 빌드와 구분한다(어댑티브 아이콘 foreground 교체).
+- WebView가 붙는 URL은 `AppConfig.TARGET_URL`이 `BuildConfig.DEBUG`로 고른다 -
+  release는 `TARGET_URL`(운영), debug는 `DEV_TARGET_URL`(개발 서버). 코드에서
+  `BuildConfig.TARGET_URL`을 직접 쓰지 말고 `AppConfig.TARGET_URL`을 쓸 것.
+- `DEV_TARGET_URL`의 기본 호스트는 build.gradle의 `devTargetHost`에 박혀 있는데,
+  이건 cloudflare 퀵터널(`*.trycloudflare.com`) 주소라 `cloudflared` 재시작 때마다
+  바뀐다. 바뀌면 파일 수정 없이
+  `./gradlew assembleKioskDebug -PdevTargetHost=https://<새-서브도메인>.trycloudflare.com`
+  로 덮어쓴다.
+- CI(`release-apk.yml`)는 `assemble*Release`만 돌리므로 debug 빌드타입/오버레이의
+  영향을 받지 않는다.
+
 ## CLAUDE.md 유지보수
 
 - 작업하다가 알게 된 중요한 내용(반복될 만한 절차, 헷갈리기 쉬운 함정, 프로젝트 고유

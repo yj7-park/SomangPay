@@ -1,0 +1,43 @@
+{
+  "name": "소망페이 키오스크 (DEV)",
+  "short_name": "소망페이 키오스크 (DEV)",
+  "description": "NFC 및 교인증 QR 코드 기반 무인 결제 PWA 웹앱",
+  "start_url": "/kiosk",
+  "scope": "/kiosk",
+  "id": "/kiosk",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#06b6d4",
+  "icons": [
+    {
+      "src": "/favicon-kiosk-debug.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icons/icon-192-kiosk-debug.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-kiosk-debug.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-kiosk-maskable-debug.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512-kiosk-maskable-debug.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -185,7 +185,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         // ngrok 인터스티셜 페이지 바이패스 헤더 추가
         Map<String, String> extraHeaders = new HashMap<>();
         extraHeaders.put("ngrok-skip-browser-warning", "true");
-        webView.loadUrl(BuildConfig.TARGET_URL, extraHeaders);
+        webView.loadUrl(AppConfig.TARGET_URL, extraHeaders);
 
         // 인앱 업데이트 - 스토어를 거치지 않는 사이드로드 배포라 앱이 직접 새 버전을 감지해야 한다.
         // 페이지 로드 직후 곧바로 체크하면 웹 쪽 JS(onUpdateAvailable 리스너)가 아직 준비되지 않았을
@@ -252,7 +252,7 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         // 완료 시점에 consumePendingDeepLink()로 가져가도록 값만 쥐고 있는다.
         applyDeepLinkFromIntent(getIntent());
 
-        Log.d(TAG, "Native App Initialized with URL: " + BuildConfig.TARGET_URL);
+        Log.d(TAG, "Native App Initialized with URL: " + AppConfig.TARGET_URL);
     }
 
     // AndroidManifest.xml에서 MainActivity를 launchMode="singleTask"로 선언해뒀으므로, 앱이

@@ -292,7 +292,7 @@ final class DepositAutoDetector {
     // API 기본 주소("http://125.248.31.132:8080")를 만든다.
     private static String apiBaseUrl() {
         try {
-            URL u = new URL(BuildConfig.TARGET_URL);
+            URL u = new URL(AppConfig.TARGET_URL);
             String base = u.getProtocol() + "://" + u.getHost();
             if (u.getPort() != -1) base += ":" + u.getPort();
             return base;

@@ -32,6 +32,14 @@ android {
         buildConfig true
     }
 
+    // debug 빌드(assemble*Debug)가 붙을 개발 서버. 코드(AppConfig.TARGET_URL)가
+    // BuildConfig.DEBUG 로 운영/개발 URL 을 고른다. trycloudflare 퀵터널 주소는 cloudflared
+    // 를 재시작할 때마다 새로 발급돼 고정이 아니다 - 아래는 최근 값이고, 바뀌면
+    //   ./gradlew assembleKioskDebug -PdevTargetHost=https://<새-서브도메인>.trycloudflare.com
+    // 처럼 프로퍼티로 덮어쓴다(파일 수정 불필요). release 빌드는 이 값을 아예 쓰지 않는다.
+    def devTargetHost = (project.findProperty('devTargetHost')
+            ?: 'https://republican-hits-kidney-apt.trycloudflare.com').toString().replaceAll('/+$', '')
+
     // 릴리스 APK 빌드(assemble*Release)는 기본으로 lintVitalRelease를 함께 돌린다.
     // AGP를 올리면 새로 생기거나 심각도가 올라간 lint 규칙 때문에 코드 변경 없이도
     // APK 릴리스 파이프라인이 깨질 수 있어, 릴리스 경로에서는 lint 게이트를 끈다
@@ -51,6 +59,7 @@ android {
             applicationId "com.somangpay.kiosk"
             resValue "string", "app_name", "소망페이 키오스크"
             buildConfigField "String", "TARGET_URL", '"https://somangpay.duckdns.org/kiosk"'
+            buildConfigField "String", "DEV_TARGET_URL", "\"${devTargetHost}/kiosk\""
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "true"
             buildConfigField "boolean", "SMS_DETECT_ENABLED", "false"
         }
@@ -62,6 +71,7 @@ android {
             // 예전 자체서명 인증서 때 wss:// 웹소켓이 막히던 문제(onReceivedSslError 우회가
             // REST/XHR에만 적용되고 웹소켓엔 안 먹힘)가 없어 https로 정상 접속된다.
             buildConfigField "String", "TARGET_URL", '"https://somangpay.duckdns.org/admin"'
+            buildConfigField "String", "DEV_TARGET_URL", "\"${devTargetHost}/admin\""
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
             // 입금 문자 자동감지는 관리자 앱에서만 의미가 있다 - 키오스크/회원 앱에는 SMS 권한
             // 프롬프트 자체를 띄우지 않기 위해 플레이버별로 껐다 켰다 한다(코드는 공유, 플래그만 분기).
@@ -72,6 +82,7 @@ android {
             applicationId "com.somangpay.user"
             resValue "string", "app_name", "소망페이"
             buildConfigField "String", "TARGET_URL", '"https://somangpay.duckdns.org/user"'
+            buildConfigField "String", "DEV_TARGET_URL", "\"${devTargetHost}/user\""
             buildConfigField "boolean", "KIOSK_LOCKDOWN_ENABLED", "false"
             buildConfigField "boolean", "SMS_DETECT_ENABLED", "false"
         }
@@ -102,6 +113,13 @@ android {
     }
 
     buildTypes {
+        // 로컬 개발용. applicationId 에 .debug 를 붙여 기기에 운영 앱과 나란히 설치되고,
+        // 런처 아이콘은 app/src/debug/res 오버레이가 빨간 배경 + DEV 리본으로 덮어써서
+        // 운영 빌드와 한눈에 구분된다. TARGET_URL 은 AppConfig 가 DEV_TARGET_URL 로 분기.
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-dev"
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

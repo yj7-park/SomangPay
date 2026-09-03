@@ -207,7 +207,7 @@ class UpdateManager {
     // TARGET_URL(예: https://host/kiosk, http://host/admin)에서 스킴+호스트만 뽑아
     // 세 플레이버가 공통으로 참조하는 /version.json 위치를 만든다.
     private URL buildVersionManifestUrl() throws IOException {
-        URL target = new URL(BuildConfig.TARGET_URL);
+        URL target = new URL(AppConfig.TARGET_URL);
         return new URL(target.getProtocol() + "://" + target.getAuthority() + "/version.json");
     }
 

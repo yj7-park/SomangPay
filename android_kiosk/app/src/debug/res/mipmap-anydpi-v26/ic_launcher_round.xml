@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug 빌드 전용: foreground 를 DEV 리본이 얹힌 레이어리스트로 교체 (src/main 버전을 덮어씀). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground_debug" />
+</adaptive-icon>

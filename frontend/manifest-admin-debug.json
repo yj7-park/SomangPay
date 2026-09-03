@@ -1,0 +1,43 @@
+{
+  "name": "소망페이 관리자 (DEV)",
+  "short_name": "소망페이 관리자 (DEV)",
+  "description": "소망페이 시스템 통합 관리자 대시보드",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "id": "/admin",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/favicon-admin-debug.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icons/icon-192-admin-debug.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-admin-debug.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-admin-maskable-debug.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512-admin-maskable-debug.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

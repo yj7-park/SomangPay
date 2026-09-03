@@ -11,6 +11,9 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark-admin.svg">
   <link rel="alternate icon" href="/favicon-admin.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-admin.png">
+  <!-- 개발 서버에서만 아이콘/매니페스트를 디버그 뱃지 버전으로 교체 (운영은 deploy.sh가 app-env.js를 production으로 덮어씀) -->
+  <script src="/app-env.js"></script>
+  <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="src/style.css?v=20260902_0119">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">

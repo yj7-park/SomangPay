@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug 빌드 전용 런처 아이콘 foreground. 플레이버별 마크(@drawable/ic_launcher_foreground -
+     kiosk/admin/user 각자 정의)를 그대로 깔고 그 위에 빨간 DEV 리본(ic_debug_ribbon)을 얹어
+     운영 빌드와 구분한다. src/debug 소스셋이 src/main 의 mipmap-anydpi-v26/ic_launcher.xml 을
+     덮어써서 이 레이어리스트를 foreground 로 쓴다. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_foreground" />
+    <item android:drawable="@drawable/ic_debug_ribbon" />
+</layer-list>

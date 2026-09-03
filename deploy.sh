@@ -37,6 +37,14 @@ deploy_frontend() {
     && sudo chown -R www-data:www-data /var/www/somangpay \
     && sudo find /var/www/somangpay -type d -exec chmod 755 {} \; \
     && sudo find /var/www/somangpay -type f -exec chmod 644 {} \;"
+
+  # 개발/운영 판별용 플래그. 저장소에 커밋된 app-env.js 는 항상 development 라서
+  # (개발 docker 가 frontend/ 를 그대로 서빙) 운영 서버에서는 여기서 production 으로 덮어쓴다.
+  # 이 파일이 development 로 남으면 운영 사이트 아이콘에 디버그 뱃지가 뜬다(frontend/src/env-badge.js).
+  echo "==> app-env.js 를 production 으로 표시"
+  ssh_cmd "printf '%s\n' 'window.__APP_ENV__ = \"production\";' | sudo tee /var/www/somangpay/app-env.js >/dev/null \
+    && sudo chown www-data:www-data /var/www/somangpay/app-env.js \
+    && sudo chmod 644 /var/www/somangpay/app-env.js"
 }
 
 case "$TARGET" in
