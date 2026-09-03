@@ -426,6 +426,16 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   outline-offset: -2px;
 }
 
+/* 네이티브 <select> 드롭다운의 옵션 목록은 OS가 그린다 - 이때 <option>이 상속하는
+   --surface-2(반투명 검정, rgba(0,0,0,0.35))가 흰 팝업 배경에 겹쳐지면서 거의 흰색이
+   되어버려, 그 위의 흰 글자(--text-main)가 보이지 않게 된다(선택/hover된 항목만 OS
+   하이라이트 덕에 읽힘). 팝업 안에서는 불투명한 어두운 배경 + 밝은 글자를 명시해
+   대비를 확보한다. */
+.form-control option {
+  color: var(--text-main);
+  background-color: var(--modal-bg);
+}
+
 .form-group {
   margin-bottom: 1rem;
 }
