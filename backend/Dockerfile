@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# entrypoint 래퍼는 /app(=bind mount 지점) 바깥에 둬서 마운트에 가려지지 않게 한다.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # 애플리케이션 코드 복사
 COPY . .
 
@@ -24,4 +28,7 @@ EXPOSE 8000
 # 4워커 x 20 = 80 <= postgres max_connections(100).
 # NOTE: --limit-max-requests(워커 주기적 재기동)는 옛 1GB 박스의 메모리 증가 방지용이었으나,
 # 부하 중 재기동 순간 nginx 502가 새는 게 확인돼(2026-09) 제거함 - 12GB/swap 0이라 불필요.
+# ENTRYPOINT: bind mount(./backend:/app)가 채워질 때까지 기다렸다가 아래 CMD 를 exec 한다
+# (docker-entrypoint.sh 주석 참고). 인자는 CMD 한 곳에서만 관리.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
