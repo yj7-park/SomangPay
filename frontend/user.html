@@ -11,8 +11,11 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark-user.svg">
   <link rel="alternate icon" href="/favicon-user.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-user.png">
+  <!-- 개발 서버에서만 아이콘/매니페스트를 디버그 뱃지 버전으로 교체 (운영은 deploy.sh가 app-env.js를 production으로 덮어씀) -->
+  <script src="/app-env.js"></script>
+  <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260901_0300">
+  <link rel="stylesheet" href="src/style.css?v=20260903_0400">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -161,18 +164,22 @@
           </div>
         </div>
 
-        <!-- 충전 대기 카드(#18) - 대기 중인 입금 건이 있을 때만 표시.
-             행을 누르면 확정 버튼이 그 행 안에 오버레이되어 나타난다(별도 모달 없음).
-             #redesign(홈 UI 어드민 이식) - 어드민 홈의 "처리 대기" 배너와 같은 경고색
-             풀 배경/테두리 톤(.pending-deposit-card CSS, style.css)으로 맞추고 아이콘도
-             같은 alert 삼각형으로 바꿨다 - 안에 행 목록을 펼쳐 그 자리에서 바로 확정하는
-             동작(이 카드만의 UX)은 그대로 유지. -->
+        <!-- 충전 대기 카드(#18) - 본인 앞으로 매칭됐지만 아직 충전 안 된 입금 건이 있을 때만 표시.
+             #redesign2 - 예전엔 어드민 홈의 "처리 대기" 배너와 같은 앰버 경고 톤이었는데,
+             "들어온 돈"을 문제처럼 보이게 한다는 피드백으로 경고색을 뺐다. 다만 대기 건은
+             회원이 직접 "충전하기"를 눌러야 완료되는 필수 선행 작업이라 눈에는 확실히 띄어야
+             해서(사용자 피드백), 다른 흰 카드들 사이에서 옅은 에메랄드 워시 + 왼쪽 액센트 바 +
+             제목 옆 "확인 필요"(액션 버튼과 같은 남색) 뱃지로 강조한다. 아이콘은 이용 내역의
+             "계좌이체 충전"(history-render.js의 in = 카드+플러스)과 같은 것. 행마다 "충전하기"
+             버튼이 항상 보이고, 누르면 같은 행 위에서 "확인/취소"로 한 번 더 확인한다
+             (별도 모달 없음 - 모달 사용성이 나쁘다는 기존 요청 유지). -->
         <div id="pending-deposit-card" class="pending-deposit-card" style="display: none;">
           <div class="pending-deposit-header">
-            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
-            <div>
-              <div class="pending-deposit-title">충전 대기 중인 입금 내역이 있습니다.</div>
-            </div>
+            <span class="pending-deposit-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/><path d="M12 12.5v4M10 14.5h4"/></svg>
+            </span>
+            <div class="pending-deposit-title">충전 대기 중인 입금</div>
+            <span class="pending-deposit-flag">확인 필요</span>
           </div>
           <div id="pending-deposit-list" class="pending-deposit-list"></div>
         </div>
@@ -419,6 +426,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/user.js?v=20260901_0300"></script>
+  <script src="src/user.js?v=20260903_0400"></script>
 </body>
 </html>

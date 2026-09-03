@@ -16,6 +16,7 @@ const KIOSK_ICON_SVGS = {
   undo: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
   x: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   backspace: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-7-8Z"/><path d="M14.5 9.5l4 5M18.5 9.5l-4 5"/></svg>',
+  refresh: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.3-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.3 6.3L3 16"/><path d="M3 21v-5h5"/></svg>',
 };
 function kioskIcon(name) {
   return KIOSK_ICON_SVGS[name] || "";
@@ -24,6 +25,19 @@ function hydrateIconPlaceholders(root) {
   (root || document).querySelectorAll("[data-icon]").forEach(el => {
     el.innerHTML = kioskIcon(el.dataset.icon);
   });
+}
+
+// 설정 "앱" 카드의 "웹 버전" 행(kiosk.html) - 네이티브 APK 버전(update-widget-root, 네이티브
+// 브리지 있을 때만 채워짐)과 별개로, 지금 이 화면이 실제로 받아서 실행 중인 코드가 몇 버전인지
+// 확인할 방법이 없다는 요청으로 추가했다. 새 배포마다 올리는 캐시버스팅 쿼리
+// (<script src="src/kiosk.js?v=YYYYMMDD_HHMM">)를 그대로 읽어서 보여준다 - 이 값 자체가
+// 이미 "웹앱이 알고 있는 버전 정보"라 새 버전 체계를 따로 만들 필요가 없다.
+function hydrateKioskWebVersionText() {
+  const el = document.getElementById("kiosk-web-version-text");
+  if (!el) return;
+  const scriptEl = document.querySelector('script[src*="kiosk.js"]');
+  const m = scriptEl && /[?&]v=([^&]+)/.exec(scriptEl.src);
+  el.textContent = m ? m[1] : "-";
 }
 
 let products = [];
@@ -167,6 +181,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 등록 모달도 data-icon 자리를 쓰므로(kiosk-register-modal) 등록 여부 분기보다 먼저
   // 아이콘/키패드를 준비해둔다.
   hydrateIconPlaceholders(document);
+  hydrateKioskWebVersionText();
   initKioskRegisterPinKeypad();
   initKioskPinKeypad();
   initKioskTestMode();
@@ -1489,6 +1504,13 @@ async function issueKioskCardToUser() {
 // #f8fafc - 실패 사유가 안 읽히는 버그였다)도 테마 토큰으로 바꿨다.
 // data: 성공 시 결제 API 응답 그대로({user_type,user_name,total_amount,balance_after}),
 // 실패 시 {title, message} - 유형별 안내(잔액 부족/미등록 카드/기타)는 호출부에서 결정한다.
+//
+// #redesign(2026-09-03) - 폰 가로모드(예: 844x390)에서 성공 모달 내용이 .modal-box-large의
+// max-height:86vh + overflow:hidden에 걸려 "결제 차감 금액"/안내문이 통째로 안 보이게
+// 잘리던 버그를 발견 - #modal-box에 overflow-y:auto를 얹어 잘리는 대신 스크롤되게 했다
+// (style.css 참고). 동시에 사용자 피드백 반영: 닫기 버튼 제거하고 오버레이 어디를 눌러도
+// 닫히게(kiosk.html #payment-modal의 onclick="closeModal()"), 자동 닫힘 5초→3초로 단축,
+// "N초 후 자동 전환" 카운트다운 안내문 제거.
 function showModal(isSuccess, data) {
   const modal = document.getElementById("payment-modal");
   const modalBox = document.getElementById("modal-box");
@@ -1498,58 +1520,50 @@ function showModal(isSuccess, data) {
   }
 
   clearTimeout(window._kioskModalAutoCloseTimer);
-  clearInterval(window._kioskModalCountdownTimer);
 
   if (isSuccess) {
     modalBox.style.borderColor = "var(--accent-emerald)";
     modalBox.innerHTML = `
-      <div style="display: flex; justify-content: center; color: var(--accent-emerald); font-size: 4rem; margin-bottom: 0.5rem;" data-icon="check"></div>
-      <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem; color: var(--text-main);">결제 승인 완료</h1>
-      <div style="margin-bottom: 1.2rem;">
-        <span class="badge-tag ${data.user_type === '시니어' ? 'badge-senior' : 'badge-general'}">${data.user_type} 회원</span>
-        <strong style="font-size: 1.5rem; margin-left: 0.5rem; color: var(--text-main);">${data.user_name}님</strong>
+      <div class="modal-result-icon" style="color: var(--accent-emerald);" data-icon="check"></div>
+      <h1 class="modal-result-title" style="color: var(--text-main);">결제 승인 완료</h1>
+      <div class="modal-result-name-row">
+        <span class="badge-tag ${data.user_type === '시니어' ? 'badge-senior' : 'badge-general'}">${data.user_type}</span>
+        <strong class="modal-result-name" style="color: var(--text-main);">${data.user_name}님</strong>
       </div>
-      <!-- 이용자가 가장 궁금한 건 "내 잔액이 얼마 남았나"라 잔액을 먼저, 차감액과 같은 크기로
-           둔다(#redesign - 예전엔 차감액이 더 크고 팔레트 밖 보라색이었다). -->
-      <div style="background: var(--surface-2); padding: 1.5rem; border-radius: 18px; margin: 1.2rem 0;">
-        <div style="color: var(--text-muted); font-size: 1.1rem;">결제 후 남은 잔액</div>
-        <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent-emerald);">${data.balance_after.toLocaleString()}원</div>
-        <div style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.8rem;">결제 차감 금액</div>
-        <div style="font-size: 1.8rem; font-weight: 900; color: var(--text-main);">${data.total_amount.toLocaleString()}원</div>
+      <!-- #redesign - 차감 금액을 먼저(위), 남은 잔액을 그 아래에 둔다. 세로 공간이 부족해
+           스크롤이 필요한 화면(폰 가로모드 등)에서는 .modal-amount-box가 좌/우 2열로 바뀌고
+           글자 크기/여백도 vh에 비례해 함께 줄어들어(style.css .modal-result-*/.modal-amount-*
+           clamp 참고) 어떤 높이든 스크롤 없이 다 보이게 한다 - 그때도 순서는 그대로 유지
+           (차감 금액 좌측, 잔액 우측). -->
+      <div class="modal-amount-box">
+        <div class="modal-amount-col">
+          <div class="modal-amount-label">결제 금액</div>
+          <div class="modal-amount-value">${data.total_amount.toLocaleString()}원</div>
+        </div>
+        <div class="modal-amount-col">
+          <div class="modal-amount-label">결제 후 남은 잔액</div>
+          <div class="modal-amount-value-hero">${data.balance_after.toLocaleString()}원</div>
+        </div>
       </div>
-      <p id="kiosk-modal-timer" style="color: var(--text-muted); font-size: 1.1rem;">5초 후 대기 화면으로 자동 전환됩니다.</p>
     `;
     hydrateIconPlaceholders(modalBox);
-
-    // 고령 이용자가 잔액을 읽을 시간을 고려해 3초 → 5초로 늘리고, 카운트다운을 눈에 보이게
-    // 남겨둔다(#redesign).
-    let seconds = 5;
-    window._kioskModalCountdownTimer = setInterval(() => {
-      seconds--;
-      const timerElem = document.getElementById("kiosk-modal-timer");
-      if (timerElem) timerElem.innerText = `${seconds}초 후 대기 화면으로 자동 전환됩니다.`;
-      if (seconds <= 0) {
-        clearInterval(window._kioskModalCountdownTimer);
-        closeModal();
-      }
-    }, 1000);
   } else {
     modalBox.style.borderColor = "var(--accent-rose)";
     modalBox.innerHTML = `
-      <div style="display: flex; justify-content: center; color: var(--accent-rose); font-size: 4rem; margin-bottom: 0.5rem;" data-icon="alert"></div>
-      <h1 style="font-size: 2.2rem; margin-bottom: 0.5rem; color: var(--accent-rose);">${data.title}</h1>
-      <p style="font-size: 1.4rem; margin: 1.5rem 0; color: var(--text-main);">${data.message}</p>
-      <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeModal()">닫기</button>
+      <div class="modal-result-icon" style="color: var(--accent-rose);" data-icon="alert"></div>
+      <h1 class="modal-result-title" style="color: var(--accent-rose);">${data.title}</h1>
+      <p class="modal-result-message">${data.message}</p>
     `;
     hydrateIconPlaceholders(modalBox);
-    // 자동 닫힘(#redesign) - 손님이 못 눌러도 다음 손님을 위해 화면이 저절로 복귀한다.
-    window._kioskModalAutoCloseTimer = setTimeout(closeModal, 5000);
   }
+
+  // 자동 닫힘(#redesign) - 손님이 못 눌러도(또는 안 눌러도) 다음 손님을 위해 화면이 저절로
+  // 복귀한다. 성공/실패 공통 3초.
+  window._kioskModalAutoCloseTimer = setTimeout(closeModal, 3000);
 }
 
 function closeModal() {
   clearTimeout(window._kioskModalAutoCloseTimer);
-  clearInterval(window._kioskModalCountdownTimer);
   const modal = document.getElementById("payment-modal");
   if (modal) {
     modal.style.display = 'none';

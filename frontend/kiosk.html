@@ -14,19 +14,12 @@
   <link rel="icon" type="image/svg+xml" href="/icons/logo-mark-kiosk.svg">
   <link rel="alternate icon" href="/favicon-kiosk.ico">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon-kiosk.png">
+  <!-- 개발 서버에서만 아이콘/매니페스트를 디버그 뱃지 버전으로 교체 (운영은 deploy.sh가 app-env.js를 production으로 덮어씀) -->
+  <script src="/app-env.js"></script>
+  <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260902_0119">
+  <link rel="stylesheet" href="src/style.css?v=20260903_0200">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">
-  <!-- 버전 배지는 update-widget.js가 admin/user 페이지와 공유하는 마크업이라 배지 스타일
-       (테두리/배경 pill)이 거기 박혀 있다 - 키오스크 헤더에서만 테두리 없이 텍스트만
-       보이도록 .kiosk-header 스코프로 여기서 덮어쓴다. -->
-  <style>
-    .kiosk-header #update-badge-btn {
-      background: none;
-      border: none;
-      padding: 0.35rem 0.2rem;
-    }
-  </style>
   <script src="jsQR.min.js"></script>
   <script>
     // 안드로이드 브라우저에서 "홈 화면에 추가" 시 앱처럼 전체화면으로 실행되려면
@@ -80,7 +73,10 @@
              뜨므로 탭이 필수고, 네이티브 앱(AndroidInterface)에서는 NFC 배지 탭은 무시되고
              상태 표시로만 쓰인다(하드웨어 리더는 앱이 자동 관리) - QR은 두 환경 모두 탭으로
              켜고 끌 수 있다. -->
-        <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+        <!-- 버전 배지(update-widget-root)는 admin/user와 같은 자리(설정 화면 "앱" 카드,
+             kiosk-admin-modal 참고)로 옮겼다 - 예전엔 여기 헤더에 떠 있었는데, 고객이 보는
+             화면에 운영자용 정보가 떠 있을 이유가 없고 admin/user도 헤더가 아니라 설정 안에
+             둔다(#redesign, 사용자 요청: "새로고침 버튼을 설정 안에"). -->
         <span id="nfc-activate-btn" onclick="toggleKioskNfcReader()" title="탭하여 NFC 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
         </span>
@@ -216,9 +212,11 @@
     </main>
   </div>
 
-  <!-- Modal Result Popup -->
-  <div id="payment-modal" class="modal-overlay" style="display: none;">
-    <div id="modal-box" class="modal-box-large">
+  <!-- Modal Result Popup - 닫기 버튼 없음(#redesign): 결과를 확인만 하면 되는 화면이라
+       버튼을 찾아 누르게 하는 대신 어디를 눌러도(오버레이/카드 내부 상관없이) 바로 닫히고,
+       3초 뒤 자동으로도 닫힌다(kiosk.js showModal 참고). -->
+  <div id="payment-modal" class="modal-overlay" style="display: none;" onclick="closeModal()">
+    <div id="modal-box" class="modal-box-large" style="text-align: center;">
       <!-- Dynamic content -->
     </div>
   </div>
@@ -325,6 +323,31 @@
 
       <!-- Tab 1: Menu Management & Device Settings -->
       <div id="kiosk-admin-menu-sec">
+        <!-- #redesign(사용자 요청: "화면을 새로고침할 방법이 없다, admin처럼 앱 버전 카드를")
+             admin.html "앱 버전" 카드와 동일한 구성(update-widget-root + 새로고침 아이콘
+             버튼) - triggerAppVersionRefresh()는 update-widget.js가 세 페이지 공통으로
+             노출하는 전역 함수라 여기서 새로 작성할 게 없다: 네이티브 앱이면 업데이트도 같이
+             확인하고, 캐시를 건너뛰어 페이지를 강제로 새로 받아온다(네이티브든 일반
+             브라우저/PWA든 항상 동작). update-badge-btn(네이티브 브리지 있을 때만 채워짐)은
+             그 안의 "네이티브 APK" 버전이고, 바로 아래 "웹 버전" 행은 지금 이 화면이 실제로
+             받아서 실행 중인 코드 버전 - kiosk.html이 로드한 src/kiosk.js?v=... 캐시버스팅
+             쿼리를 그대로 보여준다(hydrateKioskWebVersionText, kiosk.js). 서로 다른 정보라
+             구분해서 나란히 둔다. -->
+        <div class="settings-group-label">앱</div>
+        <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap;">
+            <h4 style="color: var(--text-main); margin: 0;">앱 버전</h4>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
+              <button type="button" class="icon-plain-btn" title="새로고침" aria-label="새로고침" onclick="triggerAppVersionRefresh()"><span data-icon="refresh"></span></button>
+            </div>
+          </div>
+          <div style="margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">웹 버전</span>
+            <span id="kiosk-web-version-text" style="font-size: 0.8rem; color: var(--text-main); font-family: monospace;">-</span>
+          </div>
+        </div>
+
         <div class="settings-group-label">단말기</div>
         <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem;">
@@ -410,6 +433,6 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <script src="src/kiosk.js?v=20260831_1500"></script>
+  <script src="src/kiosk.js?v=20260903_0300"></script>
 </body>
 </html>

@@ -757,9 +757,10 @@ function setupHistoryInfiniteScroll() {
   });
 }
 
-// ============ 충전 대기 카드 - 행을 누르면 확정 버튼이 그 행 안에 오버레이된다(#18) ============
-// 별도 확인 모달(과거 deposit-claim-modal) 대신, 카드 자체가 두 단계 상태(기본/확정 대기)를
-// 갖는다. 한 번에 하나만 확정 대기 상태로 둔다 - 여러 건을 동시에 열어두면 실수로 엉뚱한
+// ============ 충전 대기 카드 - 각 행에 "충전하기" 버튼이 항상 보이고, 누르면 그 행 위에
+//             "확인/취소"가 오버레이된다(#18) ============
+// 별도 확인 모달(과거 deposit-claim-modal) 대신, 행 자체가 두 단계 상태(기본/확인 대기)를
+// 갖는다. 한 번에 하나만 확인 대기 상태로 둔다 - 여러 건을 동시에 열어두면 실수로 엉뚱한
 // 건을 확정할 위험이 있다.
 let _armedDepositId = null;
 
@@ -782,17 +783,21 @@ function renderPendingDepositCard() {
 
 function pendingDepositRowHtml(d) {
   const armed = _armedDepositId === d.id;
+  const amount = d.amount.toLocaleString();
   return `
-    <div class="pending-deposit-row ${armed ? "armed" : ""}" onclick="event.stopPropagation(); armPendingDeposit(${d.id})">
-      <div class="pending-deposit-row-info">
-        <div class="pending-deposit-row-date">${formatDateTimeKST(d.created_at)}</div>
-        <div class="pending-deposit-row-amount">+${d.amount.toLocaleString()}원</div>
+    <div class="pending-deposit-row ${armed ? "armed" : ""}">
+      <div class="pending-deposit-row-main" onclick="event.stopPropagation()">
+        <div class="pending-deposit-row-info">
+          <div class="pending-deposit-row-amount">+${amount}원</div>
+          <div class="pending-deposit-row-date">${formatDateTimeKST(d.created_at)}</div>
+        </div>
+        <button type="button" class="pdrow-btn pdrow-btn-go" onclick="event.stopPropagation(); armPendingDeposit(${d.id})">충전하기</button>
       </div>
-      <div class="pending-deposit-confirm-overlay" onclick="event.stopPropagation()">
-        <span class="pending-deposit-confirm-text">${d.amount.toLocaleString()}원을 충전할까요?</span>
+      <div class="pending-deposit-confirm" onclick="event.stopPropagation()">
+        <span class="pending-deposit-confirm-text">${amount}원을 충전할까요?</span>
         <div class="pending-deposit-confirm-actions">
-          <button class="btn-action" onclick="armPendingDeposit(null)">취소</button>
-          <button class="btn-action btn-primary" onclick="confirmPendingDeposit(${d.id}, this)">확정</button>
+          <button type="button" class="pdrow-btn pdrow-btn-cancel" onclick="armPendingDeposit(null)">취소</button>
+          <button type="button" class="pdrow-btn pdrow-btn-confirm" onclick="confirmPendingDeposit(${d.id}, this)">확인</button>
         </div>
       </div>
     </div>
