@@ -18,7 +18,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260903_0200">
+  <link rel="stylesheet" href="src/style.css?v=20260904_0100">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">
   <script src="jsQR.min.js"></script>
   <script>
@@ -324,7 +324,7 @@
       <!-- Tab 1: Menu Management & Device Settings -->
       <div id="kiosk-admin-menu-sec">
         <!-- #redesign(사용자 요청: "화면을 새로고침할 방법이 없다, admin처럼 앱 버전 카드를")
-             admin.html "앱 버전" 카드와 동일한 구성(update-widget-root + 새로고침 아이콘
+             admin.html "앱 정보" 카드와 동일한 구성(update-widget-root + 새로고침 아이콘
              버튼) - triggerAppVersionRefresh()는 update-widget.js가 세 페이지 공통으로
              노출하는 전역 함수라 여기서 새로 작성할 게 없다: 네이티브 앱이면 업데이트도 같이
              확인하고, 캐시를 건너뛰어 페이지를 강제로 새로 받아온다(네이티브든 일반
@@ -336,7 +336,7 @@
         <div class="settings-group-label">앱</div>
         <div class="glass-container" style="padding: 1rem; border-radius: 12px; margin-bottom: 1.2rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap;">
-            <h4 style="color: var(--text-main); margin: 0;">앱 버전</h4>
+            <h4 style="color: var(--text-main); margin: 0;">앱 정보</h4>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
               <button type="button" class="icon-plain-btn" title="새로고침" aria-label="새로고침" onclick="triggerAppVersionRefresh()"><span data-icon="refresh"></span></button>
@@ -433,6 +433,6 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <script src="src/kiosk.js?v=20260903_0300"></script>
+  <script src="src/kiosk.js?v=20260904_0100"></script>
 </body>
 </html>

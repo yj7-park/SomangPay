@@ -724,11 +724,16 @@ function renderKioskProducts() {
     const qty = cart[p.id] || 0;
     const card = document.createElement("div");
     card.className = `menu-card ${qty > 0 ? 'selected' : ''}`;
+    // menu-card-info로 이름+가격을 한 번 감싼다: 데스크톱/태블릿에서는 style.css가
+    // 이 래퍼를 display:contents로 없애 기존 "이름 - 가격 - 수량" 한 줄 배치를 유지하고,
+    // 모바일 세로(<=767px)에서만 왼쪽 열(이름 위 / 가격 아래) 세로 스택으로 쓴다.
     card.innerHTML = `
-      <div class="menu-name">${p.name}</div>
-      <div class="menu-price-block">
-        <div class="menu-price">일반: ${p.price_general.toLocaleString()}원</div>
-        <div class="menu-price-senior">시니어: ${p.price_senior.toLocaleString()}원</div>
+      <div class="menu-card-info">
+        <div class="menu-name">${p.name}</div>
+        <div class="menu-price-block">
+          <div class="menu-price">일반: ${p.price_general.toLocaleString()}원</div>
+          <div class="menu-price-senior">시니어: ${p.price_senior.toLocaleString()}원</div>
+        </div>
       </div>
       <div class="touch-qty-box" onclick="event.stopPropagation()">
         <button class="touch-qty-btn" onclick="updateQty(${p.id}, -1)">-</button>

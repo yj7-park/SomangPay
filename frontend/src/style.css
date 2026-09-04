@@ -2315,8 +2315,34 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   .kiosk-menu-section {
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
+    /* 섹션 자체는 스크롤하지 않는다(인라인 overflow:hidden 유지) - 대신 아래
+       #kiosk-menu-content-wrap > .menu-grid가 남는 세로 공간만큼만 차지하고 그
+       안에서 스크롤한다. "메뉴 선택" 제목은 고정되고 카드 목록만 스크롤됨. */
   }
+  /* 인라인 style="display:block; height:100%" 를 flex 컬럼으로 덮어써서, 제목 줄은
+     제 높이만, .menu-grid는 나머지 전부를 차지하게 한다. */
+  #kiosk-menu-content-wrap {
+    display: flex !important;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #kiosk-menu-content-wrap > .menu-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* 스크롤 컨테이너 자체의 padding-top으로 위쪽 여백 확보(제목 바로 아래에서
+       첫 카드가 시작할 때 숨 쉴 틈). padding-bottom은 일부 안드로이드 WebView에서
+       scrollHeight에 안 잡혀 끝까지 스크롤해도 마지막 카드가 잘려 보이므로, 아래
+       여백은 마지막 카드의 margin-bottom으로 준다(모든 브라우저에서 스크롤 범위 포함). */
+    padding-top: 0.25rem;
+  }
+  #kiosk-menu-grid > .menu-card:last-child {
+    margin-bottom: 0.9rem;
+  }
+  /* 메뉴 카드를 2행(이름 / 가격+수량)으로 바꾸는 규칙은 style.css 뒤쪽,
+     base ".menu-grid .menu-card"(height:88px 등) 선언보다 나중에 와야 소스 순서로
+     이겨서 아래 별도 미디어 블록에 둔다. */
 }
 
 .checkout-cart-box {
@@ -2824,6 +2850,12 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   min-height: 88px !important;
   max-height: none !important;
 }
+/* 데스크톱/태블릿에서는 래퍼를 없애서(display:contents) 이름/가격/수량이 그대로 카드의
+   직속 flex 자식으로 한 줄에 놓이게 한다. 모바일(<=767px)에서만 아래 블록이 이 래퍼를
+   실제 flex 컬럼으로 되살려 이름 위 / 가격 아래로 쌓는다. */
+.menu-grid .menu-card .menu-card-info {
+  display: contents;
+}
 .menu-grid .menu-card .menu-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -2885,6 +2917,54 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+
+/* 좁은 세로 화면(모바일)에서는 "이름 · 가격 · 수량"을 한 줄에 못 담아 메뉴 이름이 2글자에서
+   잘렸다(사용자 피드백). 카드를 flex 두 칸으로:
+     - 왼쪽(.menu-card-info, flex 컬럼): 이름 위 / 가격(일반·시니어 세로) 아래
+     - 오른쪽(.touch-qty-box): 수량 버튼 - 카드 세로 중앙
+   base ".menu-grid .menu-card"(height:88px, gap:1.2rem 등)보다 뒤에 있어야 소스 순서로 이긴다. */
+@media screen and (max-width: 767.98px) {
+  /* 그리드 행을 카드 실제 높이에 맞춤 - 기본 auto 행이라면 카드(그리드 아이템)가
+     align-self:stretch로 88px짜리 행에 늘려 맞춰지면서 height:auto가 무력화돼 이름+가격
+     2줄이 세로로 찌부러진다(위쪽 패딩이 잘려 보이는 원인). */
+  .menu-grid {
+    grid-auto-rows: max-content !important;
+  }
+  .menu-grid .menu-card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    align-self: start !important;    /* 행에 억지로 늘어나지 않고 제 콘텐츠 높이를 유지 */
+    gap: 0.85rem;
+    height: auto !important;         /* 두 줄(이름+가격)이 들어갈 만큼 카드가 늘어나야 함 */
+    min-height: 88px !important;
+    max-height: none !important;
+    padding: 0.85rem 1rem !important;
+  }
+  .menu-grid .menu-card .menu-card-info {
+    display: flex !important;        /* 데스크톱의 display:contents를 되살려 실제 컬럼으로 */
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.3rem;
+  }
+  .menu-grid .menu-card .menu-name {
+    /* 이름을 왼쪽 열 폭만큼 다 보여준다 - 말줄임(overflow:hidden/nowrap) 대신 줄바꿈 허용.
+       overflow:hidden을 그대로 두면 flex 아이템 최소 크기가 0이 돼 세로로도 찌부러진다. */
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: keep-all;            /* 한글은 어절 단위로 끊기 */
+    line-height: 1.25;
+  }
+  .menu-grid .menu-card .menu-price-block {
+    text-align: left;
+  }
+  .menu-grid .menu-card .touch-qty-box {
+    flex: 0 0 auto;
+    margin-top: 0 !important;
+  }
 }
 
 /* Large Kiosk Tablet Landscape Optimization (e.g. Galaxy Tab A11+ SM-X236, 1920x1200)
