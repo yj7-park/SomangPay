@@ -46,6 +46,46 @@
 - `git add -A`/`git add .` 대신 관련 파일 경로를 명시해서 스테이징한다. 커밋 전
   `git status --short`로 의도한 파일만 올라갔는지 확인한다.
 
+### 4. 프론트 캐시버스팅 쿼리 (`?v=`) 와 "웹 버전" 표시
+
+- `kiosk.html` / `admin.html` / `user.html` 은 `src/style.css?v=YYYYMMDD_HHMM`,
+  `src/<page>.js?v=YYYYMMDD_HHMM` 형태로 정적 에셋을 로드한다. 링크된 에셋을
+  고쳤으면 **그 에셋을 로드하는 HTML 의 `?v=` 를 반드시 올려야** 브라우저 / PWA /
+  nginx 가 옛 파일을 계속 안 물고 새로 받는다. 안 올리면 "배포는 됐는데 화면은 옛날"
+  이 된다.
+- `style.css` 는 세 페이지가 공유하지만 `?v=` 는 페이지마다 따로다. 동작이 바뀐
+  페이지의 쿼리만 올리면 된다(예: kiosk 전용 CSS 변경이면 `kiosk.html` 만).
+- **함정 - 설정 "앱 정보" 카드의 "웹 버전"**: `hydrateKioskWebVersionText` /
+  `hydrateAdminWebVersionText` 가 보여주는 값은 `style.css?v=` 가 아니라
+  **`<page>.js?v=` 쿼리**를 읽는다. 그래서 CSS 만 고치고 `style.css?v=` 만 올리면,
+  기기에서 새 CSS 를 받아도 "웹 버전"은 옛날 값 그대로라 업데이트 반영 여부를
+  확인할 수 없다. **CSS-only 변경이어도 `<page>.js?v=` 를 같은 값으로 같이 올려라**
+  (kiosk.js/admin.js 코드는 안 건드려도 됨). 그래야 화면의 "웹 버전"이 신뢰할 수
+  있는 신호가 된다.
+- PWA(디버그 PWA 포함)는 서비스워커(`sw.js`, network-first)가 옛 셸을 붙들고 있을
+  수 있다. 기기에서 **설정 → 앱 정보 → ⟳ 새로고침**(`triggerAppVersionRefresh()`)
+  또는 PWA 완전 종료 후 재실행으로 강제로 새로 받는다.
+
+### 5. kiosk 모바일(<=767px) 메뉴 목록 스크롤 레이아웃
+
+- 메뉴 리스트는 `.kiosk-menu-section`(인라인 `overflow:hidden` + `position:relative`)
+  안에서 `#kiosk-menu-content-wrap` 을 **`position:absolute` + `top/right/bottom/left`
+  고정**으로 띄워 높이를 확정하고, 그 안의 `#kiosk-menu-grid` 만
+  `flex:1; min-height:0; overflow-y:auto` 로 스크롤한다.
+- `#kiosk-menu-content-wrap` 을 `flex` + `height:100%` 로 풀면 일부 렌더링 엔진에서
+  콘텐츠 높이만큼 부풀어 안쪽 스크롤이 아예 안 생기고, 섹션 `overflow:hidden` 에
+  마지막 카드가 잘린다. absolute 로 높이가 명확해야 안정적이다.
+- 섹션의 `overflow:hidden` 은 QR 카메라 오버레이(`#kiosk-camera-viewport-container`,
+  `position:absolute; inset:0`)가 스크롤에 안 딸려가게 하려는 것이므로 유지한다
+  (섹션 자체를 스크롤 컨테이너로 바꾸지 말 것).
+- 스크롤 컨테이너 `padding-bottom` 은 일부 안드로이드 WebView 에서 `scrollHeight` 에
+  안 잡혀 마지막 카드가 잘려 보인다. 아래 여백은 마지막 카드
+  `margin-bottom` 으로 준다.
+- 메뉴 카드 2행 배치(이름 위 / 가격 아래 / 수량 오른쪽)는 `renderKioskProducts` 가
+  이름+가격을 `.menu-card-info` 로 감싸고, 데스크톱/태블릿은
+  `.menu-grid .menu-card .menu-card-info { display: contents }` 로 래퍼를 없애
+  기존 한 줄 배치를 유지한다.
+
 ## 개발/운영 환경 구분 (디버그 뱃지)
 
 개발 서버에서 뜨는 아이콘에는 빨간 "DEV" 리본이 붙어 운영과 눈으로 구분된다.
