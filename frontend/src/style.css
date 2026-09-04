@@ -2315,26 +2315,38 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   .kiosk-menu-section {
     flex: 1 1 auto;
     min-height: 0;
-    /* 섹션 자체는 스크롤하지 않는다(인라인 overflow:hidden 유지) - 대신 아래
-       #kiosk-menu-content-wrap > .menu-grid가 남는 세로 공간만큼만 차지하고 그
-       안에서 스크롤한다. "메뉴 선택" 제목은 고정되고 카드 목록만 스크롤됨. */
+    /* 섹션 자체는 스크롤하지 않는다(인라인 overflow:hidden 유지 - QR 카메라 오버레이가
+       스크롤에 안 딸려가도록). 아래 #kiosk-menu-content-wrap를 섹션 기준 absolute로
+       띄워 높이를 확정하고, 그 안의 .menu-grid만 스크롤한다. */
   }
-  /* 인라인 style="display:block; height:100%" 를 flex 컬럼으로 덮어써서, 제목 줄은
-     제 높이만, .menu-grid는 나머지 전부를 차지하게 한다. */
+  /* 인라인 style="display:block; height:100%"를 덮어쓴다.
+       height:100%를 flex로 풀면 일부 안드로이드 WebView에서 콘텐츠 높이만큼 부풀어
+       .menu-grid의 overflow 스크롤이 아예 안 생기고 섹션 overflow:hidden에 그대로 잘린다.
+       섹션(인라인 position:relative) 기준 absolute + top/bottom 고정으로 래퍼 높이를
+       명확히 확정하면 내부 flex+overflow 스크롤이 WebView에서도 안정적으로 동작한다. */
   #kiosk-menu-content-wrap {
+    position: absolute !important;
+    top: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    height: auto !important;
     display: flex !important;
     flex-direction: column;
     min-height: 0;
+  }
+  #kiosk-menu-content-wrap > div:first-child {
+    flex: 0 0 auto;   /* "메뉴 선택" 제목 줄은 고정 높이 */
   }
   #kiosk-menu-content-wrap > .menu-grid {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    /* 스크롤 컨테이너 자체의 padding-top으로 위쪽 여백 확보(제목 바로 아래에서
-       첫 카드가 시작할 때 숨 쉴 틈). padding-bottom은 일부 안드로이드 WebView에서
-       scrollHeight에 안 잡혀 끝까지 스크롤해도 마지막 카드가 잘려 보이므로, 아래
-       여백은 마지막 카드의 margin-bottom으로 준다(모든 브라우저에서 스크롤 범위 포함). */
+    -webkit-overflow-scrolling: touch;
+    /* 위쪽 여백은 스크롤 컨테이너 padding-top으로. 아래 여백은 padding-bottom이 일부
+       안드로이드 WebView에서 scrollHeight에 안 잡혀서 마지막 카드가 잘려 보이므로
+       마지막 카드 margin-bottom으로 준다(모든 브라우저에서 스크롤 범위에 포함). */
     padding-top: 0.25rem;
   }
   #kiosk-menu-grid > .menu-card:last-child {
