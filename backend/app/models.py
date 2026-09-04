@@ -121,9 +121,11 @@ class KioskDevice(Base):
     allow_camera_reader_concurrent = Column(Boolean, default=False) # 외부 리더 사용 시 카메라와 동시 사용 허용 여부
     is_active = Column(Boolean, default=False, nullable=False) # 관리자 PIN으로 등록 완료된 단말기만 True - 미등록 단말기는 결제 등 모든 기능 차단
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    # "지금 온라인인지"는 DB가 아니라 ws_manager.manager.kiosk_sockets(인메모리 WS 연결)로
-    # 판단한다(admin_list_kiosks 참고) - 여기 이 컬럼은 "마지막으로 연결됐던 시각"만 기록해
-    # 오프라인일 때 "n분 전 접속"을 보여주는 용도. main.py의 ws_kiosk가 연결/해제 시점에 갱신한다.
+    # 키오스크 하트비트(naive UTC). ws_kiosk가 연결 시점 + WS_PING_INTERVAL마다 갱신한다.
+    # "지금 온라인인지"는 이 값의 신선도로 판단한다(main.py의 _kiosk_is_online,
+    # KIOSK_ONLINE_TTL_SECONDS) - uvicorn 워커가 여러 개라 프로세스 로컬인
+    # manager.kiosk_sockets로는 워커마다 답이 달라지기 때문. 오프라인일 때 "n분 전 접속"
+    # 표시에도 같은 값을 쓴다.
     last_seen_at = Column(DateTime, nullable=True)
 
     merchant = relationship("Merchant", back_populates="kiosk_devices")

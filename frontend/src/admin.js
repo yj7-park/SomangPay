@@ -857,6 +857,7 @@ let currentDetailUserId = null;
 let detailReturnView = "search";
 
 function switchAdminView(viewName, inboxFilter) {
+  stopKioskListPolling(); // 키오스크 탭을 벗어나면 목록 폴링을 멈춘다 (아래에서 kiosk 탭이면 다시 켬)
   document.querySelectorAll(".admin-view").forEach(el => el.classList.remove("active"));
   const target = document.getElementById(`admin-view-${viewName}`);
   if (target) target.classList.add("active");
@@ -868,7 +869,7 @@ function switchAdminView(viewName, inboxFilter) {
       btn.classList.toggle("active", btn.dataset.view === viewName);
     });
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
-    if (viewName === "kiosk") renderKioskList();
+    if (viewName === "kiosk") { renderKioskList(); loadKiosks(); startKioskListPolling(); }
     if (viewName === "settings") refreshAdminPushButtonUI();
     if (viewName === "inbox") {
       if (inboxFilter) inboxDepositFilter = inboxFilter;
@@ -2973,6 +2974,26 @@ let kiosks = [];
 let selectedKioskId = null;
 let kioskSalesPeriod = "today";
 let kioskSalesPeriodOpen = false;
+
+// 키오스크 온라인 여부는 서버가 last_seen_at 하트비트(약 20초 주기)의 신선도로 판정한다
+// (backend _kiosk_is_online). 키오스크가 조용히 죽으면 서버가 보내는 "stats" 갱신 신호가
+// (uvicorn 워커가 여러 개라) 이 관리자 세션에 안 닿을 수 있어, 키오스크 탭을 보고 있는
+// 동안만 주기적으로 목록을 다시 불러 온라인 점을 최신으로 유지한다. 탭을 벗어나면 멈춘다.
+let kioskListPollTimer = null;
+const KIOSK_LIST_POLL_MS = 30000;
+
+function startKioskListPolling() {
+  if (kioskListPollTimer) return;
+  kioskListPollTimer = setInterval(() => {
+    if (document.hidden) return;
+    loadKiosks();
+  }, KIOSK_LIST_POLL_MS);
+}
+
+function stopKioskListPolling() {
+  clearInterval(kioskListPollTimer);
+  kioskListPollTimer = null;
+}
 
 async function loadKiosks() {
   try {

@@ -1418,17 +1418,26 @@ def get_my_stats_summary(db: Session = Depends(get_db), user: models.User = Depe
 # 받아 기존 verify_admin_token/verify_user_token으로 그대로 검증한다.
 
 WS_PING_INTERVAL = 20  # seconds
+# 키오스크 "온라인" 판정 TTL - 마지막 하트비트(last_seen_at)가 이 시간 안쪽이면 온라인으로
+# 본다. 하트비트 주기(WS_PING_INTERVAL)의 3배라 ping 2회 연속 유실까지는 견딘다.
+KIOSK_ONLINE_TTL_SECONDS = WS_PING_INTERVAL * 3
 
-async def _ws_keepalive_loop(websocket: WebSocket):
+async def _ws_keepalive_loop(websocket: WebSocket, on_tick=None):
     """클라이언트는 먼저 말을 걸어오지 않으므로 receive_text()만 기다리면 이동통신망/공유기의
     유휴 NAT 타임아웃에 걸려 연결이 양쪽 모르게 끊길 수 있다(특히 휴대폰으로 접속하는 사용자
     앱에서 "실시간 반영이 안 된다"로 나타남, #18). 일정 주기로 ping을 보내 트래픽을 유지하고,
-    전송 실패 시 예외를 던져 죽은 연결을 즉시 정리한다."""
+    전송 실패 시 예외를 던져 죽은 연결을 즉시 정리한다.
+
+    on_tick(선택): 루프가 한 바퀴 돌 때마다(대략 WS_PING_INTERVAL 주기) 호출된다.
+    키오스크가 이걸로 last_seen_at을 갱신해 "온라인" 하트비트를 남긴다(admin_list_kiosks의
+    _kiosk_is_online 참고)."""
     while True:
         try:
             await asyncio.wait_for(websocket.receive_text(), timeout=WS_PING_INTERVAL)
         except asyncio.TimeoutError:
             await websocket.send_json({"type": "ping"})
+        if on_tick is not None:
+            on_tick()
 
 @app.websocket("/ws/admin")
 async def ws_admin(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
@@ -1467,18 +1476,23 @@ async def ws_kiosk(websocket: WebSocket, device_uuid: str = Query(...), db: Sess
     # 키오스크 메인 화면은 로그인이 없는 공개 화면이므로(GET /api/kiosk/device/{device_uuid}와
     # 동일한 신뢰 모델) 토큰 검증 없이 device_uuid로만 그룹을 식별한다.
     await manager.connect_kiosk(device_uuid, websocket)
-    # 관리자 키오스크 화면의 "온라인 상태/마지막 접속"(#redesign) - 온라인 여부는
-    # manager.kiosk_sockets(인메모리)로 바로 판단하지만, 오프라인일 때 보여줄 "n분 전"은
-    # DB에 남겨야 하니 연결/해제 시점마다 last_seen_at을 갱신한다. notify_admins(["stats"])는
-    # admin.js가 이미 "stats" 스코프에 loadKiosks()를 묶어놔서(#redesign) 따로 새 스코프를
-    # 안 만들어도 관리자 화면이 열려 있으면 온라인 점이 바로 갱신된다.
+    # 관리자 키오스크 화면의 "온라인 상태/마지막 접속"(#redesign). uvicorn 워커가 4개라
+    # manager.kiosk_sockets(프로세스 로컬)로는 그 소켓을 가진 워커가 admin 요청을 처리할
+    # 때만 online으로 보인다 - 그래서 온라인 판정을 워커에 무관한 last_seen_at 신선도로
+    # 옮겼다(admin_list_kiosks의 _kiosk_is_online). 여기서는 접속 즉시 한 번 찍어 바로
+    # 온라인으로 뜨게 하고, 이후로는 _ws_keepalive_loop가 WS_PING_INTERVAL마다 on_tick으로
+    # 갱신한다. notify_admins(["stats"])는 admin.js가 "stats" 스코프에 loadKiosks()를
+    # 묶어놔서 관리자 화면이 열려 있으면 온라인 점이 바로 갱신된다.
     _touch_kiosk_last_seen(db, device_uuid)
     await notify_admins(["stats"])
     try:
-        await _ws_keepalive_loop(websocket)
+        await _ws_keepalive_loop(
+            websocket, on_tick=lambda: _touch_kiosk_last_seen(db, device_uuid)
+        )
     except Exception:
         manager.disconnect_kiosk(device_uuid, websocket)
-        _touch_kiosk_last_seen(db, device_uuid)
+        # 연결이 끊긴 시점은 굳이 다시 찍지 않는다 - 마지막 하트비트(최대 WS_PING_INTERVAL
+        # 이전)가 곧 "마지막 접속"이고, _kiosk_is_online의 TTL이 지나면 자동으로 offline이 된다.
         await notify_admins(["stats"])
 
 # ================= KIOSK DEVICE PERSISTENCE APIS =================
@@ -1494,6 +1508,17 @@ def _touch_kiosk_last_seen(db: Session, device_uuid: str):
         db.commit()
     except Exception:
         db.rollback()
+
+def _kiosk_is_online(device: models.KioskDevice) -> bool:
+    """온라인 여부를 last_seen_at 신선도로 판단한다. uvicorn 워커가 4개(Dockerfile)라
+    manager.kiosk_sockets(프로세스 로컬)로는 그 소켓을 가진 워커에 요청이 걸릴 때만
+    online으로 보여서(4에 1꼴), 워커에 무관한 DB 타임스탬프로 옮겼다. 키오스크 WS는
+    _ws_keepalive_loop의 on_tick이 WS_PING_INTERVAL마다 last_seen_at을 갱신하므로
+    KIOSK_ONLINE_TTL_SECONDS 안쪽이면 살아있다고 본다. last_seen_at은 naive UTC로 저장된다."""
+    seen = device.last_seen_at
+    if not seen:
+        return False
+    return (datetime.datetime.utcnow() - seen).total_seconds() < KIOSK_ONLINE_TTL_SECONDS
 
 def _next_kiosk_name(db: Session) -> str:
     """이름을 정하지 않고 등록되는 단말기에 "키오스크 1", "키오스크 2"... 처럼 겹치지 않는
@@ -1709,7 +1734,7 @@ def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depen
             default_product_id=device.default_product_id,
             default_quantity=device.default_quantity,
             updated_at=device.updated_at,
-            is_online=bool(manager.kiosk_sockets.get(device.device_uuid)),
+            is_online=_kiosk_is_online(device),
             last_seen_at=device.last_seen_at,
             sales=schemas.KioskSalesSummary(
                 today=_kiosk_sales_for(db, device.id, period_starts["today"]),
