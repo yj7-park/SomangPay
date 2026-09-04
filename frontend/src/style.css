@@ -2374,6 +2374,12 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   font-size: 0.88rem;
   padding-left: 0.5rem;
 }
+/* 비었을 때 안내 문구("선택된 메뉴가 없습니다.")도 담긴 항목과 같은 크기·행 높이로,
+   위쪽 여백 없이. 정렬만 가운데 - 왼쪽 들여쓰기를 취소해야 진짜 가운데로 보인다. */
+.cart-item--empty {
+  padding-left: 0;
+  text-align: center;
+}
 
 /* "카드를 대주세요" 결제 유도 패널(#redesign, kiosk.html의 kiosk-tap-card-panel) - 메뉴를
    담아도 다음에 뭘 해야 하는지 안내가 없다는 게 실제 셀프 키오스크 대조 리뷰의 가장 큰

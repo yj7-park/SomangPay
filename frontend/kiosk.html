@@ -18,7 +18,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260904_0200">
+  <link rel="stylesheet" href="src/style.css?v=20260904_0300">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">
   <script src="jsQR.min.js"></script>
   <script>
@@ -148,7 +148,7 @@
             <div style="display: flex; flex-direction: column; justify-content: center; flex: 1 1 auto; min-height: 0;">
               <div style="font-size: 1rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: bold;">선택된 메뉴</div>
               <div id="cart-items-container" class="cart-list" style="max-height: 110px; overflow-y: auto;">
-                <p style="color: var(--text-muted); text-align: center; margin-top: 1rem; font-size: 0.8rem;">선택된 메뉴가 없습니다.</p>
+                <div class="cart-item cart-item--empty">선택된 메뉴가 없습니다.</div>
               </div>
               <!-- 메뉴를 안 담고 카드를 대려 할 때 잠깐 보였다 사라지는 인라인 힌트 - 예전엔 전체
                    화면 팝업(🍽️ "메뉴를 선택해주세요")으로 막았는데, 가벼운 안내치고 과했다
@@ -433,6 +433,6 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <script src="src/kiosk.js?v=20260904_0200"></script>
+  <script src="src/kiosk.js?v=20260904_0300"></script>
 </body>
 </html>

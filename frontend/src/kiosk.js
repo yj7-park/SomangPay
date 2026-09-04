@@ -784,7 +784,7 @@ function updateCheckoutSummary() {
   }
 
   if (count === 0) {
-    container.innerHTML = `<p style="color: var(--text-muted); text-align: center; margin-top: 2rem;">선택된 메뉴가 없습니다.</p>`;
+    container.innerHTML = `<div class="cart-item cart-item--empty">선택된 메뉴가 없습니다.</div>`;
     totalDisplay.innerText = "0원";
   } else if (totalMax === totalMin) {
     totalDisplay.innerText = `${totalMax.toLocaleString()}원`;
