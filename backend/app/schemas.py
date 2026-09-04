@@ -140,6 +140,14 @@ class AdminKioskResponse(BaseModel):
     last_seen_at: Optional[UTCDatetime] = None
     sales: KioskSalesSummary
 
+class AdminKioskStatus(BaseModel):
+    """온라인 점만 갱신하는 경량 응답(GET /api/admin/kiosks/status) - AdminKioskResponse는
+    단말기당 매출 집계가 붙어 무거워서 상태 폴링/실시간 갱신용으로 분리했다."""
+    id: int
+    device_uuid: str
+    is_online: bool = False
+    last_seen_at: Optional[UTCDatetime] = None
+
 # 키오스크별 결제 이력(영구 보존, 기간 제한 없이 커서 페이지네이션으로 지연 로드) - 키오스크
 # 화면의 "최근 결제 내역" 패널과 관리자 키오스크 상세 화면이 공유하는 응답. HistoryItemResponse
 # (회원 본인 이용내역)는 이미 "누구"인지 알고 있는 화면용이라 user_name/user_type이 없어서

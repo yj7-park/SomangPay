@@ -8,6 +8,7 @@ function createRealtimeClient({
   shouldReconnect,    // () => boolean - 끊겼을 때 재연결을 시도해도 되는 상태인지 (로그아웃/미인증이면 false)
   onMessage,          // (data: object) => void - JSON.parse된 메시지 전체를 그대로 전달 (type/scopes 판별은 호출부 책임)
   onResume,           // (선택) () => void - 화면이 다시 보일 때(visibilitychange/pageshow/online) 놓쳤을 갱신을 잡기 위한 강제 재조회
+  onOpen,             // (선택) () => void - 소켓이 열릴 때마다(최초/재연결 모두) 호출. 연결 직후 클라이언트 상태(예: 키오스크 포그라운드 여부)를 서버에 알릴 때 쓴다.
   onStatusChange,     // (선택) (status: "connecting"|"open"|"closed") => void - 화면에 실시간 연결 상태 점을 보여주고 싶을 때만 넘긴다(admin.js 참고). 안 넘기면 아무 일도 안 하므로 user.js/kiosk.js는 그대로 영향 없음.
   reconnectDelayMs = 3000,
 }) {
@@ -26,7 +27,10 @@ function createRealtimeClient({
     setStatus("connecting");
     socket = new WebSocket(url);
 
-    socket.onopen = () => setStatus("open");
+    socket.onopen = () => {
+      setStatus("open");
+      if (onOpen) onOpen();
+    };
 
     socket.onmessage = (event) => {
       let data;
@@ -55,6 +59,14 @@ function createRealtimeClient({
     }
   }
 
+  // 서버로 짧은 JSON 메시지를 보낸다(연결돼 있을 때만, 아니면 조용히 무시). 서버의
+  // _ws_keepalive_loop는 알 수 없는 타입은 그냥 버리므로 admin/user에서 호출해도 안전하다.
+  function send(obj) {
+    if (socket && socket.readyState === 1) {
+      try { socket.send(JSON.stringify(obj)); } catch (e) { /* 전송 실패는 onclose가 처리 */ }
+    }
+  }
+
   // 모바일 브라우저/WebView는 화면이 꺼지거나 백그라운드로 가면 WS 연결을 조용히 끊어버리는데
   // onclose가 늦게(또는 안) 불려서 재연결 타이머가 안 걸리는 경우가 있다(#18) - 화면을 다시
   // 보는 시점에 소켓 상태를 점검해 필요하면 즉시 재연결하고, 놓쳤을 갱신도 바로 잡는다.
@@ -70,5 +82,5 @@ function createRealtimeClient({
   window.addEventListener("pageshow", resume);
   window.addEventListener("online", resume);
 
-  return { connect, disconnect, resume };
+  return { connect, disconnect, resume, send };
 }

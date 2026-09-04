@@ -1422,22 +1422,26 @@ WS_PING_INTERVAL = 20  # seconds
 # 본다. 하트비트 주기(WS_PING_INTERVAL)의 3배라 ping 2회 연속 유실까지는 견딘다.
 KIOSK_ONLINE_TTL_SECONDS = WS_PING_INTERVAL * 3
 
-async def _ws_keepalive_loop(websocket: WebSocket, on_tick=None):
+async def _ws_keepalive_loop(websocket: WebSocket, on_tick=None, on_message=None):
     """클라이언트는 먼저 말을 걸어오지 않으므로 receive_text()만 기다리면 이동통신망/공유기의
     유휴 NAT 타임아웃에 걸려 연결이 양쪽 모르게 끊길 수 있다(특히 휴대폰으로 접속하는 사용자
     앱에서 "실시간 반영이 안 된다"로 나타남, #18). 일정 주기로 ping을 보내 트래픽을 유지하고,
     전송 실패 시 예외를 던져 죽은 연결을 즉시 정리한다.
 
-    on_tick(선택): 루프가 한 바퀴 돌 때마다(대략 WS_PING_INTERVAL 주기) 호출된다.
-    키오스크가 이걸로 last_seen_at을 갱신해 "온라인" 하트비트를 남긴다(admin_list_kiosks의
-    _kiosk_is_online 참고)."""
+    on_tick(선택, async): 루프가 한 바퀴 돌 때마다(대략 WS_PING_INTERVAL 주기) 호출된다.
+    on_message(선택, async): 클라이언트가 텍스트 프레임을 보내오면 그 원문(str)으로 호출된다.
+    키오스크가 이 둘로 포그라운드 여부를 알리고 last_seen_at 하트비트를 남긴다
+    (admin_list_kiosks의 _kiosk_is_online 참고)."""
     while True:
         try:
-            await asyncio.wait_for(websocket.receive_text(), timeout=WS_PING_INTERVAL)
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=WS_PING_INTERVAL)
         except asyncio.TimeoutError:
             await websocket.send_json({"type": "ping"})
+        else:
+            if on_message is not None:
+                await on_message(raw)
         if on_tick is not None:
-            on_tick()
+            await on_tick()
 
 @app.websocket("/ws/admin")
 async def ws_admin(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
@@ -1479,16 +1483,41 @@ async def ws_kiosk(websocket: WebSocket, device_uuid: str = Query(...), db: Sess
     # 관리자 키오스크 화면의 "온라인 상태/마지막 접속"(#redesign). uvicorn 워커가 4개라
     # manager.kiosk_sockets(프로세스 로컬)로는 그 소켓을 가진 워커가 admin 요청을 처리할
     # 때만 online으로 보인다 - 그래서 온라인 판정을 워커에 무관한 last_seen_at 신선도로
-    # 옮겼다(admin_list_kiosks의 _kiosk_is_online). 여기서는 접속 즉시 한 번 찍어 바로
-    # 온라인으로 뜨게 하고, 이후로는 _ws_keepalive_loop가 WS_PING_INTERVAL마다 on_tick으로
-    # 갱신한다. notify_admins(["stats"])는 admin.js가 "stats" 스코프에 loadKiosks()를
-    # 묶어놔서 관리자 화면이 열려 있으면 온라인 점이 바로 갱신된다.
+    # 옮겼다(admin_list_kiosks의 _kiosk_is_online). 접속 즉시 한 번 찍어 바로 온라인으로
+    # 뜨게 하고, 이후로는 _ws_keepalive_loop가 WS_PING_INTERVAL마다 on_tick으로 갱신한다.
+    #
+    # 단, "키오스크 화면이 실제로 떠 있을 때"만 온라인이다. 모바일 PWA가 백그라운드로 가면
+    # (화면 꺼짐/다른 앱 전환) 소켓은 한동안 살아 있어 하트비트만으로는 계속 온라인처럼
+    # 보이므로, 클라이언트(kiosk.js)가 {"type":"visibility","hidden":true/false}를 보내오면
+    # 그때 하트비트를 멈추거나(백그라운드) 되살린다(포그라운드). 백그라운드 전환 시엔
+    # last_seen_at을 TTL 밖으로 밀어 즉시 오프라인으로 표기되게 한다.
+    foreground = {"v": True}
     _touch_kiosk_last_seen(db, device_uuid)
     await notify_admins(["stats"])
+
+    async def _on_tick():
+        if foreground["v"]:
+            _touch_kiosk_last_seen(db, device_uuid)
+
+    async def _on_message(raw: str):
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            return
+        if not isinstance(data, dict) or data.get("type") != "visibility":
+            return
+        new_fg = not bool(data.get("hidden"))
+        if new_fg == foreground["v"]:
+            return
+        foreground["v"] = new_fg
+        if new_fg:
+            _touch_kiosk_last_seen(db, device_uuid)
+        else:
+            _expire_kiosk_last_seen(db, device_uuid)
+        await notify_admins(["stats"])
+
     try:
-        await _ws_keepalive_loop(
-            websocket, on_tick=lambda: _touch_kiosk_last_seen(db, device_uuid)
-        )
+        await _ws_keepalive_loop(websocket, on_tick=_on_tick, on_message=_on_message)
     except Exception:
         manager.disconnect_kiosk(device_uuid, websocket)
         # 연결이 끊긴 시점은 굳이 다시 찍지 않는다 - 마지막 하트비트(최대 WS_PING_INTERVAL
@@ -1509,16 +1538,31 @@ def _touch_kiosk_last_seen(db: Session, device_uuid: str):
     except Exception:
         db.rollback()
 
-def _kiosk_is_online(device: models.KioskDevice) -> bool:
-    """온라인 여부를 last_seen_at 신선도로 판단한다. uvicorn 워커가 4개(Dockerfile)라
-    manager.kiosk_sockets(프로세스 로컬)로는 그 소켓을 가진 워커에 요청이 걸릴 때만
-    online으로 보여서(4에 1꼴), 워커에 무관한 DB 타임스탬프로 옮겼다. 키오스크 WS는
-    _ws_keepalive_loop의 on_tick이 WS_PING_INTERVAL마다 last_seen_at을 갱신하므로
-    KIOSK_ONLINE_TTL_SECONDS 안쪽이면 살아있다고 본다. last_seen_at은 naive UTC로 저장된다."""
-    seen = device.last_seen_at
-    if not seen:
+def _expire_kiosk_last_seen(db: Session, device_uuid: str):
+    """키오스크 화면이 백그라운드로 갔을 때 호출 - last_seen_at을 온라인 TTL 밖으로 밀어
+    _kiosk_is_online이 곧바로 False가 되게 한다(하트비트만 멈추면 최대 TTL(60초)만큼
+    온라인으로 남아버림). 값 자체는 대략 "방금 전"이라 "마지막 접속" 표시도 크게 안 틀어진다."""
+    try:
+        stale = datetime.datetime.utcnow() - datetime.timedelta(seconds=KIOSK_ONLINE_TTL_SECONDS + 5)
+        db.query(models.KioskDevice).filter(models.KioskDevice.device_uuid == device_uuid).update(
+            {"last_seen_at": stale}
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+def _kiosk_is_online_at(last_seen_at) -> bool:
+    """last_seen_at(naive UTC) 신선도로 온라인 여부를 판단한다. uvicorn 워커가 4개(Dockerfile)라
+    manager.kiosk_sockets(프로세스 로컬)로는 그 소켓을 가진 워커에 요청이 걸릴 때만 online으로
+    보여서(4에 1꼴), 워커에 무관한 DB 타임스탬프로 옮겼다. 키오스크 WS는 _ws_keepalive_loop의
+    on_tick이 포그라운드일 때 WS_PING_INTERVAL마다 갱신하므로 KIOSK_ONLINE_TTL_SECONDS
+    안쪽이면 살아있다고 본다."""
+    if not last_seen_at:
         return False
-    return (datetime.datetime.utcnow() - seen).total_seconds() < KIOSK_ONLINE_TTL_SECONDS
+    return (datetime.datetime.utcnow() - last_seen_at).total_seconds() < KIOSK_ONLINE_TTL_SECONDS
+
+def _kiosk_is_online(device: models.KioskDevice) -> bool:
+    return _kiosk_is_online_at(device.last_seen_at)
 
 def _next_kiosk_name(db: Session) -> str:
     """이름을 정하지 않고 등록되는 단말기에 "키오스크 1", "키오스크 2"... 처럼 겹치지 않는
@@ -1744,6 +1788,26 @@ def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depen
             ),
         ))
     return result
+
+@app.get("/api/admin/kiosks/status", response_model=List[schemas.AdminKioskStatus])
+def admin_list_kiosk_statuses(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    """온라인 점만 빠르게 갱신하는 경량 목록. admin_list_kiosks는 단말기당 매출 집계 쿼리가
+    4개씩 붙어 무거워서(#부하), admin.js의 30초 폴링과 "stats" 실시간 갱신은 이 엔드포인트만
+    쓴다 - kiosk_devices 한 테이블만 훑는다."""
+    rows = db.query(
+        models.KioskDevice.id,
+        models.KioskDevice.device_uuid,
+        models.KioskDevice.last_seen_at,
+    ).order_by(models.KioskDevice.id.asc()).all()
+    return [
+        schemas.AdminKioskStatus(
+            id=row.id,
+            device_uuid=row.device_uuid,
+            is_online=_kiosk_is_online_at(row.last_seen_at),
+            last_seen_at=row.last_seen_at,
+        )
+        for row in rows
+    ]
 
 @app.get("/api/admin/kiosks/{device_id}/history", response_model=schemas.KioskPaymentHistoryPage)
 def admin_get_kiosk_history(

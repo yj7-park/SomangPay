@@ -95,6 +95,32 @@
   기존 한 줄 배치를 유지한다. 빈 카트 안내는 `.cart-item cart-item--empty` 로
   담긴 항목과 같은 행 크기 + 가운데 정렬.
 
+## 실시간(WebSocket) / 키오스크 온라인 판정
+
+- 백엔드는 `uvicorn --workers 4`로 뜨는데(`backend/Dockerfile`), `ws_manager.ConnectionManager`
+  는 **프로세스 로컬 인메모리**다(Redis 같은 브로커 없음). 그래서 어떤 워커에 붙은 WS
+  소켓은 다른 워커에서 안 보이고, `notify_admins` / `send_to_kiosk` / `broadcast_kiosks`
+  는 **같은 워커에 붙은 클라이언트에게만** 닿는다. WS 기반 상태를 "지금 켜져 있나?"
+  판정에 직접 쓰면 안 된다(워커 4개면 4번에 1번만 맞음).
+- **키오스크 온라인 여부**는 그래서 `KioskDevice.last_seen_at`(naive UTC) **신선도**로
+  본다(`main.py`의 `_kiosk_is_online_at`, `KIOSK_ONLINE_TTL_SECONDS = WS_PING_INTERVAL*3
+  = 60초`). `_ws_keepalive_loop`의 `on_tick`이 **포그라운드일 때만** 20초마다
+  `last_seen_at`을 갱신한다.
+- 키오스크 화면(모바일 PWA 포함)이 백그라운드로 가면 `kiosk.js`가 WS로
+  `{"type":"visibility","hidden":true}`를 보내고, 서버(`ws_kiosk`)는 하트비트를 멈추고
+  `_expire_kiosk_last_seen`으로 `last_seen_at`을 TTL 밖으로 밀어 **즉시 오프라인**으로
+  표기되게 한다. 포그라운드 복귀 시 `{hidden:false}` + 재연결로 되살아난다.
+  `ws-client.js`는 이걸 위해 `send()`와 `onOpen` 콜백을 노출한다.
+- 무거운 `GET /api/admin/kiosks`(단말기당 매출 집계 쿼리 4개)와 분리해서, 온라인 점만
+  갱신하는 경량 `GET /api/admin/kiosks/status`가 있다. `admin.js`의 30초 폴링과 "stats"
+  실시간 갱신은 키오스크 탭을 실제로 보고 있을 때가 아니면 이 경량 쪽만 쓴다.
+- 매출 집계는 `payment_transactions(kiosk_device_id, status, created_at)` +
+  `payment_transaction_items(payment_transaction_id)` 인덱스에 의존한다(`database.py`
+  마이그레이션). 없으면 목록이 5~10초씩 걸린다.
+- **아직 안 고친 것**: 라이브 메뉴 갱신(`send_to_kiosk`/`broadcast_kiosks`)은 여전히
+  워커 로컬이라 다중 워커에서 일부 키오스크에 신호가 안 갈 수 있다. 근본 해결은
+  매니저에 Redis pub/sub.
+
 ## 개발/운영 환경 구분 (디버그 뱃지)
 
 개발 서버에서 뜨는 아이콘에는 빨간 "DEV" 리본이 붙어 운영과 눈으로 구분된다.

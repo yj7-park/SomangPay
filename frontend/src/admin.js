@@ -796,7 +796,14 @@ async function handleAdminRefreshEvent(scopes) {
   if (scopes.includes("users")) tasks.push(loadAdminUsers());
   if (scopes.includes("cards")) tasks.push(loadAdminCards());
   if (scopes.includes("deposit_queue")) tasks.push(loadBankTransactions());
-  if (scopes.includes("stats")) { tasks.push(loadStatsSummary()); tasks.push(loadBankTransactions()); tasks.push(loadKiosks()); }
+  if (scopes.includes("stats")) {
+    tasks.push(loadStatsSummary());
+    tasks.push(loadBankTransactions());
+    // 키오스크 목록 전체(loadKiosks)는 단말기당 매출 집계가 붙어 무겁다 - 키오스크 탭을
+    // 실제로 보고 있을 때만(kioskListPollTimer가 살아 있음) 전체를 다시 부르고, 그 외에는
+    // 온라인 점만 갱신하는 경량 호출로 끝낸다.
+    tasks.push(kioskListPollTimer ? loadKiosks() : loadKioskStatuses());
+  }
   await Promise.all(tasks);
 
   // 지금 열려 있는 회원 상세도 최신 데이터(users/cards/deposits)로 다시 그린다.
@@ -2975,10 +2982,11 @@ let selectedKioskId = null;
 let kioskSalesPeriod = "today";
 let kioskSalesPeriodOpen = false;
 
-// 키오스크 온라인 여부는 서버가 last_seen_at 하트비트(약 20초 주기)의 신선도로 판정한다
-// (backend _kiosk_is_online). 키오스크가 조용히 죽으면 서버가 보내는 "stats" 갱신 신호가
-// (uvicorn 워커가 여러 개라) 이 관리자 세션에 안 닿을 수 있어, 키오스크 탭을 보고 있는
-// 동안만 주기적으로 목록을 다시 불러 온라인 점을 최신으로 유지한다. 탭을 벗어나면 멈춘다.
+// 키오스크 온라인 여부는 서버가 last_seen_at 하트비트(포그라운드일 때 약 20초 주기)의
+// 신선도로 판정한다(backend _kiosk_is_online). 키오스크가 조용히 죽거나 백그라운드로 가면
+// 서버의 "stats" 갱신 신호가 (uvicorn 워커가 여러 개라) 이 관리자 세션에 안 닿을 수 있어,
+// 키오스크 탭을 보고 있는 동안만 주기적으로 온라인 점을 다시 불러 최신으로 유지한다.
+// 폴링은 경량 엔드포인트(loadKioskStatuses)만 쓴다 - 전체 목록은 탭 진입 때 한 번.
 let kioskListPollTimer = null;
 const KIOSK_LIST_POLL_MS = 30000;
 
@@ -2986,13 +2994,38 @@ function startKioskListPolling() {
   if (kioskListPollTimer) return;
   kioskListPollTimer = setInterval(() => {
     if (document.hidden) return;
-    loadKiosks();
+    loadKioskStatuses();
   }, KIOSK_LIST_POLL_MS);
 }
 
 function stopKioskListPolling() {
   clearInterval(kioskListPollTimer);
   kioskListPollTimer = null;
+}
+
+// 온라인 점(is_online/last_seen_at)만 가볍게 갱신한다. 전체 loadKiosks()는 단말기당 매출
+// 집계 쿼리가 붙어 무거워서(backend), 폴링/실시간 갱신은 이걸 쓴다. 매출 숫자는 건드리지
+// 않고 기존 kiosks 배열에 상태만 덮어쓴 뒤, 바뀐 게 있을 때만 다시 그린다.
+async function loadKioskStatuses() {
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/kiosks/status`);
+    if (!res.ok) return;
+    const statuses = await res.json();
+    // 목록에 없던 단말기가 새로 등록됐으면 경량 갱신으로는 못 채우므로 전체를 다시 부른다.
+    if (statuses.some(s => !kiosks.some(k => k.id === s.id))) { loadKiosks(); return; }
+    const byId = new Map(statuses.map(s => [s.id, s]));
+    let changed = false;
+    kiosks.forEach(k => {
+      const s = byId.get(k.id);
+      if (!s) return;
+      if (k.is_online !== s.is_online || k.last_seen_at !== s.last_seen_at) changed = true;
+      k.is_online = s.is_online;
+      k.last_seen_at = s.last_seen_at;
+    });
+    if (changed) renderKioskList();
+  } catch (err) {
+    console.error("Failed to load kiosk statuses:", err);
+  }
 }
 
 async function loadKiosks() {

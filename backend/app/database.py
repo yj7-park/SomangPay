@@ -230,6 +230,23 @@ def _migrate_and_seed():
         # 이 컬럼은 오프라인일 때 보여줄 "마지막으로 연결됐던 시각"만 담는다.
         _run_migration_step(db, "ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;", "kiosk_devices.last_seen_at")
 
+        # 키오스크별 매출 집계(_kiosk_sales_for)와 관리자 키오스크 목록이 payment_transactions를
+        # kiosk_device_id로 반복 필터/집계하는데 인덱스가 없어 목록 응답이 5~10초씩 걸렸다
+        # (#부하, 온라인 상태 갱신 지연). 집계 쿼리 형태(kiosk_device_id + status 필터,
+        # created_at 범위)에 맞춘 복합 인덱스와, 라인아이템 JOIN용 FK 인덱스를 추가한다.
+        _run_migration_step(
+            db,
+            "CREATE INDEX IF NOT EXISTS ix_payment_transactions_kiosk_sales "
+            "ON payment_transactions (kiosk_device_id, status, created_at);",
+            "payment_transactions(kiosk_device_id, status, created_at) idx",
+        )
+        _run_migration_step(
+            db,
+            "CREATE INDEX IF NOT EXISTS ix_payment_transaction_items_txn_id "
+            "ON payment_transaction_items (payment_transaction_id);",
+            "payment_transaction_items(payment_transaction_id) idx",
+        )
+
         try:
             _backfill_balance_snapshots(db)
         except Exception as e:

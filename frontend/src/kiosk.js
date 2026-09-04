@@ -685,6 +685,23 @@ const kioskRealtime = createRealtimeClient({
   onResume: () => {
     if (currentDeviceUuid) handleKioskMenuRefresh();
   },
+  // 관리자 화면의 "온라인" 표시는 이 키오스크 화면이 실제로 떠 있을 때만이어야 한다
+  // (모바일 PWA가 백그라운드로 가면 소켓은 한동안 살아 있어도 화면은 안 보임). 연결 직후와
+  // 화면 가시성이 바뀔 때마다 현재 상태를 서버에 알린다 - 서버(ws_kiosk)가 hidden이면
+  // 하트비트를 멈추고 즉시 오프라인으로 표기한다.
+  onOpen: () => {
+    kioskRealtime.send({ type: "visibility", hidden: document.hidden });
+  },
+});
+
+function reportKioskVisibility() {
+  kioskRealtime.send({ type: "visibility", hidden: document.hidden });
+}
+document.addEventListener("visibilitychange", reportKioskVisibility);
+// 앱이 완전히 백그라운드로 밀리거나 종료 직전엔 visibilitychange가 안 잡히는 기기가 있어
+// pagehide로도 한 번 더 "숨김"을 알린다(소켓이 아직 살아 있으면 전달됨).
+window.addEventListener("pagehide", () => {
+  kioskRealtime.send({ type: "visibility", hidden: true });
 });
 
 async function handleKioskMenuRefresh() {
