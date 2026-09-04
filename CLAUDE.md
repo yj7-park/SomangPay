@@ -68,23 +68,32 @@
 
 ### 5. kiosk 모바일(<=767px) 메뉴 목록 스크롤 레이아웃
 
-- 메뉴 리스트는 `.kiosk-menu-section`(인라인 `overflow:hidden` + `position:relative`)
-  안에서 `#kiosk-menu-content-wrap` 을 **`position:absolute` + `top/right/bottom/left`
-  고정**으로 띄워 높이를 확정하고, 그 안의 `#kiosk-menu-grid` 만
-  `flex:1; min-height:0; overflow-y:auto` 로 스크롤한다.
-- `#kiosk-menu-content-wrap` 을 `flex` + `height:100%` 로 풀면 일부 렌더링 엔진에서
-  콘텐츠 높이만큼 부풀어 안쪽 스크롤이 아예 안 생기고, 섹션 `overflow:hidden` 에
-  마지막 카드가 잘린다. absolute 로 높이가 명확해야 안정적이다.
-- 섹션의 `overflow:hidden` 은 QR 카메라 오버레이(`#kiosk-camera-viewport-container`,
-  `position:absolute; inset:0`)가 스크롤에 안 딸려가게 하려는 것이므로 유지한다
-  (섹션 자체를 스크롤 컨테이너로 바꾸지 말 것).
+- **"최초 세로 로드 시 하단 잘림, 회전하면 정상"의 근본 원인은
+  `.kiosk-wrapper { height: 100vh }`**(하드 100vh). 모바일에서 100vh는 주소창
+  숨은 "최대" 뷰포트라 첫 렌더 때 실제 보이는 영역보다 커서 wrapper 하단이 화면
+  밖으로 나간다. `height: 100dvh` 를 한 줄 더 얹어서 실제 보이는 높이를 쓰게 한다
+  (파일 내 다른 `.kiosk-wrapper` 규칙들은 이미 `min-height: 100dvh` 폴백이 있는데
+  이 규칙만 빠져 있었다). 비슷한 "회전해야 고쳐짐" 증상은 대부분 뷰포트 단위 문제다.
+- 메뉴 리스트 스크롤은 `.kiosk-body` > `.kiosk-menu-section` >
+  `#kiosk-menu-content-wrap` > `#kiosk-menu-grid` 를 **전부
+  `display:flex; flex-direction:column; flex:1 1 auto; min-height:0` 로만 잇는
+  순수 flex 체인**으로 하고, 맨 안쪽 `#kiosk-menu-grid` 에만 `overflow-y:auto`.
+  `height:100%` 는 쓰지 말 것 - 부모가 definite 여야 하는데 flex/데이터 로드로
+  늦게 정해지면 첫 렌더에서 안 잡힌다. `position:absolute + inset` 으로 래퍼 높이를
+  확정하는 방식도 시도했으나, containing block(섹션) 높이가 flex 로 늦게 정해지면
+  똑같이 첫 렌더에서 stale 해지는 타이밍 버그가 있어 폐기했다.
+- `#kiosk-menu-content-wrap` 인라인 `style="display:block; height:100%"` 는
+  모바일 미디어쿼리에서 `height:auto !important` + flex 로 덮어쓴다.
+- 섹션 인라인 `overflow:hidden` 은 유지한다 - QR 카메라 오버레이
+  (`#kiosk-camera-viewport-container`, `position:absolute; inset:0`)가 스크롤에
+  안 딸려가게 하려는 것. 섹션 자체를 스크롤 컨테이너로 바꾸지 말 것.
 - 스크롤 컨테이너 `padding-bottom` 은 일부 안드로이드 WebView 에서 `scrollHeight` 에
-  안 잡혀 마지막 카드가 잘려 보인다. 아래 여백은 마지막 카드
-  `margin-bottom` 으로 준다.
+  안 잡혀 마지막 카드가 잘려 보인다. 아래 여백은 마지막 카드 `margin-bottom` 으로 준다.
 - 메뉴 카드 2행 배치(이름 위 / 가격 아래 / 수량 오른쪽)는 `renderKioskProducts` 가
   이름+가격을 `.menu-card-info` 로 감싸고, 데스크톱/태블릿은
   `.menu-grid .menu-card .menu-card-info { display: contents }` 로 래퍼를 없애
-  기존 한 줄 배치를 유지한다.
+  기존 한 줄 배치를 유지한다. 빈 카트 안내는 `.cart-item cart-item--empty` 로
+  담긴 항목과 같은 행 크기 + 가운데 정렬.
 
 ## 개발/운영 환경 구분 (디버그 뱃지)
 
