@@ -72,6 +72,19 @@ async function hydrateApkDownloadMeta() {
   }
 }
 
+// 설정 "앱 정보" 카드의 "웹 버전" 행(admin.html) - 네이티브 APK 버전(update-widget-root,
+// 네이티브 브리지 있을 때만 채워짐)과 별개로, 지금 이 화면이 실제로 받아서 실행 중인 코드가
+// 몇 버전인지 확인할 방법이 필요하다는 요청으로 추가했다(kiosk.js hydrateKioskWebVersionText와
+// 동일). 새 배포마다 올리는 캐시버스팅 쿼리(<script src="src/admin.js?v=YYYYMMDD_HHMM">)를
+// 그대로 읽어서 보여준다.
+function hydrateAdminWebVersionText() {
+  const el = document.getElementById("admin-web-version-text");
+  if (!el) return;
+  const scriptEl = document.querySelector('script[src*="admin.js"]');
+  const m = scriptEl && /[?&]v=([^&]+)/.exec(scriptEl.src);
+  el.textContent = m ? m[1] : "-";
+}
+
 // 외부(수신 문자 본문 등 신뢰할 수 없는) 텍스트를 innerHTML에 꽂을 때 XSS를 막는 이스케이프.
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, ch => ({
@@ -185,6 +198,7 @@ function formatPhoneInput(input) {
 
 document.addEventListener("DOMContentLoaded", () => {
   hydrateIconPlaceholders();
+  hydrateAdminWebVersionText();
   updateFixedViewLayoutMetrics(); // PIN 인증 전에도 --header-h/뷰 높이를 미리 맞춰 둔다
   initAdminTheme();
   initAdminPinKeypad();

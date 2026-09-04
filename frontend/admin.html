@@ -172,11 +172,20 @@
         <div class="settings-group-label">앱</div>
         <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
-            <h3 style="font-size: 1.05rem; margin: 0;">앱 버전</h3>
+            <h3 style="font-size: 1.05rem; margin: 0;">앱 정보</h3>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span id="update-widget-root" style="display: inline-flex; align-items: center;"></span>
-              <button type="button" class="icon-plain-btn" title="업데이트 확인" aria-label="업데이트 확인" onclick="triggerAppVersionRefresh()"><span data-icon="refresh"></span></button>
+              <button type="button" class="icon-plain-btn" title="새로고침" aria-label="새로고침" onclick="triggerAppVersionRefresh()"><span data-icon="refresh"></span></button>
             </div>
+          </div>
+
+          <!-- update-widget-root의 배지는 네이티브 APK(AndroidInterface) 안에서만 채워진다.
+               일반 브라우저/PWA에서는 지금 이 화면이 로드한 src/admin.js?v=... 캐시버스팅
+               쿼리를 "웹 버전"으로 보여준다(hydrateAdminWebVersionText, admin.js). KIOSK
+               설정의 "앱 정보" 카드와 같은 구성. -->
+          <div style="margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">웹 버전</span>
+            <span id="admin-web-version-text" style="font-size: 0.8rem; color: var(--text-main); font-family: monospace;">-</span>
           </div>
 
           <!-- 풀폭 pill 버튼 3개 → 플랫폼·버전·용량 리스트 + 다운로드 아이콘(#settings-redesign,
@@ -816,6 +825,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260831_1400"></script>
-  <script src="src/admin.js?v=20260902_0119"></script>
+  <script src="src/admin.js?v=20260904_0001"></script>
 </body>
 </html>
