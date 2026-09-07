@@ -33,12 +33,13 @@ android {
     }
 
     // debug 빌드(assemble*Debug)가 붙을 개발 서버. 코드(AppConfig.TARGET_URL)가
-    // BuildConfig.DEBUG 로 운영/개발 URL 을 고른다. trycloudflare 퀵터널 주소는 cloudflared
-    // 를 재시작할 때마다 새로 발급돼 고정이 아니다 - 아래는 최근 값이고, 바뀌면
-    //   ./gradlew assembleKioskDebug -PdevTargetHost=https://<새-서브도메인>.trycloudflare.com
-    // 처럼 프로퍼티로 덮어쓴다(파일 수정 불필요). release 빌드는 이 값을 아예 쓰지 않는다.
+    // BuildConfig.DEBUG 로 운영/개발 URL 을 고른다. dev 전용 OCI 인스턴스(운영과 별도,
+    // dev-somangpay.duckdns.org)에 certbot 정식 인증서로 고정 도메인을 붙여뒀다 - 더 이상
+    // cloudflared 퀵터널처럼 재시작마다 바뀌지 않는다. 그래도 필요하면
+    //   ./gradlew assembleKioskDebug -PdevTargetHost=https://<다른-주소>
+    // 처럼 프로퍼티로 덮어쓸 수 있다(파일 수정 불필요). release 빌드는 이 값을 아예 쓰지 않는다.
     def devTargetHost = (project.findProperty('devTargetHost')
-            ?: 'https://rescue-python-signature-grain.trycloudflare.com').toString().replaceAll('/+$', '')
+            ?: 'https://dev-somangpay.duckdns.org').toString().replaceAll('/+$', '')
 
     // 릴리스 APK 빌드(assemble*Release)는 기본으로 lintVitalRelease를 함께 돌린다.
     // AGP를 올리면 새로 생기거나 심각도가 올라간 lint 규칙 때문에 코드 변경 없이도

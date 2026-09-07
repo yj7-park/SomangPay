@@ -33,7 +33,7 @@
 - **순서 주의**: android_kiosk 변경 후 `deploy.sh frontend`를 CI의 자체 커밋(위 1-2번)이
   push되기 *전에* 돌리면, 관리자 페이지 다운로드 링크가 옛 APK 바이너리를 계속 서빙한다.
   반드시 "push → CI 완료 대기 → CI 커밋 pull → `deploy.sh frontend`" 순서를 지킬 것.
-- `deploy.sh`는 `~/.ssh/somangpay-oci.pem`으로 실서버에 SSH/rsync하는 스크립트다. 실제
+- `deploy.sh`는 `~/.ssh/somangpay-new`로 실서버에 SSH/rsync하는 스크립트다. 실제
   사용자에게 영향을 주는 프로덕션 액션이므로, 사용자가 명시적으로 배포를 요청한 게 아니라면
   임의로 실행하지 말고 먼저 확인받는다. `main`으로의 `git push`도 마찬가지 - 실제 APK
   릴리스를 만드는 행위이므로 동일하게 취급한다.
@@ -94,6 +94,50 @@
   `.menu-grid .menu-card .menu-card-info { display: contents }` 로 래퍼를 없애
   기존 한 줄 배치를 유지한다. 빈 카트 안내는 `.cart-item cart-item--empty` 로
   담긴 항목과 같은 행 크기 + 가운데 정렬.
+
+### 6. dev 전용 서버 (PWA/HTTPS 테스트용)
+
+로컬 PC를 cloudflare 퀵터널로 노출하던 방식(URL이 `cloudflared` 재시작마다 바뀜, 홈
+네트워크 포트포워딩 필요)을 버리고, **운영과 별도의 OCI 인스턴스**로 옮겼다
+(2026-09-07).
+
+- 인스턴스: `129.225.168.253`, `ssh -i ~/.ssh/somangpay-dev-oci ubuntu@...`. 운영
+  (`somangpay-a1`)과 동일 조건: `ap-chuncheon-1` 리전, `VM.Standard.A1.Flex`, 2
+  OCPU/12GB, Ubuntu 24.04 - 운영이 쓰는 Always Free A1 한도(4 OCPU/24GB)를 정확히
+  같이 채우는 구성이라 둘 다 무료.
+- 도메인: `dev-somangpay.duckdns.org` - duckdns에만 등록, DDNS 자동갱신 스크립트는
+  없다. **이 인스턴스를 재생성해서 IP가 바뀌면 duckdns.org에서 수동으로 IP를 다시
+  지정해야 한다.**
+- 아키텍처는 운영과 동일하게 **호스트 nginx + docker(db/backend만)** 조합이다 -
+  `docker-compose.yml`의 `frontend`/`cloudflared` 서비스는 로컬 개발용이고 이 dev
+  서버에서도 운영처럼 안 쓴다. 정적 프론트는 `/var/www/somangpay-dev`에 두고
+  `/etc/nginx/sites-available/somangpay-dev`가 `/api`, `/ws`를 `127.0.0.1:8000`(docker
+  backend)으로 프록시한다.
+- 인증서는 운영과 동일하게 **certbot(snap, `--nginx`, HTTP-01)**로 발급 - dev도 80을
+  열어뒀기 때문에 가능. 갱신은 `snap.certbot.renew.timer`가 자동으로 돈다.
+- 방화벽(iptables + OCI 보안목록)은 **22/80/443만** 열려 있다. 운영은 8000(백엔드
+  직결)도 열려 있는데(아마 설정 실수, 안 고침) dev는 의도적으로 막았다 - 백엔드는
+  반드시 nginx `/api/` 프록시를 통해서만 접근 가능.
+- `~/somangpay/.env`(dev 서버)의 `ADMIN_PIN`/`ADMIN_SECRET_KEY`/`VAPID_*`는 운영과
+  **다른 값**으로 새로 생성해뒀다 - 세션/구독이 운영과 안 섞인다.
+- `CHURCH_BANK_NAME`/`CHURCH_ACCOUNT_NUMBER`/`CHURCH_ACCOUNT_HOLDER`는 운영 실계좌
+  대신 **더미값**(`테스트은행(dev)` 등)이다 - 테스트 서버 화면에 교회 실계좌가
+  노출되지 않게. `docker-compose.yml`의 `${VAR}` 치환은 `.env`에 키가 아예 없으면
+  **빈 문자열**로 들어가버려서(코드의 `os.getenv(..., 기본값)` 폴백이 안 먹음)
+  반드시 더미값을 명시적으로 채워야 한다 - 비워두면 화면에 계좌 정보가 통째로 안
+  보인다.
+- `frontend/app-env.js`는 운영과 반대로 `'development'`를 **유지**한다 - DEV
+  리본이 계속 보여야 운영과 착각하지 않는다. 반영은 `./deploy-dev.sh
+  [all|frontend|backend]`로 (`deploy.sh`와 동일한 인터페이스, 대상 서버/도메인만
+  다르고 `deploy_frontend`가 `app-env.js`를 `production`으로 덮어쓰지 않는 점만 다름).
+- `android_kiosk/app/build.gradle`의 `devTargetHost` 기본값이 이 도메인을 가리키게
+  바꿔뒀다 - 이제 debug APK 빌드 시 `-PdevTargetHost=` 오버라이드 없이 그냥
+  `./gradlew assembleKioskDebug` 하면 됨.
+- 참고로 이 작업 중 **운영 서버에 인증서 자동 갱신이 아예 안 걸려 있던 것**을
+  발견해서 같이 고쳤다(2026-09-06) - `certbot`이 발급 당시엔 있었는데 이후 지워져서
+  crontab/systemd timer/바이너리가 전부 없었다. snap certbot 재설치로
+  `snap.certbot.renew.timer` 활성화, `certbot renew --dry-run` 성공 확인함
+  (기존 인증서/`renewal` 설정은 그대로 이어받아서 재발급 없이 해결).
 
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 
