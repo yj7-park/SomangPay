@@ -94,10 +94,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 전용 키오스크 단말기 빌드에서만 강제로 가로 고정 모드(LANDSCAPE)로 설정 -
+        // 전용 키오스크 단말기 빌드에서만 강제로 가로 모드로 설정 -
         // admin/user는 직원 개인 휴대폰에서 쓰므로 기기 방향을 자유롭게 따라간다.
+        // SENSOR_LANDSCAPE: 가로축은 고정하되 기기를 180도 뒤집으면 화면도 같이 뒤집힌다
+        // (90도 회전으로 세로가 되지는 않음). 시스템 자동회전 잠금 설정과 무관하게 센서를 따른다.
         if (BuildConfig.KIOSK_LOCKDOWN_ENABLED) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         }
 
         mainHandler = new Handler(Looper.getMainLooper());
@@ -632,11 +634,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     // JS의 화면 방향 전환 요청 처리 - Screen Orientation API의 lock()은 전체화면(Fullscreen API) 상태가
     // 아니면 WebView에서 지원되지 않아 실패하므로, 이미 시작 시점에 쓰던 setRequestedOrientation()을
     // 그대로 재사용해 네이티브 레벨에서 처리한다. 설치 여부와 무관하게 항상 동작한다.
+    // SENSOR_* 계열: 선택한 축(가로/세로)은 고정하되 기기를 180도 뒤집으면 화면도 같이 뒤집힌다.
     void setKioskOrientation(String mode) {
         if ("portrait".equals(mode)) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
         } else if ("landscape".equals(mode)) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         }
     }
 
