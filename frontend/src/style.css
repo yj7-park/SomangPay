@@ -2344,6 +2344,33 @@ body[data-theme="dark"] .pending-deposit-row {
   line-height: 1.2;
 }
 
+/* 키오스크 "파란 글씨"(섹션 타이틀 / 결제 총액 / 최근 결제 내역 / 헤더 카드 아이콘)는
+   다크에선 기존 브랜드 블루(--accent-cyan, instagram-theme.css에서 #6781c0)를 그대로
+   두고, 라이트 테마에서만 유저 앱 QR결제 버튼 배지(.user-qr-fab .tab-icon)와 같은
+   남색(--user-card-bg)으로 바꾼다(사용자 요청). [data-theme="light"]는 항상,
+   :not([data-theme="dark"]) + 시스템 라이트는 그때만 - instagram-theme.css의 라이트
+   스코프와 동일한 이중 셀렉터. 인라인 style의 color를 덮어야 해서 !important. */
+body[data-theme="light"] .section-title,
+body[data-theme="light"] #kiosk-total-price,
+body[data-theme="light"] .recent-payments-title,
+body[data-theme="light"] .kiosk-header-icon {
+  color: var(--user-card-bg, #2d326e) !important;
+}
+body[data-theme="light"] .section-title {
+  border-left-color: var(--user-card-bg, #2d326e);
+}
+@media (prefers-color-scheme: light) {
+  body:not([data-theme="dark"]) .section-title,
+  body:not([data-theme="dark"]) #kiosk-total-price,
+  body:not([data-theme="dark"]) .recent-payments-title,
+  body:not([data-theme="dark"]) .kiosk-header-icon {
+    color: var(--user-card-bg, #2d326e) !important;
+  }
+  body:not([data-theme="dark"]) .section-title {
+    border-left-color: var(--user-card-bg, #2d326e);
+  }
+}
+
 /* Checkout cart and scanning boxes layout styling */
 .kiosk-checkout-section {
   display: flex !important;
@@ -3219,39 +3246,44 @@ body[data-theme="dark"] .pending-deposit-row {
     overflow-x: hidden;
   }
 
+  /* 최근 결제 내역 피드는 부가 정보라 태블릿 확대 폰트에서도 전체적으로 한 단계 작게
+     간다(사용자 요청) - 시간은 나머지보다 더 작고, 배지는 특히 더 작게. */
   .recent-payments-title {
-    font-size: 1.25rem !important;
+    font-size: 1.1rem !important;
   }
 
   .recent-payments-subtitle {
-    font-size: 1rem !important;
+    font-size: 0.88rem !important;
   }
 
   .recent-payment-row {
-    font-size: 1.15rem !important;
-    padding: 0.6rem 0.8rem !important;
-    gap: 0.6rem;
+    font-size: 0.98rem !important;
+    padding: 0.45rem 0.65rem !important;
+    gap: 0.45rem;
   }
 
   .recent-payment-time {
-    font-size: 1rem !important;
+    font-size: 0.82rem !important;
   }
 
   .recent-payment-name {
-    font-size: 1.2rem !important;
+    font-size: 1rem !important;
+    /* 시간에서 조금 더 떨어뜨려 오른쪽으로 민다(사용자 요청). 왼쪽 그룹 gap(0.45rem)에
+       더해지는 값. */
+    margin-left: 1.5rem;
   }
 
   .recent-payment-badge {
-    font-size: 1rem !important;
-    padding: 0.15rem 0.6rem !important;
+    font-size: 0.78rem !important;
+    padding: 0.08rem 0.4rem !important;
   }
 
   .recent-payment-amount {
-    font-size: 1.4rem !important;
+    font-size: 1.15rem !important;
   }
 
   .recent-payment-empty {
-    font-size: 1.2rem !important;
+    font-size: 1rem !important;
   }
 }
 
@@ -3334,11 +3366,11 @@ body[data-theme="dark"] .pending-deposit-row {
 
   /* 최근 결제 내역 한 줄 항목도 좁은 컬럼 기준으로 살짝 축소 (가로 모드 700px+ 확대 폰트 기준 대비) */
   .recent-payment-row {
-    font-size: 0.95rem !important;
+    font-size: 0.85rem !important;
   }
 
   .recent-payment-amount {
-    font-size: 1.05rem !important;
+    font-size: 0.95rem !important;
   }
 }
 
