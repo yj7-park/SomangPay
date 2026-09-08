@@ -94,11 +94,12 @@
   --accent-danger-glow: rgba(239, 68, 68, 0.15);
   --accent-rose: #f43f5e; /* kiosk.html의 로그 "비우기" 버튼이 참조하는데 정의가 빠져있었음(라이트 테마 작업 중 발견) */
   /* "처리/충전 대기" 알림 카드 전용 강조색 - user.html 충전 대기 카드 + admin 홈 "처리 대기"
-     배너가 공유한다. --accent-amber(#f59e0b)를 안 쓰고 별도 토큰을 둔 이유:
-     instagram-theme.css가 라이트 모드에서 --accent-amber를 #b45309(번트 브라운)로
-     재정의하는데, 이 카드들은 라이트/다크 모두 amber-500(#f59e0b) 그대로여야 한다는
-     사용자 결정. --brand-navy처럼 테마 불문 고정값. */
-  --pending-accent: #f59e0b;
+     배너가 공유한다. 별도 토큰을 둔 이유: instagram-theme.css가 테마별로 --accent-*
+     계열을 재정의하는데, 이 카드들은 라이트/다크 모두 같은 값이어야 한다는 사용자 결정
+     (--brand-navy처럼 테마 불문 고정값). 색은 앰버/에메랄드/레드 사이를 여러 번 오갔고
+     (2026-09-08) 현재는 red-800(#991b1b). 이 토큰과 아래 pending-* 규칙의 하드코딩
+     rgba 폴백(= 이 색의 rgb, color-mix 폴백용)만 바꾸면 전체가 따라온다. */
+  --pending-accent: #991b1b;
 
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
@@ -1039,10 +1040,10 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 
 /* 대시보드 "처리 대기" 배너(#redesign) - 대기/오류 타일 2개를 나란히 늘 띄우던 대신,
    하나로 합쳐서 0건이면 완전히 숨긴다(display:none, admin.js의 renderDashboard). 있을 때만
-   보이므로 굳이 색을 옅게/진하게 나눌 필요가 없어 늘 경고색(amber) 톤 하나로 고정.
-   #redesign3 - user.html 충전 대기 카드와 같은 디자인으로 통일: --pending-accent(#f59e0b,
-   테마 불문 고정) 워시 + 왼쪽 액센트 바 + 아이콘 칩. 다크에선 검정 위 탁한 갈색 워시를
-   피해 배경만 중립 카드색으로 되돌린다(.pending-deposit-card와 동일 처리). */
+   보이므로 굳이 색을 옅게/진하게 나눌 필요가 없어 늘 경고색 톤 하나로 고정.
+   #redesign3 - user.html 충전 대기 카드와 같은 디자인으로 통일: --pending-accent(현재
+   red-800, 테마 불문 고정) 워시 + 왼쪽 액센트 바 + 아이콘 칩. 다크에선 검정 위 탁한
+   워시를 피해 배경만 중립 카드색으로 되돌린다 (.pending-deposit-card와 동일 처리). */
 .pending-action-banner {
   display: flex;
   align-items: center;
@@ -1050,8 +1051,8 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   padding: 1rem 1.1rem;
   margin-bottom: 1.2rem;
   cursor: pointer;
-  background: rgba(245, 158, 11, 0.10);
-  border: 1px solid rgba(245, 158, 11, 0.42);
+  background: rgba(153, 27, 27, 0.08);
+  border: 1px solid rgba(153, 27, 27, 0.4);
   border-left: 3px solid var(--pending-accent);
 }
 body[data-theme="dark"] .pending-action-banner {
@@ -1062,7 +1063,7 @@ body[data-theme="dark"] .pending-action-banner {
     background: var(--bg-card);
   }
 }
-/* 아이콘 - user.html .pending-deposit-icon과 같은 앰버 톤 칩. */
+/* 아이콘 - user.html .pending-deposit-icon과 같은 pending 톤 칩. */
 .pending-action-icon {
   flex-shrink: 0;
   display: inline-flex;
@@ -1073,7 +1074,7 @@ body[data-theme="dark"] .pending-action-banner {
   border-radius: 50%;
   font-size: 1.1rem;
   color: var(--pending-accent);
-  background: rgba(245, 158, 11, 0.18); /* color-mix 미지원 브라우저 폴백 */
+  background: rgba(153, 27, 27, 0.18); /* color-mix 미지원 브라우저 폴백 */
   background: color-mix(in srgb, var(--pending-accent) 18%, transparent);
 }
 .pending-action-text {
@@ -1794,40 +1795,22 @@ body[data-theme="dark"] .pending-action-banner {
 }
 
 /* 충전 대기 카드(#18) - 메인 잔액 카드 바로 아래. 본인 앞으로 매칭된 미충전 입금 건 목록.
-   #redesign2 - 예전엔 어드민 "처리 대기" 배너와 같은 앰버(경고) 톤이었는데, "들어온 돈"을
-   문제처럼 보이게 한다는 피드백으로 경고색은 뺐다. 다만 대기 건은 회원이 직접 "충전하기"를
-   눌러야 완료되는 필수 선행 작업이라 확실히 눈에 띄어야 해서(사용자 피드백), 주변 흰 카드들
-   사이에서 옅은 에메랄드 워시 + 왼쪽 액센트 바 + "확인 필요" 뱃지 + 솔리드 행으로 대비를
-   준다. 확정은 별도 모달 대신 행 안에서 "충전하기" → "확인/취소" 2단계(모달 사용성이 안
-   좋다는 기존 요청 유지). 한 번에 한 행만 확인 대기 상태로 둔다. */
+   색 이력: 앰버/에메랄드/레드 사이를 여러 번 오감(2026-09-08), 현재 --pending-accent =
+   red-800(#991b1b). 미확인 입금은 회원이 직접 "충전하기"를 눌러야 완료되는 필수 선행
+   작업이라 눈에 띄어야 한다. 카드 껍데기는 아무 표식 없는 테마 기본 카드(흰/검정)이고,
+   pending 색 신호(옅은 배경 + 같은 색 테두리 + 왼쪽 액센트 바)는 전부 각 입금
+   행(.pending-deposit-row)이 진다 - admin "처리 대기" 배너와 같은 카드 모양. 확정은
+   별도 모달 대신 행 안에서 "충전하기" →
+   "확인/취소" 2단계(모달 사용성이 안 좋다는 기존 요청 유지). 한 번에 한 행만 확인 대기
+   상태로 둔다. */
 .pending-deposit-card {
-  background: rgba(245, 158, 11, 0.10); /* 옅은 앰버 워시 - "확인 필요"라는 대기 성격 + 따뜻한 톤, 흰 카드들 틈에서 떠 보이게 */
-  border: 1px solid rgba(245, 158, 11, 0.42);
-  border-left: 3px solid var(--pending-accent);
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   padding: 1.2rem 1.25rem;
   margin-bottom: 1.2rem;
   box-shadow: var(--shadow-subtle);
   animation: pendingDepositIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* 다크: 위 rgba 앰버 워시는 흰 배경에선 옅은 살구빛이지만 검정 배경 위에선 탁한
-   갈색으로 뜬다. 다크에서는 배경을 중립 카드색으로 되돌리고(테두리·아이콘·금액·버튼의
-   앰버는 그대로), 안쪽 행을 한 단계 밝은 표면으로 띄워 구분한다. body[data-theme]
-   명시 + 시스템 다크(속성 없음) 두 경우를 instagram-theme.css와 같은 방식으로 함께 건다. */
-body[data-theme="dark"] .pending-deposit-card {
-  background: var(--bg-card);
-}
-body[data-theme="dark"] .pending-deposit-row {
-  background: var(--bg-card-hover);
-}
-@media (prefers-color-scheme: dark) {
-  body:not([data-theme="light"]) .pending-deposit-card {
-    background: var(--bg-card);
-  }
-  body:not([data-theme="light"]) .pending-deposit-row {
-    background: var(--bg-card-hover);
-  }
 }
 
 @keyframes pendingDepositIn {
@@ -1842,7 +1825,7 @@ body[data-theme="dark"] .pending-deposit-row {
   margin-bottom: 0.9rem;
 }
 
-/* 아이콘 - 이용 내역의 "계좌이체 충전"(카드+플러스)과 같은 모양. 앰버 톤 칩에 담는다. */
+/* 아이콘 - 이용 내역의 "계좌이체 충전"(카드+플러스)과 같은 모양. pending 톤 칩에 담는다. */
 .pending-deposit-icon {
   flex-shrink: 0;
   display: inline-flex;
@@ -1852,7 +1835,7 @@ body[data-theme="dark"] .pending-deposit-row {
   height: 2rem;
   border-radius: 50%;
   color: var(--pending-accent);
-  background: rgba(245, 158, 11, 0.18); /* color-mix 미지원 브라우저 폴백 */
+  background: rgba(153, 27, 27, 0.18); /* color-mix 미지원 브라우저 폴백 */
   background: color-mix(in srgb, var(--pending-accent) 18%, transparent);
 }
 
@@ -1862,8 +1845,8 @@ body[data-theme="dark"] .pending-deposit-row {
   color: var(--text-main);
 }
 
-/* "확인 필요" 뱃지 - 필수 액션임을 알리는 신호. 솔리드 앰버 버튼(.pdrow-btn-go)의
-   세컨더리(아웃라인) 버전으로 - 앰버 글자 + 옅은 틴트 + 테두리. "저 버튼을
+/* "확인 필요" 뱃지 - 필수 액션임을 알리는 신호. 솔리드 pending 버튼(.pdrow-btn-go)의
+   세컨더리(아웃라인) 버전으로 - pending 색 글자 + 옅은 틴트 + 테두리. "저 버튼을
    누르라는 것"이라는 관계는 같은 색으로 유지하되, 채워진 버튼과 위계는 구분한다. */
 .pending-deposit-flag {
   flex-shrink: 0;
@@ -1874,9 +1857,9 @@ body[data-theme="dark"] .pending-deposit-row {
   font-weight: 800;
   letter-spacing: 0.01em;
   color: var(--pending-accent);
-  background: rgba(245, 158, 11, 0.12); /* color-mix 미지원 브라우저 폴백 */
+  background: rgba(153, 27, 27, 0.12); /* color-mix 미지원 브라우저 폴백 */
   background: color-mix(in srgb, var(--pending-accent) 12%, transparent);
-  border: 1px solid rgba(245, 158, 11, 0.5);
+  border: 1px solid rgba(153, 27, 27, 0.5);
   border: 1px solid color-mix(in srgb, var(--pending-accent) 50%, transparent);
 }
 
@@ -1886,13 +1869,24 @@ body[data-theme="dark"] .pending-deposit-row {
   gap: 0.55rem;
 }
 
-/* 행은 카드 표면색(흰/다크)으로 솔리드하게 - 앰버 워시 배경 위에서 또렷하게 떠 보인다. */
+/* 각 항목이 admin "처리 대기" 배너(.pending-action-banner)와 같은 카드가 된다 - 옅은
+   pending 색 배경 + 같은 색 테두리 + 왼쪽 액센트 바. 다크에선 그 배경이 탁해서 한 단계
+   밝은 표면(--bg-card-hover)으로 되돌리고 색 테두리/바만 남긴다. */
 .pending-deposit-row {
   position: relative;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-glass, rgba(0, 0, 0, 0.08));
+  background: rgba(153, 27, 27, 0.08);
+  border: 1px solid rgba(153, 27, 27, 0.4);
+  border-left: 3px solid var(--pending-accent);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+body[data-theme="dark"] .pending-deposit-row {
+  background: var(--bg-card-hover);
+}
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .pending-deposit-row {
+    background: var(--bg-card-hover);
+  }
 }
 
 /* 기본 상태: 왼쪽에 금액(강조) + 시각, 오른쪽에 "충전" 트리거 버튼이 항상 보인다.
@@ -1968,7 +1962,7 @@ body[data-theme="dark"] .pending-deposit-row {
 }
 
 /* 행 내부 버튼 - 앱 전역 버튼(.btn/.btn-action)보다 한 톤 작게. "충전하기"/"확인"은
-   카드 강조색과 같은 솔리드 앰버, "취소"는 고스트(테두리만). */
+   카드 강조색과 같은 솔리드 pending 색, "취소"는 고스트(테두리만). */
 .pdrow-btn {
   min-height: 0;
   padding: 0.4rem 0.9rem;
