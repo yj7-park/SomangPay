@@ -489,6 +489,25 @@ const USER_PUSH_LAST_REFRESH_KEY = "user_push_last_refresh_at";
 // 실행이 있으면 새로 시작하지 않고 그 결과를 그대로 기다리게 해서 항상 한 번에 하나만 돈다.
 let _userPushRefreshInFlight = null;
 
+// admin.js의 syncAdminPushSubscriptionToServer와 동일 - 토글은 브라우저 구독만 보고 켜지므로 서버
+// DB에서 행이 사라지면 "켜짐"인 채 알림만 안 온다. 현재 구독을 서버에 upsert 해서 맞춘다.
+const USER_PUSH_SYNC_MIN_GAP_MS = 60 * 1000;
+let _userPushLastSyncAt = 0;
+async function syncUserPushSubscriptionToServer(sub) {
+  if (Date.now() - _userPushLastSyncAt < USER_PUSH_SYNC_MIN_GAP_MS) return;
+  try {
+    const subJson = sub.toJSON();
+    const res = await authFetch(`${API_BASE}/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+    });
+    if (res.ok) _userPushLastSyncAt = Date.now();
+  } catch (err) {
+    console.error("푸시 서버 동기화 오류:", err);
+  }
+}
+
 // 로그인 직후/화면 복귀(resume) 시마다 호출.
 function ensurePushSubscriptionFresh() {
   if (!_userPushRefreshInFlight) {
@@ -512,7 +531,11 @@ async function _doEnsurePushSubscriptionFresh() {
   // 통째로 없는 상태(브라우저가 조용히 만료시켰거나, 이전 재구독 도중 새로고침 등으로
   // 끊긴 경우)까지 6시간 동안 방치하라는 뜻이 아니다 - existingSub가 없으면 즉시 재시도한다.
   const lastRefresh = Number(localStorage.getItem(USER_PUSH_LAST_REFRESH_KEY) || 0);
-  if (existingSub && Date.now() - lastRefresh < USER_PUSH_REFRESH_INTERVAL_MS) return;
+  if (existingSub && Date.now() - lastRefresh < USER_PUSH_REFRESH_INTERVAL_MS) {
+    // 갈아치울 시점은 아니어도 서버가 이 endpoint를 아직 갖고 있는지는 매번 보장한다.
+    if (userToken) await syncUserPushSubscriptionToServer(existingSub);
+    return;
+  }
 
   try {
     const oldEndpoint = existingSub ? existingSub.endpoint : null;
@@ -527,11 +550,15 @@ async function _doEnsurePushSubscriptionFresh() {
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
     const subJson = sub.toJSON();
-    await authFetch(`${API_BASE}/push/subscribe`, {
+    // 등록 실패를 조용히 넘기면 브라우저만 새 구독이고 서버는 비게 된다 - 실패하면 예외로 던져
+    // LAST_REFRESH를 갱신하지 않아, 다음 화면 복귀 때 위의 sync 경로가 다시 등록을 시도한다.
+    const postRes = await authFetch(`${API_BASE}/push/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
     });
+    if (!postRes.ok) throw new Error(`push subscribe ${postRes.status}`);
+    _userPushLastSyncAt = Date.now();
     if (oldEndpoint && oldEndpoint !== subJson.endpoint) {
       // 옛 구독 행이 만료된 채로 DB에 남아있지 않도록 정리 - 실패해도 어차피 다음 발송
       // 실패(404/410) 시 서버가 알아서 지우므로 best-effort로만 시도한다.

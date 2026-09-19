@@ -413,7 +413,11 @@ async function refreshAdminPushButtonUI() {
   setAdminPushCategoryCheckboxesEnabled(!!sub);
   if (sub) {
     try {
-      const res = await adminFetch(`${API_BASE}/admin/push/subscribe/categories?endpoint=${encodeURIComponent(sub.endpoint)}`);
+      let res = await adminFetch(`${API_BASE}/admin/push/subscribe/categories?endpoint=${encodeURIComponent(sub.endpoint)}`);
+      if (res.status === 404 && await syncAdminPushSubscriptionToServer(sub, true)) {
+        // 서버에 이 기기 행이 없던 상태(토글은 켜졌는데 알림이 안 오던 원인) - 재등록 후 다시 조회
+        res = await adminFetch(`${API_BASE}/admin/push/subscribe/categories?endpoint=${encodeURIComponent(sub.endpoint)}`);
+      }
       if (res.ok) writeAdminPushCategoryCheckboxes(await res.json());
     } catch (err) {
       console.error("관리자 푸시 항목 설정 조회 오류:", err);
@@ -497,6 +501,28 @@ const ADMIN_PUSH_LAST_REFRESH_KEY = "admin_push_last_refresh_at";
 // 유실됐던 것. 진행 중인 실행이 있으면 그 결과를 그대로 기다리게 해서 항상 한 번에 하나만.
 let _adminPushRefreshInFlight = null;
 
+// 토글은 브라우저의 getSubscription()만 보고 켜지므로, 서버 DB에서 이 기기 endpoint 행이 사라져도
+// (발송 404/410 정리, resubscribe 404 등) "켜짐"인 채 알림만 안 오게 된다. 현재 브라우저 구독을
+// 서버에 upsert 해서 둘을 맞춘다 - 항목별 on/off는 안 보내므로(None) 기존 설정은 유지된다.
+const ADMIN_PUSH_SYNC_MIN_GAP_MS = 60 * 1000;
+let _adminPushLastSyncAt = 0;
+async function syncAdminPushSubscriptionToServer(sub, force) {
+  if (!force && Date.now() - _adminPushLastSyncAt < ADMIN_PUSH_SYNC_MIN_GAP_MS) return true;
+  try {
+    const subJson = sub.toJSON();
+    const res = await adminFetch(`${API_BASE}/admin/push/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+    });
+    if (res.ok) _adminPushLastSyncAt = Date.now();
+    return res.ok;
+  } catch (err) {
+    console.error("관리자 푸시 서버 동기화 오류:", err);
+    return false;
+  }
+}
+
 // 로그인 직후/화면 복귀(resume) 시마다 호출.
 function ensureAdminPushSubscriptionFresh() {
   if (!_adminPushRefreshInFlight) {
@@ -516,7 +542,11 @@ async function _doEnsureAdminPushSubscriptionFresh() {
   // user.js의 _doEnsurePushSubscriptionFresh()와 동일 - 스로틀은 이미 살아있는 구독을 너무
   // 자주 갈아치우지 않기 위함이지, 구독이 아예 없는 상태를 6시간 동안 방치하라는 뜻이 아니다.
   const lastRefresh = Number(localStorage.getItem(ADMIN_PUSH_LAST_REFRESH_KEY) || 0);
-  if (existingSub && Date.now() - lastRefresh < ADMIN_PUSH_REFRESH_INTERVAL_MS) return;
+  if (existingSub && Date.now() - lastRefresh < ADMIN_PUSH_REFRESH_INTERVAL_MS) {
+    // 갈아치울 시점은 아니어도 서버가 이 endpoint를 아직 갖고 있는지는 매번 보장한다.
+    if (adminToken) await syncAdminPushSubscriptionToServer(existingSub);
+    return;
+  }
 
   try {
     const oldEndpoint = existingSub ? existingSub.endpoint : null;
@@ -531,11 +561,15 @@ async function _doEnsureAdminPushSubscriptionFresh() {
       applicationServerKey: urlBase64ToUint8ArrayAdmin(publicKey),
     });
     const subJson = sub.toJSON();
-    await adminFetch(`${API_BASE}/admin/push/subscribe`, {
+    // 등록 실패를 조용히 넘기면 브라우저만 새 구독이고 서버는 비게 된다 - 실패하면 예외로 던져
+    // LAST_REFRESH를 갱신하지 않아, 다음 화면 복귀 때 위의 sync 경로가 다시 등록을 시도한다.
+    const postRes = await adminFetch(`${API_BASE}/admin/push/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
     });
+    if (!postRes.ok) throw new Error(`admin push subscribe ${postRes.status}`);
+    _adminPushLastSyncAt = Date.now();
     if (oldEndpoint && oldEndpoint !== subJson.endpoint) {
       adminFetch(`${API_BASE}/admin/push/subscribe`, {
         method: "DELETE",
