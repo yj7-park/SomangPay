@@ -524,7 +524,7 @@ async def admin_recharge_credit(
 
     await notify_admins(["users", "stats", "deposits"])
     await notify_user(user.id, ["me"])
-    send_push_to_user(db, user.id, "충전 완료", f"{req.amount:,}원이 충전되었습니다 (잔액 {user.credit_balance:,}원)")
+    await run_in_threadpool(send_push_to_user, db, user.id, "충전 완료", f"{req.amount:,}원이 충전되었습니다 (잔액 {user.credit_balance:,}원)")
     return {
         "success": True,
         "message": f"{user.name}님에게 {req.amount:,}원이 충전되었습니다.",
@@ -1035,10 +1035,19 @@ async def process_nfc_payment(req: schemas.PaymentRequest, db: Session = Depends
     # 결제로 잔액이 바뀌었으므로 관리자 대시보드와 결제한 회원 본인 화면을 갱신
     await notify_admins(["users", "stats"])
     await notify_user(user.id, ["me"])
-    await run_in_threadpool(
-        send_push_to_admins, db, "결제 발생",
-        f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment", entity_id=user.id
-    )
+    # 관리자에게는 "결제 발생", 결제한 회원 본인에게는 결제 확인 푸시를 같은 스레드에서 순차 발송
+    # (동기 네트워크 호출이라 이벤트 루프를 막지 않도록 threadpool로 - 둘 다 같은 db 세션을 쓰므로
+    # 병렬이 아니라 순차로 돌린다).
+    def _send_payment_pushes():
+        send_push_to_admins(
+            db, "결제 발생",
+            f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})", category="payment", entity_id=user.id
+        )
+        send_push_to_user(
+            db, user.id, "결제 완료",
+            f"{total_amount:,}원이 결제되었습니다 ({', '.join(item_summaries)}) - 잔액 {user.credit_balance:,}원"
+        )
+    await run_in_threadpool(_send_payment_pushes)
     await notify_admins_alert(
         "결제 발생", f"{user.name}님 {total_amount:,}원 결제 ({', '.join(item_summaries)})",
         category="payment", entity_id=user.id
@@ -1203,7 +1212,7 @@ async def admin_add_bank_transaction(
     await notify_admins(["deposit_queue", "stats"])
     if txn.status == "PENDING":
         await notify_user(txn.matched_user_id, ["me", "deposits"])
-        send_push_to_user(db, txn.matched_user_id, "입금이 확인됐어요", f"{txn.amount:,}원 입금 확인 - 앱에서 충전을 완료해주세요")
+        await run_in_threadpool(send_push_to_user, db, txn.matched_user_id, "입금이 확인됐어요", f"{txn.amount:,}원 입금 확인 - 앱에서 충전을 완료해주세요")
     elif txn.status == "ERROR":
         send_push_to_admins(
             db, "미매칭 입금 발생", f"입금자명 '{txn.depositor_name}' {txn.amount:,}원 - 매칭되는 회원이 없어 확인이 필요합니다",
@@ -1288,7 +1297,7 @@ async def admin_resolve_bank_transaction(
 
     await notify_admins(["deposit_queue", "stats", "deposits", "users"])
     await notify_user(user.id, ["me"])
-    send_push_to_user(db, user.id, "충전 완료", f"{txn.amount:,}원이 충전되었습니다 (잔액 {user.credit_balance:,}원)")
+    await run_in_threadpool(send_push_to_user, db, user.id, "충전 완료", f"{txn.amount:,}원이 충전되었습니다 (잔액 {user.credit_balance:,}원)")
     return _bank_txn_response(db, txn)
 
 @app.post("/api/admin/bank-transactions/{txn_id}/mark-other", response_model=schemas.BankTransactionResponse)

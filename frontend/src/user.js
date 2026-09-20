@@ -202,7 +202,27 @@ async function userLogin() {
   }
 }
 
+// 로그아웃 후에도 서버에 이 기기 구독 행이 남아 있으면 로그아웃한 회원의 충전/결제 알림이 계속
+// 이 기기로 온다(공용 기기/계정 전환). 서버 행만 지운다 - 브라우저 구독과 "켜짐" 플래그는 남겨
+// 두므로, 같은 회원이 다시 로그인하면 ensurePushSubscriptionFresh()의 동기화가 재등록한다.
+// authFetch가 아닌 raw fetch를 쓰는 이유: 401(세션 만료)로 userLogout()이 불린 경우 authFetch를
+// 쓰면 다시 401 → userLogout()으로 무한 재귀한다. best-effort라 실패해도 무시.
+async function unregisterUserPushOnServer(token) {
+  if (!token || !pushSupported()) return;
+  try {
+    const sub = await getCurrentPushSubscription();
+    if (!sub) return;
+    await fetch(`${API_BASE}/push/subscribe`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+  } catch (err) { /* 무시 */ }
+}
+
 function userLogout() {
+  unregisterUserPushOnServer(userToken);
+  _userPushLastSyncAt = 0; // 다시 로그인하면 60초 스로틀 없이 바로 재등록되게
   localStorage.removeItem("user_token");
   userToken = null;
   loggedInUser = null;
