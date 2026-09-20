@@ -1101,12 +1101,14 @@ function renderRecentPaymentsUI() {
     const isSenior = p.userType === "시니어";
     const badgeColor = isSenior ? "#f59e0b" : "#6781c0";
     const badgeBg = isSenior ? "rgba(245,158,11,0.15)" : "rgba(103,129,192,0.15)";
+    // 이 피드에서만 시간 표기를 손본다(formatHistoryTime은 admin/user 내역과 공유라 안 건드림):
+    //  1) "오전 9:30"의 일반 공백 → 얇은 공백(U+2009)으로 살짝만 띄움
+    //  2) 시(時)가 한 자리면 앞에 figure space(U+2007, monospace에서 숫자 한 칸 폭)를 끼워
+    //     "9:09"이 "11:18"과 같은 폭이 되게 → 숫자가 오른쪽 정렬돼 이름 시작선이 맞음
+    const timeText = p.time.replace(" ", "\u2009").replace(/\u2009(\d):/, "\u2009\u2007$1:");
     return `<div class="recent-payment-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0.4rem; background: ${i === 0 ? 'rgba(16,185,129,0.12)' : 'var(--surface-1)'}; border-radius: 6px; border-left: 3px solid ${i === 0 ? '#10b981' : 'var(--border-glass)'}; font-size: 0.74rem;">
       <div style="display: flex; align-items: center; gap: 0.3rem;">
-        <!-- 이 피드에서만 "오전 9:30"의 일반 공백을 얇은 공백(U+2009)으로 바꿔 살짝만
-             띄운다(사용자 요청). formatHistoryTime은 admin/user 내역 카드와 공유라 거긴
-             그대로 두고 여기서만 좁힌다. -->
-        <span class="recent-payment-time" style="color: var(--text-muted); font-family: monospace; font-size: 0.68rem;">${p.time.replace(" ", " ")}</span>
+        <span class="recent-payment-time" style="color: var(--text-muted); font-family: monospace; font-size: 0.68rem; white-space: pre;">${timeText}</span>
         <strong class="recent-payment-name" style="color: var(--text-main);">${p.userName}</strong>
         <span class="recent-payment-badge" style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}; border-radius: 4px; padding: 0 0.25rem; font-size: 0.65rem; font-weight: bold;">${p.userType}</span>
       </div>
