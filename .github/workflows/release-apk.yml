@@ -103,8 +103,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # packages를 명시 안 하면 액션 기본값("tools platform-tools")을 쓰는데, 레거시
+      # "tools" 패키지는 구글이 SDK 저장소에서 이미 내려버려서 sdkmanager가 "Failed to find
+      # package 'tools'"로 실패해 빌드 자체가 안 뜬다(2026-09-28 발견) - 아래 platform-tools
+      # 설치 단계가 이미 platforms/build-tools를 따로 받아오므로 "tools"는 애초에 필요 없다.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
 
       # compileSdk 35 / build-tools 35는 AGP가 빌드 중 자동으로 받아오지만, 러너에
       # 미리 깔아두면 첫 빌드에서 라이선스 프롬프트/다운로드 타임아웃으로 흔들리는 걸 막는다.
