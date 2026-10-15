@@ -16,6 +16,11 @@ function renderUserBalance(amount) {
   const el = document.getElementById("display-user-balance");
   if (!el) return;
   el.innerHTML = `${amount.toLocaleString()}<span class="user-balance-unit">원</span>`;
+  // QR 결제 화면의 "결제 가능 잔액"(#pages-b)도 같은 값.
+  const qrBal = document.getElementById("user-qr-balance");
+  if (qrBal) qrBal.innerHTML = `${amount.toLocaleString()}<small>원</small>`;
+  // 충전 대기 상태의 카드 아래 띠도 "현재 잔액/충전 후 잔액"을 보여주므로 같이 갱신(#home-b).
+  renderPendingDepositCard();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -170,15 +175,47 @@ function formatPhoneInput(input) {
   input.value = formatted;
 }
 
+// #login-b - 로그인 오류는 알림 모달 대신 입력칸 아래 한 줄로(#login-error).
+function showLoginError(message) {
+  const el = document.getElementById("login-error");
+  if (!el) return;
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function clearLoginError() {
+  const el = document.getElementById("login-error");
+  if (el && !el.hidden) {
+    el.hidden = true;
+    el.textContent = "";
+  }
+}
+
+function toggleLoginPasswordVisibility() {
+  const input = document.getElementById("login-password");
+  const btn = document.getElementById("login-password-toggle");
+  if (!input || !btn) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.textContent = show ? "숨기기" : "보기";
+  btn.setAttribute("aria-pressed", String(show));
+  btn.setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 보기");
+}
+
 async function userLogin() {
   const phone = document.getElementById("login-phone").value.trim();
   const password = document.getElementById("login-password").value.trim();
+  const btn = document.getElementById("login-submit-btn");
 
   if (!phone || !password) {
-    await showAlertModal("휴대폰 번호와 비밀번호를 입력해주세요.");
+    showLoginError(!phone ? "휴대폰 번호를 입력해 주세요." : "비밀번호를 입력해 주세요.");
     return;
   }
+  if (btn.disabled) return;
 
+  clearLoginError();
+  btn.disabled = true;
+  btn.textContent = "로그인 중…";
   try {
     const res = await fetch(`${API_BASE}/users/login`, {
       method: "POST",
@@ -186,9 +223,9 @@ async function userLogin() {
       body: JSON.stringify({ phone, password })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      await showAlertModal(`[로그인 실패] ${data.detail || '휴대폰 번호 또는 비밀번호 오류'}`);
+      showLoginError(data.detail || "휴대폰 번호 또는 비밀번호가 맞지 않아요.");
       return;
     }
 
@@ -198,7 +235,10 @@ async function userLogin() {
     onLoginSuccess(loggedInUser);
   } catch (err) {
     console.error("Login Error:", err);
-    await showAlertModal("서버 연결에 실패했습니다.");
+    showLoginError("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "로그인";
   }
 }
 
@@ -229,11 +269,14 @@ function userLogout() {
   disconnectUserWebSocket();
   document.getElementById("user-login-wrapper").style.display = "flex";
   document.getElementById("user-shell").style.display = "none";
-  document.getElementById("pending-deposit-card").style.display = "none";
+  _myDeposits = [];
+  renderPendingDepositCard();
   document.getElementById("charge-guide-section").style.display = "none";
+  toggleUserPasswordPanel(false);
   switchUserView("home");
   document.getElementById("login-phone").value = "";
   document.getElementById("login-password").value = "";
+  clearLoginError();
 }
 
 // 마이프로필 "로그아웃" 버튼 전용(#redesign, 사용자 피드백: "로그아웃 버튼은 컨펌 모달이
@@ -253,7 +296,7 @@ const USER_HEADER_TITLES = {
   charge: "충전",
   history: "이용 내역",
   qr: "QR 결제",
-  profile: "마이 프로필",
+  profile: "내 정보",
 };
 
 function switchUserView(viewName) {
@@ -276,13 +319,9 @@ function onLoginSuccess(user) {
   document.getElementById("charge-guide-section").style.display = "block";
 
   document.getElementById("display-user-name").innerText = user.name;
-  document.getElementById("display-user-badge").innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
-  document.getElementById("display-user-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
   renderUserBalance(user.credit_balance);
   // 마이 프로필 상단 이름+유형 배지 헤더(#redesign) - 홈 카드와 같은 정보, 별도 엘리먼트.
   document.getElementById("profile-display-name").innerText = user.name;
-  document.getElementById("profile-display-badge").innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
-  document.getElementById("profile-display-badge").className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
   document.getElementById("display-user-phone").innerText = user.phone || "-"; // #redesign - 비활성 input → 읽기전용 행
 
   loadChargeGuide();
@@ -330,6 +369,7 @@ function renderUserQrView() {
   const head = document.getElementById("user-qr-card-head");
   const guide = document.getElementById("user-qr-guide");
   const nameEl = document.getElementById("user-qr-name");
+  const balRow = document.getElementById("user-qr-balance-row");
   if (nameEl && loggedInUser) nameEl.innerText = loggedInUser.name || "";
   if (_userQrDataUrl) {
     img.src = _userQrDataUrl;
@@ -337,11 +377,13 @@ function renderUserQrView() {
     empty.style.display = "none";
     if (head) head.style.display = "block";
     if (guide) guide.style.display = "block";
+    if (balRow) balRow.style.display = "flex";
   } else {
     img.style.display = "none";
     empty.style.display = "block";
     if (head) head.style.display = "none";
     if (guide) guide.style.display = "none";
+    if (balRow) balRow.style.display = "none";
   }
 }
 
@@ -385,15 +427,14 @@ async function getCurrentPushSubscription() {
 }
 
 async function refreshPushButtonUI() {
-  // #redesign - u-push-section이 이제 캡션+카드를 함께 감싸는 바깥 래퍼라(그룹 전체를
-  // 숨기기 위함, user.html 참고) 항상 block 레이아웃이면 된다 - 실제 가로 정렬(flex)은
-  // 안쪽 행에 별도 style로 고정돼 있어 이 wrapper의 display 값과 무관하다.
+  // #pages-b - u-push-section은 이제 "설정" 그룹 안의 한 행(.user-list-row, flex)이라 보일 땐
+  // 인라인 display를 비워 CSS 값(flex)으로 되돌린다("block"으로 박으면 가로 정렬이 깨진다).
   const section = document.getElementById("u-push-section");
   if (!isInstalledUserAppContext()) {
     if (section) section.style.display = "none";
     return;
   }
-  if (section) section.style.display = "block";
+  if (section) section.style.display = "";
 
   // 화면을 열 때마다 먼저 자가복구를 한 번 시도한다 - 구독이 이미 살아있으면 스로틀에 걸려
   // 즉시 반환되니 비용이 없고, 뭔가로 인해 끊겨 있었다면(새로고침/버전업 등) 여기서 바로
@@ -641,6 +682,20 @@ const userRealtime = createRealtimeClient({
   },
 });
 
+// 이미 열려 있는 탭에서 푸시 알림을 누르면 sw.js가 포커스와 함께 이 메시지를 보낸다 -
+// 다른 탭에 가 있어도 홈(잔액 카드)으로 돌아오고, 알림 내용(입금 확인 등)이 바로 보이게
+// 최신 상태로 다시 불러온다(#home-b).
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    const data = event.data || {};
+    if (data.type !== "user-notification-open" || !userToken) return;
+    switchUserView(data.view || "home");
+    refreshMyInfo();
+    loadMyDeposits();
+    loadUserStatsSummary();
+  });
+}
+
 function connectUserWebSocket() { userRealtime.connect(); }
 function disconnectUserWebSocket() { userRealtime.disconnect(); }
 
@@ -666,7 +721,10 @@ async function loadChargeGuide() {
     // 표시/복사 문구 모두 "NH농협"처럼 통신사/제휴 접두어가 붙은 은행명이어도 접두어를
     // 떼고 "농협 <번호>"만 쓴다(#33) - 예금주는 라벨 없이 괄호 안에만 표기.
     const displayBankName = guide.bank_name.replace(/^NH\s*/, "");
-    document.getElementById("charge-guide-account").innerText = `${displayBankName} ${guide.account_number} (${guide.account_holder})`;
+    // #pages-b - 은행/번호/예금주를 각각 따로 보여준다(번호만 크게).
+    document.getElementById("charge-guide-bank").innerText = displayBankName;
+    document.getElementById("charge-guide-account").innerText = guide.account_number;
+    document.getElementById("charge-guide-holder").innerText = guide.account_holder;
     document.getElementById("charge-guide-depositor-name").innerText = guide.depositor_name;
     _chargeGuideAccountCopyText = `${displayBankName} ${guide.account_number}`;
   } catch (err) {
@@ -682,15 +740,14 @@ async function copyAccountNumber(btn) {
     console.error("copyAccountNumber error:", err);
     return;
   }
-  const icon = document.getElementById("charge-guide-account-copy-icon");
-  if (!icon) return;
-  const original = icon.innerHTML;
-  icon.innerHTML = '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 6 6L20 6"/></svg>';
-  icon.style.color = "var(--accent-emerald)";
-  clearTimeout(icon._resetTimer);
-  icon._resetTimer = setTimeout(() => {
-    icon.innerHTML = original;
-    icon.style.color = "var(--text-muted)";
+  // #pages-b - 복사 아이콘 대신 버튼 문구로 결과를 알린다.
+  const label = "계좌번호 복사";
+  btn.textContent = "복사했어요";
+  btn.classList.add("is-done");
+  clearTimeout(btn._resetTimer);
+  btn._resetTimer = setTimeout(() => {
+    btn.textContent = label;
+    btn.classList.remove("is-done");
   }, 1500);
 }
 
@@ -711,32 +768,37 @@ async function loadMyDeposits() {
   }
   setupHistoryInfiniteScroll();
   loadMoreHistory(true);
+  loadRecentHistory();
 }
 
-// ============ 홈 화면 기간 통계(오늘/이번달) ============
-// #redesign(홈 UI 어드민 이식) - 어드민 홈의 기간 통계 블록(admin.js의
-// selectHomeStatsPeriod/renderHomePeriodStats/statAmountHtml)을 본인 데이터 기준으로
-// 그대로 옮겨왔다. admin.js를 이 페이지가 로드하지 않으므로(별도 문서) 헬퍼째로 복사 -
-// ICON_SVGS를 admin.js/kiosk.js가 각자 갖고 있는 것과 같은 패턴.
-function statAmountHtml(value, unit = "원") {
-  return `${Number(value).toLocaleString()}<small class="stat-unit">${unit}</small>`;
+// 홈 "최근 이용"(#home-b) - 이용 내역 탭과 같은 API/렌더러로 최근 3건만. 날짜 구분선도
+// 탭과 똑같이 찍힌다(dateState를 매번 새로 넘김).
+async function loadRecentHistory() {
+  const box = document.getElementById("user-recent-list");
+  if (!box) return;
+  try {
+    const res = await authFetch(`${API_BASE}/history/me?limit=3`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const dateState = { last: null };
+    box.innerHTML = data.items.length === 0
+      ? historyEmptyStateHtml("아직 이용 내역이 없습니다.")
+      : data.items.map((item) => historyItemHtml(item, dateState)).join("");
+  } catch (err) {
+    console.error("loadRecentHistory error:", err);
+  }
 }
 
+// ============ 홈 화면 이번 달 요약(#home-b) ============
+// 예전엔 어드민 홈의 기간 통계(오늘/이번달 토글 + 타일 2장)를 그대로 이식했는데, 회원 홈에선
+// 공간 대비 정보가 적어(오늘 충전 0원 타일 등) 이번 달 충전/사용 한 줄로 줄였다.
 let _lastUserStats = null;
-let userHomeStatsPeriod = "today";
 
-function selectUserHomeStatsPeriod(period) {
-  userHomeStatsPeriod = period;
-  renderUserHomePeriodStats();
-}
-
-function renderUserHomePeriodStats() {
-  document.getElementById("user-home-period-today-btn")?.classList.toggle("is-on", userHomeStatsPeriod === "today");
-  document.getElementById("user-home-period-month-btn")?.classList.toggle("is-on", userHomeStatsPeriod === "this_month");
+function renderUserHomeMonthStats() {
   if (!_lastUserStats) return;
-  const period = _lastUserStats[userHomeStatsPeriod];
-  document.getElementById("user-stat-period-deposit").innerHTML = statAmountHtml(period.deposit_amount);
-  document.getElementById("user-stat-period-payment").innerHTML = statAmountHtml(period.payment_amount);
+  const month = _lastUserStats.this_month;
+  document.getElementById("user-stat-month-deposit").innerHTML = `${Number(month.deposit_amount).toLocaleString()}<small>원</small>`;
+  document.getElementById("user-stat-month-payment").innerHTML = `${Number(month.payment_amount).toLocaleString()}<small>원</small>`;
 }
 
 async function loadUserStatsSummary() {
@@ -744,7 +806,7 @@ async function loadUserStatsSummary() {
     const res = await authFetch(`${API_BASE}/users/me/stats/summary`);
     if (!res.ok) return;
     _lastUserStats = await res.json();
-    renderUserHomePeriodStats();
+    renderUserHomeMonthStats();
   } catch (err) {
     console.error("loadUserStatsSummary error:", err);
   }
@@ -804,51 +866,67 @@ function setupHistoryInfiniteScroll() {
   });
 }
 
-// ============ 충전 대기 카드 - 각 행에 "충전하기" 버튼이 항상 보이고, 누르면 그 행 위에
-//             "확인/취소"가 오버레이된다(#18) ============
-// 별도 확인 모달(과거 deposit-claim-modal) 대신, 행 자체가 두 단계 상태(기본/확인 대기)를
-// 갖는다. 한 번에 하나만 확인 대기 상태로 둔다 - 여러 건을 동시에 열어두면 실수로 엉뚱한
-// 건을 확정할 위험이 있다.
+// ============ 충전 대기 - 잔액 카드가 초록 안내로 바뀐다(#home-b) ============
+// 대기 건이 있으면 홈 잔액 카드(#user-card-box)에 .has-pending을 걸어 위쪽을 초록 안내 +
+// "충전하기", 아래 남색 띠를 현재/충전 후 잔액으로 바꾼다. 확정은 별도 모달 없이 같은 자리에서
+// "충전하기" → "취소/충전하기" 2단계(모달 사용성이 나쁘다는 기존 요청 유지, #18). 대기 건이 여러
+// 개면 가장 오래된 것부터 한 건씩 보여주고(한 번에 하나만 확인 대기 - 엉뚱한 건 확정 방지),
+// 확정하면 다음 건이 이어서 뜬다. 홈 탭 아이콘 초록 점과 QR 결제 화면 안내 한 줄도 여기서 같이 갱신.
 let _armedDepositId = null;
 
 function renderPendingDepositCard() {
-  const card = document.getElementById("pending-deposit-card");
-  const list = document.getElementById("pending-deposit-list");
-  if (!card || !list) return;
+  const cardBox = document.getElementById("user-card-box");
+  const slot = document.getElementById("user-card-pending");
+  if (!cardBox || !slot) return;
 
-  const pending = _myDeposits.filter(d => d.status === "PENDING");
-  if (pending.length === 0) {
-    card.style.display = "none";
+  const pending = _myDeposits
+    .filter(d => d.status === "PENDING")
+    .sort((a, b) => a.id - b.id);
+  const hasPending = pending.length > 0;
+  cardBox.classList.toggle("has-pending", hasPending);
+  document.querySelector('#user-shell .admin-tab-btn[data-view="home"]')?.classList.toggle("has-pending", hasPending);
+  const qrHint = document.getElementById("user-qr-pending-hint");
+
+  if (!hasPending) {
     _armedDepositId = null;
+    slot.innerHTML = "";
+    if (qrHint) qrHint.style.display = "none";
     return;
   }
-  if (!pending.some(d => d.id === _armedDepositId)) _armedDepositId = null;
 
-  card.style.display = "block";
-  list.innerHTML = pending.map(pendingDepositRowHtml).join("");
-}
-
-function pendingDepositRowHtml(d) {
+  const d = pending[0];
+  if (_armedDepositId !== d.id) _armedDepositId = null; // 확인 대기였던 건이 사라졌으면(다른 기기에서 확정 등) 해제
   const armed = _armedDepositId === d.id;
   const amount = d.amount.toLocaleString();
-  return `
-    <div class="pending-deposit-row ${armed ? "armed" : ""}">
-      <div class="pending-deposit-row-main" onclick="event.stopPropagation()">
-        <div class="pending-deposit-row-info">
-          <div class="pending-deposit-row-amount">+${amount}원</div>
-          <div class="pending-deposit-row-date">${formatDateTimeKST(d.created_at)}</div>
-        </div>
-        <button type="button" class="pdrow-btn pdrow-btn-go" onclick="event.stopPropagation(); armPendingDeposit(${d.id})">충전하기</button>
-      </div>
-      <div class="pending-deposit-confirm" onclick="event.stopPropagation()">
-        <span class="pending-deposit-confirm-text">${amount}원을 충전할까요?</span>
-        <div class="pending-deposit-confirm-actions">
-          <button type="button" class="pdrow-btn pdrow-btn-cancel" onclick="armPendingDeposit(null)">취소</button>
-          <button type="button" class="pdrow-btn pdrow-btn-confirm" onclick="confirmPendingDeposit(${d.id}, this)">확인</button>
-        </div>
-      </div>
+  const balance = loggedInUser ? loggedInUser.credit_balance : 0;
+  const more = pending.length > 1 ? ` · 외 ${pending.length - 1}건` : "";
+  const when = formatDateTimeKST(d.created_at);
+
+  const head = armed
+    ? `<div class="ucp-when">입금 확인 · ${when}</div>
+       <div class="ucp-title">${amount}원을 충전할까요?</div>`
+    : `<div class="ucp-when">${amount}원 입금 확인 · ${when}${more}</div>
+       <div class="ucp-title">충전을 완료해 주세요</div>`;
+  const actions = armed
+    ? `<div class="ucp-actions">
+         <button type="button" class="ucp-btn ucp-btn-cancel" onclick="armPendingDeposit(null)">취소</button>
+         <button type="button" class="ucp-btn" onclick="confirmPendingDeposit(${d.id}, this)">충전하기</button>
+       </div>`
+    : `<button type="button" class="ucp-btn" onclick="armPendingDeposit(${d.id})">충전하기</button>`;
+
+  slot.innerHTML = `
+    <div class="ucp-top">${head}${actions}</div>
+    <div class="ucp-band">
+      <span><span class="ucp-band-label">현재 잔액</span> <strong>${balance.toLocaleString()}<small>원</small></strong></span>
+      <span class="ucp-band-after">충전 후 <strong>${(balance + d.amount).toLocaleString()}원</strong></span>
     </div>
   `;
+
+  if (qrHint) {
+    // 두 줄 - 안내 / 행동(사용자 요청: 줄바꿈 넣어서 깔끔하게).
+    qrHint.innerHTML = `<span>입금 확인된 ${amount}원이 아직 충전 전이에요</span><span class="user-qr-pending-hint-cta">홈에서 충전하기 ›</span>`;
+    qrHint.style.display = "block";
+  }
 }
 
 function armPendingDeposit(id) {
@@ -874,6 +952,9 @@ async function confirmPendingDeposit(id, btn) {
       return;
     }
     _armedDepositId = null;
+    // 서버 재조회 전에 로컬 목록에서 먼저 빼둔다 - 안 그러면 refreshMyInfo가 새 잔액으로 카드를
+    // 다시 그릴 때 아직 남아있는 이 건 때문에 "충전 후" 금액이 이중으로 더해져 잠깐 보인다.
+    _myDeposits = _myDeposits.filter(x => x.id !== id);
     await refreshMyInfo();
     await loadMyDeposits();
   } catch (err) {
@@ -884,6 +965,25 @@ async function confirmPendingDeposit(id, btn) {
 }
 
 // ============ 비밀번호 변경 ============
+// #pages-b - 입력칸은 평소 접어두고 "비밀번호 변경 ›" 행을 누르면 그 자리에서 펼친다.
+// open을 안 넘기면 토글, false면 닫기(취소/변경 성공 시).
+function toggleUserPasswordPanel(open) {
+  const panel = document.getElementById("user-pw-panel");
+  const toggle = document.getElementById("user-pw-toggle");
+  if (!panel) return;
+  const next = open === undefined ? panel.style.display === "none" : open;
+  panel.style.display = next ? "block" : "none";
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(next));
+    toggle.classList.toggle("is-open", next);
+  }
+  const input = document.getElementById("edit-user-password");
+  if (!next && input) {
+    input.value = "";
+    document.getElementById("change-password-btn").disabled = true;
+  }
+  if (next && input) input.focus();
+}
 
 async function changePassword() {
   const newPassword = document.getElementById("edit-user-password").value.trim();
@@ -900,8 +1000,7 @@ async function changePassword() {
     });
 
     if (res.ok) {
-      document.getElementById("edit-user-password").value = "";
-      document.getElementById("change-password-btn").disabled = true; // #redesign - 값 비워졌으니 버튼도 같이 비활성화
+      toggleUserPasswordPanel(false); // 입력값 비우고 버튼 비활성화까지 같이 처리
       await showAlertModal("🎉 비밀번호가 변경되었습니다!");
     } else {
       const err = await res.json().catch(() => ({}));

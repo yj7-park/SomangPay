@@ -15,8 +15,8 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260908_2000">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">
+  <link rel="stylesheet" href="src/style.css?v=20261015_1800">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20261015_1800">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -37,7 +37,7 @@
        받아(#32) 17px로 낮추고 admin.html 쪽을 17px로 올려 두 앱의 체감 글자 크기를 맞췄다. -->
   <style>html { font-size: 17px; }</style>
 </head>
-<body>
+<body class="page-user">
   <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
        동일한 패턴(setUserTheme()/initUserTheme(), user.js 참고). 저장값이 없으면(기본값
        "시스템") 아무 속성도 안 얹어서 instagram-theme.css의 시스템 설정 기반 미디어
@@ -52,33 +52,36 @@
     })();
   </script>
 
-  <!-- 로그인 전 화면 - 인스타그램 로그인 페이지 톤: 좁은 컬럼 가운데 정렬, 로고 +
-       워드마크, 플로팅 라벨 입력, 풀폭 버튼 + "또는" 구분선, 아래에 별도 안내 박스.
-       스타일은 instagram-theme.css의 .ig-login* 규칙. -->
+  <!-- 로그인 전 화면 - 좁은 컬럼 가운데 정렬, 로고 + 워드마크, 플로팅 라벨 입력, 풀폭 버튼.
+       #login-b - 홈 B안에 맞춰 다듬었다: 입력칸/버튼을 키우고(손가락 터치 영역), 버튼은 홈 잔액
+       카드와 같은 남색, 비밀번호 "보기" 토글 추가. 예전엔 오류를 전부 알림 모달로 띄웠는데
+       (빈 칸, 비밀번호 틀림, 서버 연결 실패) 입력칸 바로 아래 한 줄(#login-error)로 보여준다.
+       뒤에 아무 대안도 없던 "또는" 구분선은 뺐다. 스타일은 instagram-theme.css의 .ig-login* 규칙. -->
   <div id="user-login-wrapper" class="ig-login-wrapper">
     <div class="ig-login">
       <div class="ig-login-brand">
-        <img src="/icons/logo-mark-user.svg" alt="소망페이" class="ig-login-logo">
+        <img src="/icons/logo-mark-user.svg" alt="" class="ig-login-logo">
         <h1 class="ig-login-wordmark">소망페이</h1>
+        <p class="ig-login-sub">가입할 때 등록한 휴대폰 번호로 로그인하세요</p>
       </div>
 
-      <form class="ig-login-form" onsubmit="event.preventDefault(); userLogin();">
+      <form class="ig-login-form" onsubmit="event.preventDefault(); userLogin();" novalidate>
         <label class="ig-field">
-          <input type="tel" id="login-phone" class="ig-input" placeholder=" " maxlength="13" autocomplete="username" inputmode="numeric" oninput="formatPhoneInput(this)">
+          <input type="tel" id="login-phone" class="ig-input" placeholder=" " maxlength="13" autocomplete="username" inputmode="numeric" oninput="formatPhoneInput(this); clearLoginError();">
           <span class="ig-field-label">휴대폰 번호</span>
         </label>
-        <label class="ig-field">
-          <input type="password" id="login-password" class="ig-input" placeholder=" " autocomplete="current-password" onkeyup="if(event.key==='Enter') userLogin();">
+        <label class="ig-field ig-field-password">
+          <input type="password" id="login-password" class="ig-input" placeholder=" " autocomplete="current-password" oninput="clearLoginError();">
           <span class="ig-field-label">비밀번호</span>
+          <button type="button" id="login-password-toggle" class="ig-reveal-btn" aria-label="비밀번호 보기" aria-pressed="false" onclick="toggleLoginPasswordVisibility()">보기</button>
         </label>
-        <button type="submit" class="ig-login-btn">로그인</button>
+        <p id="login-error" class="ig-login-error" role="alert" hidden></p>
+        <button type="submit" id="login-submit-btn" class="ig-login-btn">로그인</button>
       </form>
 
-      <div class="ig-login-divider"><span>또는</span></div>
-
       <p class="ig-login-hint">
-        가입 시 등록한 휴대폰 번호로 로그인하세요.<br>
-        초기 비밀번호는 <strong>1234</strong> 입니다.
+        처음이라면 초기 비밀번호는 <strong>1234</strong>예요.<br>
+        로그인한 뒤 내 정보에서 바꿀 수 있어요.
       </p>
     </div>
 
@@ -105,7 +108,7 @@
   </header>
 
   <!-- 로그인 후 화면 - admin.html과 같은 탭 구조(.admin-shell/.admin-tabbar/.admin-view)를
-       재사용한다. 홈 / 충전 / 이용 내역 / 마이 프로필 4개 탭 + 가운데 QR 결제 액션 버튼. -->
+       재사용한다. 홈 / 충전 / 이용 내역 / 내 정보 4개 탭 + 가운데 QR 결제 액션 버튼. -->
   <div id="user-shell" class="admin-shell" style="display: none;">
     <nav class="admin-tabbar">
       <button class="admin-tab-btn active" data-view="home" onclick="switchUserView('home')">
@@ -142,7 +145,7 @@
       </button>
       <button class="admin-tab-btn" data-view="profile" onclick="switchUserView('profile')">
         <span class="tab-icon"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg></span>
-        <span>마이프로필</span>
+        <span>내 정보</span>
       </button>
     </nav>
 
@@ -151,77 +154,43 @@
       <!-- ================= 홈 ================= -->
       <div id="user-view-home" class="admin-view active">
 
-        <!-- User Balance Card -->
+        <!-- 잔액 카드(#home-b) - 홈 개선안 B. 카드 하나가 두 상태를 오간다:
+             평소(.user-card-normal): 남색 + 로고 워터마크, "OOO님의 잔액" + 큰 잔액.
+             충전 대기(.has-pending → .user-card-pending): 넓은 위쪽이 초록 안내 + "충전하기",
+             아래 남색 띠가 현재 잔액/충전 후 잔액. 예전엔 대기 건을 잔액 카드 아래 별도 카드
+             (빨강 톤)로 보여줬는데, 꼭 눌러야 하는 항목이 두 번째 자리라 지나치기 쉬웠고 빨강이
+             오류처럼 읽혔다 - 늘 보던 잔액 카드 자체의 색이 바뀌게 해서 놓치지 않게 한다.
+             카드 높이는 평소/대기/확인 세 상태 모두 같게 고정(사용자 요청 - 상태가 바뀔 때 아래
+             목록이 밀리지 않게). 렌더링은 user.js의 renderPendingDepositCard. -->
         <div id="user-card-box" class="user-card-widget">
-          <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
-            <h2 id="display-user-name" style="font-size: 1.6rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</h2>
-            <span id="display-user-badge" class="badge-tag badge-general" style="flex-shrink: 0;">-</span>
-          </div>
-
-          <div style="margin-top: 1.5rem;">
-            <div style="color: #c7d2fe; font-size: 0.95rem;">현재 보유 크레딧 잔액</div>
+          <div class="user-card-normal">
+            <div class="user-card-label"><span id="display-user-name">-</span>님의 잔액</div>
             <div id="display-user-balance" class="user-balance-big">0원</div>
           </div>
+          <div id="user-card-pending" class="user-card-pending" onclick="event.stopPropagation()"></div>
         </div>
 
-        <!-- 충전 대기 카드(#18) - 본인 앞으로 매칭됐지만 아직 충전 안 된 입금 건이 있을 때만 표시.
-             #redesign2 - 예전엔 어드민 홈의 "처리 대기" 배너와 같은 앰버 경고 톤이었는데,
-             "들어온 돈"을 문제처럼 보이게 한다는 피드백으로 경고색을 뺐다. 다만 대기 건은
-             회원이 직접 "충전하기"를 눌러야 완료되는 필수 선행 작업이라 눈에는 확실히 띄어야
-             해서(사용자 피드백), 다른 흰 카드들 사이에서 옅은 에메랄드 워시 + 왼쪽 액센트 바 +
-             제목 옆 "확인 필요"(액션 버튼과 같은 남색) 뱃지로 강조한다. 아이콘은 이용 내역의
-             "계좌이체 충전"(history-render.js의 in = 카드+플러스)과 같은 것. 행마다 "충전하기"
-             버튼이 항상 보이고, 누르면 같은 행 위에서 "확인/취소"로 한 번 더 확인한다
-             (별도 모달 없음 - 모달 사용성이 나쁘다는 기존 요청 유지). -->
-        <div id="pending-deposit-card" class="pending-deposit-card" style="display: none;">
-          <div class="pending-deposit-header">
-            <span class="pending-deposit-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/><path d="M12 12.5v4M10 14.5h4"/></svg>
-            </span>
-            <div class="pending-deposit-title">충전 대기 중인 입금</div>
-            <span class="pending-deposit-flag">확인 필요</span>
+        <!-- 이번 달 요약(#home-b) - 예전 "기간 통계"(오늘/이번달 토글 + 타일 2장)를 이번 달 한
+             줄로 줄였다. 데이터는 그대로 /api/users/me/stats/summary의 this_month. -->
+        <div class="glass-container user-month-summary">
+          <div>
+            <div class="user-month-label">이번 달 충전</div>
+            <div class="user-month-value is-plus" id="user-stat-month-deposit">0<small>원</small></div>
           </div>
-          <div id="pending-deposit-list" class="pending-deposit-list"></div>
-        </div>
-
-        <!-- 기간 통계 블록(#redesign, 홈 UI 어드민 이식) - 어드민 홈의 "기간 통계"(오늘/
-             이번달 토글 + 충전액/결제액 타일)를 본인 데이터 기준으로 그대로 이식. 마크업은
-             admin.html의 동일 블록과 같고(같은 클래스 재사용), 데이터는
-             /api/users/me/stats/summary에서 온다(user.js의 selectUserHomeStatsPeriod). -->
-        <div class="admin-page-title-row" style="margin-bottom: 0.6rem;">
-          <span style="font-size: 0.85rem; color: var(--text-muted);">기간 통계</span>
-          <div class="seg-control" style="margin-left: auto;">
-            <button id="user-home-period-today-btn" type="button" onclick="selectUserHomeStatsPeriod('today')">오늘</button>
-            <button id="user-home-period-month-btn" type="button" onclick="selectUserHomeStatsPeriod('this_month')">이번달</button>
-          </div>
-        </div>
-        <div class="stat-grid">
-          <div class="glass-container stat-tile">
-            <div class="stat-label">충전액</div>
-            <div class="stat-value" id="user-stat-period-deposit">0원</div>
-          </div>
-          <div class="glass-container stat-tile">
-            <div class="stat-label">결제액</div>
-            <div class="stat-value" id="user-stat-period-payment">0원</div>
+          <div>
+            <div class="user-month-label">이번 달 사용</div>
+            <div class="user-month-value" id="user-stat-month-payment">0<small>원</small></div>
           </div>
         </div>
 
-        <!-- 퀵액션(#redesign, 홈 UI 어드민 이식으로 카드 바로 아래에서 맨 아래로 내림) -
-             지갑 앱의 기본 동작이라 여전히 홈에 두되, 위 두 블록(충전 대기/기간 통계)이
-             먼저 오도록 순서만 바꿨다. -->
-        <div class="user-quick-actions">
-          <button type="button" onclick="switchUserView('qr')">
-            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M19 17v4M17 19h4"/></svg>
-            <span>QR 결제</span>
-          </button>
-          <button type="button" onclick="switchUserView('charge')">
-            <svg class="icon-line" viewBox="0 0 24 24" width="1.5em" height="1.5em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/><path d="M12 12.5v4M10 14.5h4"/></svg>
-            <span>충전</span>
-          </button>
-          <button type="button" onclick="switchUserView('history')">
-            <svg class="icon-line" viewBox="0 0 24 24" width="1.4em" height="1.4em" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
-            <span>이용 내역</span>
-          </button>
+        <!-- 최근 이용(#home-b) - 예전 퀵액션 3개(탭바와 완전히 중복)를 대신한다. 이용 내역 탭과
+             같은 API(/api/history/me)·같은 렌더러(history-render.js)로 최근 3건만. -->
+        <div class="glass-container user-recent">
+          <div class="user-recent-head">
+            <span>최근 이용</span>
+            <button type="button" class="user-recent-more" onclick="switchUserView('history')">전체보기 ›</button>
+          </div>
+          <div id="user-recent-list"></div>
         </div>
       </div>
 
@@ -233,166 +202,127 @@
       </div>
 
       <!-- ================= QR 결제 ================= -->
-      <!-- 제목은 상단 고정 바로 옮겨갔다(#redesign) - 카드 내용은 .user-qr-view-body가
-           남은 세로 공간 안에서 상하 가운데로 오도록 감싼다(#user-update). -->
+      <!-- #pages-b - 키오스크 앞에서 여는 화면. 예전엔 카드를 남은 세로 공간 가운데에 띄워
+           위가 휑했고 QR이 260px로 작았다 - 위에서부터 붙이고 QR을 카드 가로폭에 꽉 채운다
+           (사용자 요청). 결제 직전에 홈으로 갔다 올 필요 없게 QR 아래에 결제 가능 잔액을 둔다. -->
       <div id="user-view-qr" class="admin-view">
         <div class="user-qr-view-body">
-          <div class="glass-container" style="padding: 1.5rem; text-align: center;">
-            <!-- 카드가 있을 때만: "내 결제 코드" + 이름을 QR 위에 올려 세로 중앙 정렬이 휑하지 않게 한다(#redesign) -->
-            <div id="user-qr-card-head" style="display: none; margin-bottom: 1rem;">
-              <div style="font-size: 0.8rem; color: var(--text-muted);">내 결제 코드</div>
-              <div id="user-qr-name" style="font-size: 1.15rem; font-weight: 700; color: var(--text-main); margin-top: 0.15rem;"></div>
+          <!-- 충전 대기 안내(#home-b) - 입금 확인된 건을 아직 충전 안 한 채로 결제하러 오면
+               키오스크 앞에서 잔액 부족이 날 수 있어 QR 위에 띄운다. 두 줄(안내 / 행동)로 나눠
+               보여주고(사용자 요청), 누르면 홈으로 가서 잔액 카드의 "충전하기"로 이어진다
+               (user.js renderPendingDepositCard가 표시 제어). -->
+          <button type="button" id="user-qr-pending-hint" class="user-qr-pending-hint" style="display: none;" onclick="switchUserView('home')"></button>
+          <div class="glass-container user-qr-card">
+            <!-- 등록된 카드가 있을 때만 표시(renderUserQrView(), user.js). -->
+            <div id="user-qr-card-head" class="user-qr-card-head" style="display: none;"><span id="user-qr-name"></span>님의 결제 코드</div>
+            <img id="user-qr-page-img" class="user-qr-img" src="" alt="QR 결제 코드" style="display: none;">
+            <p id="user-qr-guide" class="user-qr-guide" style="display: none;">키오스크의 QR 스캐너에 화면을 비춰 주세요</p>
+            <div id="user-qr-balance-row" class="user-qr-balance" style="display: none;">
+              <span>결제 가능 잔액</span>
+              <strong id="user-qr-balance">0<small>원</small></strong>
             </div>
-            <!-- 등록된 카드가 있을 때만 표시(renderUserQrView(), user.js). 흰 패딩 축소 + radius↑ + 브랜드색 얇은 프레임. -->
-            <img id="user-qr-page-img" src="" alt="QR 코드" style="display: none; width: 100%; max-width: 260px; margin: 0 auto; background: #fff; padding: 12px; border-radius: 16px; border: 2px solid var(--accent-cyan);">
             <!-- 카드가 없을 때 표시 -->
-            <div id="user-qr-page-empty" style="display: none; padding: 2rem 0;">
+            <div id="user-qr-page-empty" style="display: none; padding: 2rem 0; text-align: center;">
               <div style="display: inline-flex; color: var(--text-muted); margin-bottom: 0.8rem;"><svg class="icon-line" viewBox="0 0 24 24" width="2.2em" height="2.2em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3z"/><path d="M19 17v4M17 19h4"/></svg></div>
               <p style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 0.5rem;">등록된 QR 카드가 없습니다.</p>
               <p style="font-size: 0.85rem; color: var(--text-muted);">교회 사무실(관리자)에 문의해 카드를 등록해 주세요.</p>
             </div>
-            <p id="user-qr-guide" style="display: none; font-size: 0.95rem; color: var(--text-main); margin-top: 1rem;">키오스크 QR 스캔에 사용하세요.</p>
           </div>
         </div>
       </div>
 
       <!-- ================= 충전 ================= -->
-      <!-- #redesign - 옛 "문의" 탭 자리. 계좌 정보(구 홈 화면 charge-guide-section, id는
-           그대로 유지 - loadChargeGuide()/copyAccountNumber()가 이 id로 채운다)를 전용
-           탭으로 옮기고, 그 아래 "충전은 이렇게 진행됩니다" 3단계 안내를 새로 추가했다 -
-           계좌 정보만으로는 "이름이 다르면 안 붙는다"/"입금 후 홈에서 한 번 더 눌러야
-           확정된다"는, 실제로 문의가 들어오던 부분이 설명되지 않았다. -->
+      <!-- #pages-b - 회원이 이 화면에서 실제로 하는 일은 "계좌번호 복사"와 "정확한 이름으로 입금"
+           두 가지라 그 둘을 가장 크게 둔다. 예전엔 은행·번호·예금주가 "입금 계좌:" 라벨 아래 한
+           줄에 섞여 있고 복사 아이콘이 작았으며, 입금 실패의 첫 원인인 입금자명이 회색 박스 안
+           두 번째 줄이었다. 3단계 안내도 단계마다 2~3줄 설명이 붙어 화면이 길어서 한 줄씩으로
+           줄였다(동명이인 A/B 구분 글자는 입금자명 자체에 이미 들어가 있음).
+           id(charge-guide-section/-account/-depositor-name)는 loadChargeGuide()/copyAccountNumber()가
+           채운다. -->
       <div id="user-view-charge" class="admin-view">
-        <div id="charge-guide-section" class="glass-container" style="padding: 1.5rem; display: none; margin-bottom: 1.2rem;">
-          <h4 style="color: var(--accent-cyan); font-size: 1.05rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span style="display: inline-flex;"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M4 10h16v9H4z"/><path d="M4 19h16M8 13v4M12 13v4M16 13v4"/></svg></span>
-            계좌이체 충전 안내
-          </h4>
-          <div style="background: var(--surface-2); padding: 0.9rem; border-radius: 10px; font-size: 0.95rem;">
-            <div>입금 계좌:
-              <button id="charge-guide-account-copy-btn" onclick="copyAccountNumber(this)" title="눌러서 계좌번호 복사"
-                style="display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0.1rem 0.3rem; margin-left: 0.1rem; cursor: pointer; font: inherit; font-weight: 700; color: var(--text-main); border-radius: 6px; vertical-align: middle;">
-                <strong id="charge-guide-account">-</strong>
-                <span id="charge-guide-account-copy-icon" style="display: inline-flex; color: var(--text-muted);"><svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
-              </button>
-            </div>
-            <div style="margin-top: 0.4rem;">입금자명(<strong>반드시 이 이름 그대로</strong> 입금): <strong id="charge-guide-depositor-name" style="color: var(--accent-cyan);">-</strong></div>
+        <div id="charge-guide-section" style="display: none;">
+          <div class="glass-container charge-account-card">
+            <div class="charge-account-bank">입금할 계좌 · <span id="charge-guide-bank">-</span></div>
+            <div id="charge-guide-account" class="charge-account-number">-</div>
+            <div class="charge-account-holder">예금주 <span id="charge-guide-holder">-</span></div>
+            <button type="button" id="charge-guide-account-copy-btn" class="charge-copy-btn" onclick="copyAccountNumber(this)">계좌번호 복사</button>
+          </div>
+          <div class="charge-depositor-card">
+            <div class="charge-depositor-label">입금자명은 꼭 이 이름으로</div>
+            <div id="charge-guide-depositor-name" class="charge-depositor-name">-</div>
+            <div class="charge-depositor-note">이름이 다르면 자동으로 확인되지 않아요.</div>
           </div>
         </div>
 
-        <div class="glass-container" style="padding: 1.5rem;">
-          <h4 style="font-size: 1.05rem; margin-bottom: 1rem;">충전은 이렇게 진행됩니다</h4>
-          <div class="guide-steps">
-            <div class="guide-step">
-              <span class="guide-step-num">1</span>
-              <div class="guide-step-body">
-                <div class="guide-step-title">위 계좌로 입금</div>
-                <div class="guide-step-desc">반드시 등록된 이름 그대로 입금해 주세요(동명이인 구분용 A, B 같은 글자가 포함된 이름이라면 그 글자까지). 이름이 다르면 자동으로 확인되지 않습니다.</div>
-              </div>
-            </div>
-            <div class="guide-step">
-              <span class="guide-step-num">2</span>
-              <div class="guide-step-body">
-                <div class="guide-step-title">입금 자동 확인</div>
-                <div class="guide-step-desc">입금자명이 일치하면 자동으로 확인되어 홈 화면에 "충전 대기" 카드로 표시됩니다.</div>
-              </div>
-            </div>
-            <div class="guide-step">
-              <span class="guide-step-num">3</span>
-              <div class="guide-step-body">
-                <div class="guide-step-title">홈에서 확정하면 충전 완료</div>
-                <div class="guide-step-desc">홈 화면 "충전 대기" 카드를 눌러 금액을 확인하고 확정하면 바로 잔액에 반영됩니다.</div>
-              </div>
-            </div>
-          </div>
-          <p style="margin-top: 1.1rem; padding-top: 0.9rem; border-top: 1px solid var(--border-glass); font-size: 0.82rem; color: var(--text-muted);">입금했는데 확인이 안 되거나 이름을 다르게 입금하신 경우, 교회 사무실(관리자)로 연락해 주세요.</p>
+        <div class="glass-container charge-steps">
+          <div class="charge-steps-title">충전 순서</div>
+          <div class="charge-step"><span class="charge-step-num">1</span><span><strong>위 계좌로 입금</strong></span></div>
+          <div class="charge-step"><span class="charge-step-num">2</span><span><strong>입금 자동 확인</strong> · 홈 잔액 카드가 초록으로 바뀌어요</span></div>
+          <div class="charge-step"><span class="charge-step-num">3</span><span><strong>홈에서 "충전하기"</strong> · 바로 잔액에 반영돼요</span></div>
         </div>
+        <p class="charge-footnote">이름을 다르게 입금했거나 확인이 안 되면 교회 사무실(관리자)로 연락해 주세요.</p>
       </div>
 
-      <!-- ================= 마이 프로필 ================= -->
-      <!-- #redesign - 예전엔 설정이 카드 하나에 자유배치라 화면 맨 위에 정체성이 없고
-           (이름조차 없음), 어디부터 어디까지가 한 묶음인지도 안 보였다. ADMIN 설정 탭과
-           같은 그룹드 리스트 패턴(.settings-group-label + 카드별 그룹: 계정/화면/알림/앱)
-           으로, 맨 위엔 이름+유형 배지 헤더를 한 줄 둔다(이니셜 아바타는 안 쓴다 - 한국어
-           이름에 의미 없이 공간만 차지, feedback_no_initial_avatars_korean 참고). -->
+      <!-- ================= 내 정보 ================= -->
+      <!-- #pages-b - "마이 프로필" → "내 정보". 자주 안 오는 화면이라 한눈에 훑는 목록 행으로.
+           예전엔 "일반" 뱃지(관리용 분류라 회원에게 의미 없음)가 이름 아래 있었고, 비밀번호 입력칸과
+           흐린 버튼이 늘 펼쳐져 화면에서 가장 큰 요소였다 - 이름 아래엔 로그인 ID인 연락처를 두고,
+           비밀번호는 "비밀번호 변경 ›" 한 줄을 누르면 그 자리에서 펼친다(user.js
+           toggleUserPasswordPanel). 이니셜 아바타는 안 쓴다(한국어 이름에 의미 없이 공간만 차지).
+           푸시 행(u-push-section)/앱 버전 행(user-app-version-row)은 조건이 안 맞으면 각각 JS가
+           행 단위로 숨긴다(refreshPushButtonUI / update-widget.js). -->
       <div id="user-view-profile" class="admin-view">
-        <div class="detail-header-id" style="margin-bottom: 1.2rem;">
-          <h2 id="profile-display-name" style="font-size: 1.5rem;">-</h2>
-          <div class="detail-header-tags">
-            <span id="profile-display-badge" class="badge-tag badge-general">-</span>
-          </div>
+        <div class="user-me-head">
+          <h2 id="profile-display-name">-</h2>
+          <div id="display-user-phone" class="user-me-phone">-</div>
         </div>
 
         <div class="settings-group-label">계정</div>
-        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
-          <!-- 비활성 <input> 대신 읽기전용 행(#redesign) - 어차피 못 바꾸는 값을 입력칸처럼
-               보여줘 헷갈리게 하지 않는다. -->
-          <div style="display: flex; align-items: center; gap: 0.6rem;">
-            <div style="min-width: 0;">
-              <div style="font-size: 0.78rem; color: var(--text-muted);">연락처 (로그인 ID)</div>
-              <div id="display-user-phone" style="font-size: 0.95rem; color: var(--text-main); margin-top: 0.15rem;">-</div>
-            </div>
-            <span style="margin-left: auto; flex-shrink: 0; font-size: 0.75rem; color: var(--text-muted); background: var(--surface-2); border-radius: 999px; padding: 0.2rem 0.6rem;">변경 문의</span>
+        <div class="glass-container user-list-group">
+          <div class="user-list-row">
+            <span>연락처 변경</span>
+            <span class="user-list-value">교회 사무실 문의</span>
           </div>
-
-          <div style="margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--border-glass);">
-            <label class="form-label">비밀번호 변경 (변경할 경우만 입력)</label>
-            <input type="password" id="edit-user-password" placeholder="새 비밀번호 입력" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-glass); color: var(--text-main);" oninput="document.getElementById('change-password-btn').disabled = !this.value;">
-            <!-- 화면에서 제일 시끄러운 풀폭 solid 버튼이었다(#redesign) - ghost/tinted로
-                 강등하고, 입력값이 있을 때만 활성화(실수로 빈 값 제출 방지 겸 시각적 강조). -->
-            <!-- #redesign(사용자 피드백: "라이트 테마에서 너무 흐려") - 원래 ghost/tinted
-                 스타일이었는데, disabled 시 opacity 0.45가 곱해지면서 라이트에서 옅은
-                 tint(--accent-cyan-glow)가 거의 안 보이는 지경까지 흐려졌다. 다른 주 액션
-                 버튼(.btn-primary)과 같은 꽉 찬 색으로 - 채워진 배경은 0.45 곱해져도
-                 충분히 보인다. -->
-            <button id="change-password-btn" class="btn-action btn-primary" disabled style="margin-top: 0.6rem;" onclick="changePassword()">비밀번호 변경</button>
+          <button type="button" id="user-pw-toggle" class="user-list-row user-list-button" aria-expanded="false" aria-controls="user-pw-panel" onclick="toggleUserPasswordPanel()">
+            <span>비밀번호 변경</span>
+            <span class="user-list-value user-list-chev" aria-hidden="true">›</span>
+          </button>
+          <div id="user-pw-panel" class="user-pw-panel" style="display: none;">
+            <input type="password" id="edit-user-password" class="user-pw-input" placeholder="새 비밀번호" autocomplete="new-password" oninput="document.getElementById('change-password-btn').disabled = !this.value;">
+            <div class="user-pw-actions">
+              <button type="button" class="user-pw-cancel" onclick="toggleUserPasswordPanel(false)">취소</button>
+              <button type="button" id="change-password-btn" class="btn-action btn-primary user-pw-save" disabled onclick="changePassword()">변경하기</button>
+            </div>
           </div>
         </div>
 
-        <div class="settings-group-label">화면</div>
-        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
-          <div class="settings-row">
-            <span style="font-size: 0.8rem; color: var(--text-muted);">화면 테마</span>
+        <div class="settings-group-label">설정</div>
+        <div class="glass-container user-list-group">
+          <div class="user-list-row">
+            <span>화면 테마</span>
             <div class="seg-control" style="margin-left: auto;">
               <button id="u-theme-system-btn" type="button" onclick="setUserTheme('system')">시스템</button>
               <button id="u-theme-light-btn" type="button" onclick="setUserTheme('light')">라이트</button>
               <button id="u-theme-dark-btn" type="button" onclick="setUserTheme('dark')">다크</button>
             </div>
           </div>
-        </div>
-
-        <!-- 입금 확인/충전 완료 시 앱을 꺼둔 상태에서도 알림을 받을지 여부(Web Push, #push).
-             설치된 앱 컨텍스트가 아니면(user.js의 isInstalledUserAppContext) 그룹 전체
-             (캡션+카드)를 감춘다 - #redesign 전엔 이 id가 카드 안쪽 행 하나에만 걸려 있어서
-             캡션만 카드 없이 덩그러니 남았다(refreshPushButtonUI도 같이 손봄, "block"으로). -->
-        <div id="u-push-section" style="margin-bottom: 1.2rem;">
-          <div class="settings-group-label">알림</div>
-          <div class="glass-container" style="padding: 1.5rem;">
-            <div class="settings-row">
-              <span style="font-size: 0.8rem; color: var(--text-muted);">푸시 알림</span>
-              <span id="u-push-status" class="switch-status"></span>
-              <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
-            </div>
+          <!-- 입금 확인/충전 완료 알림(Web Push, #push) - 설치된 앱 컨텍스트에서만 보인다. -->
+          <div id="u-push-section" class="user-list-row">
+            <span>푸시 알림</span>
+            <span id="u-push-status" class="switch-status"></span>
+            <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
+          </div>
+          <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 이 행을 숨긴다(#17). -->
+          <div id="user-app-version-row" class="user-list-row">
+            <span>앱 버전</span>
+            <span id="update-widget-root" style="display: inline-flex; align-items: center; margin-left: auto;"></span>
           </div>
         </div>
 
-        <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 내용을 아무것도
-             그리지 않아 라벨만 덩그러니 남는다(#17) - 그 경우 update-widget.js가 이 그룹
-             전체(캡션+카드)를 감춘다. -->
-        <div id="user-app-version-row">
-          <div class="settings-group-label">앱</div>
-          <div class="glass-container" style="padding: 1.5rem;">
-            <div class="settings-row">
-              <span style="font-size: 0.8rem; color: var(--text-muted);">앱 버전</span>
-              <span id="update-widget-root" style="display: inline-flex; align-items: center; margin-left: auto;"></span>
-            </div>
-          </div>
+        <!-- 로그아웃은 위험한 동작이 아니라 경고색 없이 중립 행으로(#redesign 피드백 유지). -->
+        <div class="glass-container user-list-group">
+          <button type="button" class="user-list-row user-list-button user-logout-row" onclick="confirmUserLogout()">로그아웃</button>
         </div>
-
-        <!-- #redesign(사용자 피드백: "빨간색 버튼들이 안예쁘다") - 로그아웃은 계정 삭제 같은
-             위험/파괴적 액션이 아니라 평범한 탐색 동작이라 경고색을 쓸 이유가 없다.
-             다른 중립 보조 버튼(모달 "닫기" 등)과 같은 무채색 톤으로. -->
-        <button onclick="confirmUserLogout()" style="margin-top: 0.4rem; width: 100%; padding: 0.7rem 0.8rem; font-size: 0.85rem; background: var(--surface-2); border: 1px solid var(--border-glass); color: var(--text-main); border-radius: 8px; cursor: pointer;">로그아웃</button>
       </div>
 
     </main>
@@ -426,6 +356,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/user.js?v=20260920_0846"></script>
+  <script src="src/user.js?v=20261015_1800"></script>
 </body>
 </html>

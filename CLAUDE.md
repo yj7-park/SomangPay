@@ -101,10 +101,13 @@
 네트워크 포트포워딩 필요)을 버리고, **운영과 별도의 OCI 인스턴스**로 옮겼다
 (2026-09-07).
 
-- 인스턴스: `129.225.168.253`, `ssh -i ~/.ssh/somangpay-dev-oci ubuntu@...`. 운영
-  (`somangpay-a1`)과 동일 조건: `ap-chuncheon-1` 리전, `VM.Standard.A1.Flex`, 2
-  OCPU/12GB, Ubuntu 24.04 - 운영이 쓰는 Always Free A1 한도(4 OCPU/24GB)를 정확히
-  같이 채우는 구성이라 둘 다 무료.
+- 인스턴스: `129.225.168.253`, `ssh -i ~/.ssh/somangpay-dev-oci ubuntu@...`. hostname
+  `dev-somangpay`, 리전 `ap-osaka-1`(오사카, AD `UJmr:AP-OSAKA-1-AD-1`) - 인스턴스
+  메타데이터로 확인함(2026-09-24). `VM.Standard.A1.Flex`, 2 OCPU/12GB, Ubuntu
+  24.04는 운영(`somangpay-a1`)과 동일 조건이나, **리전 자체는 운영과 다르다**(운영은
+  `ap-chuncheon-1`) - 예전엔 동일 리전으로 적혀 있었는데 오기였다. OCI Always Free
+  A1 한도가 리전별인지 테넌시 홈 리전 기준인지는 이 정정에서 다시 확인 안 했으니,
+  "운영과 한도를 같이 채워서 둘 다 무료"라는 이전 설명은 그대로 믿지 말 것.
 - 도메인: `dev-somangpay.duckdns.org` - duckdns에만 등록, DDNS 자동갱신 스크립트는
   없다. **이 인스턴스를 재생성해서 IP가 바뀌면 duckdns.org에서 수동으로 IP를 다시
   지정해야 한다.**
@@ -133,11 +136,55 @@
 - `android_kiosk/app/build.gradle`의 `devTargetHost` 기본값이 이 도메인을 가리키게
   바꿔뒀다 - 이제 debug APK 빌드 시 `-PdevTargetHost=` 오버라이드 없이 그냥
   `./gradlew assembleKioskDebug` 하면 됨.
+- **이 저장소가 dev 인스턴스 자체에 체크아웃돼 있는 경우**(`hostname`이 `dev-somangpay`)엔
+  `deploy-dev.sh`가 자기 자신에게 SSH하려다 실패한다(`~/.ssh/somangpay-dev-oci` 키가 이
+  머신엔 없음, 스크립트 실행 권한도 없음). 그땐 스크립트의 `deploy_frontend` 원격 명령을
+  로컬에서 그대로 돌린다: `sudo rsync -a --delete frontend/ /var/www/somangpay-dev/
+  --exclude Dockerfile --exclude nginx.conf --exclude package.json` → chown/chmod →
+  `app-env.js`를 `development`로 다시 쓰기(2026-10-15 확인).
+- **SQLAlchemy 2.1 함정**(2026-10-15): `requirements.txt`가 `sqlalchemy>=2.0.0`로 상한 없이
+  열려 있어서 백엔드 이미지를 새로 빌드하면 2.1.x가 깔리는데, 2.1부터 `postgresql://` URL의
+  기본 드라이버가 psycopg2 → psycopg(v3)로 바뀌어 `ModuleNotFoundError: No module named
+  'psycopg'`로 기동 실패한다(dev에서 재빌드하다 발견). `<2.1` 상한을 걸어 해결 - 올리려면
+  `psycopg[binary]`를 추가하거나 URL을 `postgresql+psycopg2://`로 명시할 것. 운영
+  (`deploy.sh backend`)도 이 상한이 들어간 뒤에 재빌드해야 안 죽는다.
 - 참고로 이 작업 중 **운영 서버에 인증서 자동 갱신이 아예 안 걸려 있던 것**을
   발견해서 같이 고쳤다(2026-09-06) - `certbot`이 발급 당시엔 있었는데 이후 지워져서
   crontab/systemd timer/바이너리가 전부 없었다. snap certbot 재설치로
   `snap.certbot.renew.timer` 활성화, `certbot renew --dry-run` 성공 확인함
   (기존 인증서/`renewal` 설정은 그대로 이어받아서 재발급 없이 해결).
+
+### 7. 회원 앱(user.html) 홈 - 잔액 카드 두 상태 (2026-10-15, #home-b)
+
+- 홈은 잔액 카드(`#user-card-box`) + 이번 달 요약 + 최근 이용 3건. 충전 대기(PENDING 입금)가
+  있으면 별도 카드를 띄우지 않고 **잔액 카드 자체**에 `.has-pending`을 걸어 초록 안내 +
+  "충전하기"(위) / 남색 잔액 띠(아래)로 바꾼다(`user.js renderPendingDepositCard`). 홈 탭 초록
+  점, QR 결제 화면 안내 한 줄도 같은 함수가 갱신한다.
+- 카드 높이는 평소/대기/확인 세 상태 모두 `height: 11.5rem` 고정(사용자 요청 - 상태가 바뀌어도
+  아래 목록이 안 밀리게). 대기 카드에 내용을 더 넣으려면 이 높이 안에 들어가는지 먼저 확인.
+- 충전 확정은 **회원이 직접 누르는 수동 2단계 유지**가 사용자 결정이다(자동 확정 안 함). 대기
+  건이 여러 개면 오래된 것부터 한 건씩.
+- 입금 매칭 시 회원 푸시("입금이 확인됐어요")는 `main.py` 입금 등록 처리에 이미 있다 -
+  `run_in_threadpool(send_push_to_user, ...)`처럼 함수 참조로 넘기는 호출이라
+  `send_push_to_user(`로 grep하면 안 잡힌다.
+- **함정**: `style.css`의 전역 button 규칙이 `white-space: nowrap !important`라 버튼 안 긴
+  문구는 버튼에서 못 푼다. 안쪽 `<span>`에 `white-space: normal`을 명시해서 줄바꿈시킨다.
+- 나머지 탭도 같은 원칙으로 정리(#pages-b): 충전 = 계좌번호 크게 + "계좌번호 복사" 버튼 +
+  입금자명 독립 카드 + 한 줄짜리 3단계, QR 결제 = 카드 위에 붙이고 QR을 카드 가로폭에 꽉
+  채움 + 아래 "결제 가능 잔액", 충전 대기 안내는 두 줄(안내/행동), 내 정보("마이 프로필"에서
+  개명) = 이름+연락처 헤더, 목록 행, 비밀번호 입력칸은 행을 눌러야 펼침. 푸시/앱 버전 행은
+  조건이 안 맞으면 JS가 행 단위로 숨기므로 보일 땐 인라인 display를 `""`로 비워야 한다
+  (`"block"`이면 flex 행이 깨짐).
+- 로그인 화면(#login-b): 오류는 알림 모달이 아니라 입력칸 아래 `#login-error` 한 줄
+  (`showLoginError`/`clearLoginError`), 비밀번호 "보기" 토글, 로그인 버튼은 `--user-card-bg`
+  남색. `.ig-login*`는 user.html 전용이라 instagram-theme.css에 있어도 다른 화면 영향 없음.
+- 회원 앱 라이트 모드 본문 글자는 `#262626`(거의 검정) 대신 회색 섞인 차콜 `#383a45`
+  (사용자 피드백 "너무 검은색"). `<body class="page-user">` 스코프로 `--text-main`만 덮어써서
+  관리자/키오스크는 그대로(instagram-theme.css의 `body.page-user` 블록).
+- UI 액센트 연보라(`--accent-cyan`)를 남색으로 바꿀지는 아직 결정 전(회원 앱만 먼저 → 관리자
+  → 키오스크는 보류 쪽으로 검토안 제시). 이번 홈 변경은 회원 앱 전용 클래스와 새 토큰
+  (`--user-pending-bg`/`--user-pending-ink`, instagram-theme.css `:root`)만 써서 다른 화면에
+  영향 없음.
 
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 
@@ -200,11 +247,10 @@
 - WebView가 붙는 URL은 `AppConfig.TARGET_URL`이 `BuildConfig.DEBUG`로 고른다 -
   release는 `TARGET_URL`(운영), debug는 `DEV_TARGET_URL`(개발 서버). 코드에서
   `BuildConfig.TARGET_URL`을 직접 쓰지 말고 `AppConfig.TARGET_URL`을 쓸 것.
-- `DEV_TARGET_URL`의 기본 호스트는 build.gradle의 `devTargetHost`에 박혀 있는데,
-  이건 cloudflare 퀵터널(`*.trycloudflare.com`) 주소라 `cloudflared` 재시작 때마다
-  바뀐다. 바뀌면 파일 수정 없이
-  `./gradlew assembleKioskDebug -PdevTargetHost=https://<새-서브도메인>.trycloudflare.com`
-  로 덮어쓴다.
+- `DEV_TARGET_URL`의 기본 호스트는 build.gradle의 `devTargetHost`에 박혀 있고, 지금은
+  dev 전용 OCI 서버(`https://dev-somangpay.duckdns.org`, 위 6번)를 가리킨다 - 예전
+  cloudflare 퀵터널처럼 재시작마다 바뀌지 않는다. 다른 서버로 붙여야 하면 파일 수정 없이
+  `./gradlew assembleKioskDebug -PdevTargetHost=https://<다른-주소>`로 덮어쓴다.
 - CI(`release-apk.yml`)는 `assemble*Release`만 돌리므로 debug 빌드타입/오버레이의
   영향을 받지 않는다.
 

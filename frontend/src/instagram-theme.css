@@ -46,6 +46,11 @@
      단계적으로 조정). 라이트/다크 공통, 여기 한 번만 선언해도 두 테마 스코프 모두
      상속받는다(--brand-navy 자체가 테마 불문 고정인 것과 동일 이유). */
   --user-card-bg: #2d326e;
+  /* 홈 잔액 카드의 충전 대기 상태(#home-b) 배경 - 흰 글씨 대비 4.5:1 이상이 나오는 초록.
+     --accent-success(#10b981/#0e9f6e)는 흰 글씨를 얹기엔 대비가 3:1대라 따로 뺐다.
+     --user-pending-ink는 그 위 흰 버튼의 글자색. 카드 배경처럼 라이트/다크 공통. */
+  --user-pending-bg: #0a7d5a;
+  --user-pending-ink: #075c43;
 
   --accent-cyan: #6781c0;    /* 메인 액센트 (버튼/링크/포커스) - 로고 중간 톤 */
   --accent-cyan-glow: rgba(103, 129, 192, 0.18);
@@ -192,6 +197,20 @@ body[data-theme="light"] {
   --modal-bg: #ffffff;
 
   --shadow-subtle: 0 4px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* 회원 앱(user.html, body.page-user) 라이트 모드 본문 글자색 - #262626(거의 검정)이 남색 잔액
+   카드/초록 대기 카드와 나란히 있으면 너무 까맣게 떠 보인다는 피드백(2026-10-15)으로, 키오스크
+   메뉴 이름(--text-menu-name)처럼 회색이 섞인 차콜로 한 단계 낮춘다. 살짝 남색 쪽으로 기울여
+   브랜드 남색과 어울리게 했고, #fafafa 배경 대비는 약 11:1이라 가독성 문제는 없다. 관리자/
+   키오스크 화면은 이 클래스가 없어 영향 없음. 다크 모드(흰 글자)는 그대로. */
+@media (prefers-color-scheme: light) {
+  body.page-user:not([data-theme="dark"]) {
+    --text-main: #383a45;
+  }
+}
+body.page-user[data-theme="light"] {
+  --text-main: #383a45;
 }
 
 /* 위 body[data-theme="light"]와 같은 이유(html:has(body:not([data-theme="dark"]))
@@ -602,8 +621,14 @@ button:hover,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.7rem;
-  margin-bottom: 2.4rem;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+}
+.ig-login-sub {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 /* 로고 마크는 배경 투명 + 어두운 남색(#1f1e59) 타일이 포함돼 있어 다크 테마의
    검정 카드 위에서는 절반쯤 묻힌다. 다크에서는 로고 뒤에 흰 라운드 칩을 깔아
@@ -641,7 +666,7 @@ body[data-theme="light"] .ig-login-logo {
 .ig-login-form {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.6rem;
 }
 
 /* 플로팅 라벨: input에 placeholder=" "(공백)을 둬서 :placeholder-shown으로
@@ -659,7 +684,7 @@ body[data-theme="light"] .ig-login-logo {
   display: block;
   background: var(--surface-1);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   transition: border-color 0.15s ease;
 }
 .ig-field:focus-within {
@@ -669,10 +694,12 @@ body[data-theme="light"] .ig-login-logo {
 .ig-input {
   width: 100%;
   box-sizing: border-box;
-  height: 2.55rem;
-  padding: 0.85rem 0.7rem 0.25rem;
+  /* #login-b - 2.55rem → 3.3rem(손가락 터치 영역), 글자도 한 단계 키움. 라벨 위치(top/
+     translateY)는 이 높이에 맞춰 같이 옮겼다. */
+  height: 3.3rem;
+  padding: 1.25rem 0.9rem 0.35rem;
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   color: var(--text-main);
   background: transparent;
   border: none;
@@ -690,31 +717,64 @@ body[data-theme="light"] .ig-field {
 }
 .ig-field-label {
   position: absolute;
-  left: 0.75rem;
-  top: 1.28rem;
+  left: 0.9rem;
+  top: 1.65rem;
   transform: translateY(-50%);
   transform-origin: left center;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   color: var(--text-dim);
   pointer-events: none;
   transition: transform 0.12s ease, color 0.12s ease;
 }
 .ig-input:focus + .ig-field-label,
 .ig-input:not(:placeholder-shown) + .ig-field-label {
-  transform: translateY(-1.15rem) scale(0.72);
+  transform: translateY(-1.35rem) scale(0.76);
+}
+
+/* 비밀번호 "보기/숨기기" - 입력칸 오른쪽 안. 입력 글자가 버튼 밑으로 안 들어가게 오른쪽
+   패딩을 버튼 폭만큼 비운다. */
+.ig-field-password .ig-input {
+  padding-right: 4.2rem;
+}
+.ig-reveal-btn {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 0;
+  padding: 0.45rem 0.65rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 로그인 오류 한 줄(#login-error) - 알림 모달 대신. */
+.ig-login-error {
+  margin: 0.1rem 0.2rem 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--accent-danger);
 }
 
 .ig-login-btn {
-  margin-top: 0.7rem;
+  margin-top: 0.5rem;
   width: 100%;
-  padding: 0.5rem;
+  /* #login-b - 홈 잔액 카드와 같은 남색(--user-card-bg), 높이 3.2rem. 이 버튼은 user.html
+     전용이라 공용 액센트(--accent-cyan) 결정과 무관하게 회원 앱 톤에 맞춘다. */
+  height: 3.2rem;
+  padding: 0 0.5rem;
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   font-weight: 700;
   color: #fff;
-  background: var(--accent-cyan);
+  background: var(--user-card-bg, #2d326e);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: filter 0.15s ease, transform 0.1s ease;
 }
@@ -724,28 +784,13 @@ body[data-theme="light"] .ig-field {
 .ig-login-btn:active {
   transform: scale(0.99);
 }
-
-/* ---- "또는" 구분선 ---- */
-.ig-login-divider {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin: 1.5rem 0;
-  color: var(--text-dim);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.ig-login-divider::before,
-.ig-login-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border-glass);
+.ig-login-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
 }
 
 .ig-login-hint {
-  margin: 0;
+  margin: 1.4rem 0 0;
   text-align: center;
   font-size: 0.82rem;
   line-height: 1.55;

@@ -112,6 +112,12 @@ self.addEventListener("notificationclick", (event) => {
           if (deepLinkCategory) {
             client.postMessage({ type: "admin-notification-deeplink", category: deepLinkCategory, entityId: deepLinkEntityId });
           }
+          // 회원 앱 알림(입금 확인/결제 완료 등)은 이미 열린 탭이 다른 탭(이용내역/내 정보 등)에
+          // 가 있어도 홈으로 돌려보낸다 - 입금 확인 알림을 눌렀는데 충전 대기 잔액 카드가 안 보이면
+          // 안 되므로(#home-b). user.js의 navigator.serviceWorker "message" 리스너 참고.
+          if (targetPath === "/user" || targetPath === "/user.html") {
+            client.postMessage({ type: "user-notification-open", view: "home" });
+          }
           return client.focus();
         }
       }
