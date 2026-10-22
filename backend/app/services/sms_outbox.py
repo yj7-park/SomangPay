@@ -41,6 +41,17 @@ def validate_phone(raw: str) -> str:
     return phone
 
 
+def blocked_recipient(db: Session, phone: str, user_id: Optional[int]) -> Optional[models.User]:
+    """받는 사람이 ACTIVE가 아닌 회원(비활성 INACTIVE / 정지 SUSPENDED)이면 그 회원을 돌려준다(#inactive).
+    회원 지정 없이 번호만 넣은 문자도 그 번호의 회원이 있으면 똑같이 막는다."""
+    user = db.get(models.User, user_id) if user_id else None
+    if user is None and phone:
+        user = db.query(models.User).filter(models.User.phone == phone).first()
+    if user is not None and user.status != "ACTIVE":
+        return user
+    return None
+
+
 def enqueue_sms(
     db: Session,
     to_phone: str,
@@ -57,6 +68,9 @@ def enqueue_sms(
         raise ValueError("보낼 내용을 입력하세요.")
     if len(text) > SMS_BODY_MAX_LEN:
         raise ValueError(f"내용은 {SMS_BODY_MAX_LEN}자 이내로 입력하세요.")
+    blocked = blocked_recipient(db, phone, user_id)
+    if blocked is not None:
+        raise ValueError(f"{blocked.name}님은 {'비활성' if blocked.status == 'INACTIVE' else '정지'} 회원이라 문자를 보낼 수 없습니다.")
 
     row = models.SmsOutbox(
         to_phone=phone,
@@ -123,6 +137,16 @@ def claim_messages(db: Session, device_id: str, device_name: Optional[str], limi
         .all()
     )
     now = _now()
+    sendable = []
+    for row in rows:
+        # 대기열에 들어간 뒤 비활성/정지로 바뀐 회원에게는 보내지 않는다(#inactive).
+        blocked = blocked_recipient(db, row.to_phone, row.user_id)
+        if blocked is not None:
+            row.status = "FAILED"
+            row.error = "받는 회원이 비활성/정지 상태라 발송하지 않음"
+            continue
+        sendable.append(row)
+    rows = sendable
     for row in rows:
         row.status = "SENDING"
         row.sender_device_id = device_id

@@ -253,6 +253,13 @@ def _migrate_and_seed():
 
         # 미완료 충전 안내 문자(services/deposit_reminder.py) - 한 입금 건에 한 번만 보내기 위한 표시.
         _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;", "bank_transactions.reminder_sent_at")
+
+        # 교적 명단 일괄 등록(#inactive) - 나이만 아는 회원용 출생연도, 직분/소속, 프로필 사진 유무.
+        # 사진 바이너리는 user_photos 테이블(아래 create_all이 만든다).
+        _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_year INTEGER;", "users.birth_year")
+        _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS church_position VARCHAR(20);", "users.church_position")
+        _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS church_group VARCHAR(100);", "users.church_group")
+        _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_updated_at TIMESTAMP;", "users.photo_updated_at")
         if not is_sqlite:
             try:
                 _add_password_set_column(db)

@@ -1624,14 +1624,16 @@ function renderDashboard(stats) {
 
 function renderMemberFeedCard(u) {
   const isActive = u.status === "ACTIVE";
+  const dotClass = isActive ? "" : (u.status === "INACTIVE" ? "inactive" : "suspended");
   const div = document.createElement("div");
   div.className = "glass-container member-card";
   div.onclick = () => openMemberDetail(u.id);
   div.innerHTML = `
     <div class="member-card-info">
       <div class="member-card-name">
-        <span class="status-dot ${isActive ? '' : 'suspended'}"></span>${u.name}
+        <span class="status-dot ${dotClass}"></span>${u.name}
         ${u.user_type === 'SENIOR' ? '<span class="badge-tag badge-senior" style="margin-left: 0.4rem;">시니어</span>' : ''}
+        ${u.status === 'INACTIVE' ? '<span class="badge-tag badge-inactive" style="margin-left: 0.4rem;">비활성</span>' : ''}
       </div>
       <div class="member-card-sub">${u.phone ? formatPhoneDisplay(u.phone) : '연락처 없음'}</div>
     </div>
@@ -1907,11 +1909,17 @@ function renderMemberDetail() {
   const badge = document.getElementById("detail-member-badge");
   badge.style.display = user.user_type === 'SENIOR' ? "" : "none";
   const statusEl = document.getElementById("detail-member-status");
-  statusEl.style.display = isActive ? "none" : "";
+  // 비활성(INACTIVE)은 이름 옆 스위치가 이미 보여주므로 칩은 정지일 때만 띄운다(#inactive).
+  statusEl.style.display = user.status === "SUSPENDED" ? "" : "none";
+  renderDetailActiveSwitch(user);
+  loadDetailMemberPhoto(user);
   document.getElementById("detail-member-head-phone").innerText = user.phone ? formatPhoneDisplay(user.phone) : "연락처 없음";
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("detail-member-phone").innerText = user.phone ? formatPhoneDisplay(user.phone) : "-";
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
+  document.getElementById("detail-member-age").innerText = user.age != null ? `${user.age}세` : "-";
+  document.getElementById("detail-member-church").innerText =
+    [user.church_position, user.church_group].filter(Boolean).join(" · ") || "-";
   // 앱 비밀번호를 직접 정했는지(#activation) - 안 정했으면 첫 로그인 때 문자 인증을 거친다.
   document.getElementById("detail-member-app-status").innerText = user.password_set ? "사용 중" : "아직 가입 전 (첫 로그인 때 문자 인증)";
 
@@ -1925,9 +1933,10 @@ function renderMemberDetail() {
 function renderEditModalStatusButton(user) {
   const statusBtn = document.getElementById("edit-user-status-btn");
   if (!statusBtn) return;
-  const isActive = user.status === "ACTIVE";
+  // 정지(SUSPENDED) 전용 버튼 - 활성/비활성 전환은 회원 상세 이름 옆 스위치가 맡는다(#inactive).
+  const isActive = user.status !== "SUSPENDED";
   const isAdminUser = user.role === "ADMIN";
-  statusBtn.innerText = isActive ? "계정 정지" : "계정 활성";
+  statusBtn.innerText = isActive ? "계정 정지" : "정지 해제";
   statusBtn.style.background = isActive ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)";
   statusBtn.style.color = isActive ? "var(--icon-danger)" : "var(--accent-emerald)";
   statusBtn.disabled = isActive && isAdminUser;
@@ -2045,11 +2054,104 @@ async function deleteDetailCard(cardId) {
   }
 }
 
+// 회원 상세 이름 옆 활성/비활성 스위치(#inactive). 비활성 회원은 로그인/결제/입금 처리/문자가
+// 전부 막힌다(서버 models.User.status). 관리자 계정과 정지 회원은 스위치를 숨긴다.
+function renderDetailActiveSwitch(user) {
+  const wrap = document.getElementById("detail-member-active-wrap");
+  if (!wrap) return;
+  const show = user.role !== "ADMIN" && user.status !== "SUSPENDED";
+  wrap.style.display = show ? "" : "none";
+  if (!show) return;
+  const on = user.status === "ACTIVE";
+  const btn = document.getElementById("detail-member-active-toggle");
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-checked", on ? "true" : "false");
+  document.getElementById("detail-member-active-label").innerText = on ? "활성" : "비활성";
+}
+
+async function toggleDetailUserActive() {
+  const user = users.find(u => u.id === currentDetailUserId);
+  if (!user || user.status === "SUSPENDED") return;
+  const newStatus = user.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+  const msg = newStatus === "ACTIVE"
+    ? `${user.name}님을 활성화할까요? 결제, 입금 처리, 문자 발송이 가능해집니다.`
+    : `${user.name}님을 비활성으로 바꿀까요? 로그인, 결제, 입금 처리, 문자 발송이 모두 막힙니다.`;
+  if (!(await showConfirmModal(msg))) return;
+  const btn = document.getElementById("detail-member-active-toggle");
+  btn.disabled = true;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/users/${user.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (res.ok) {
+      await loadAdminUsers();
+      renderMemberDetail();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("toggleDetailUserActive error:", err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 프로필 사진(#inactive) - 관리자 토큰이 필요한 API라 <img src>로 직접 못 걸고 fetch → blob URL.
+// 같은 사진(photo_updated_at)이면 다시 받지 않는다.
+const detailPhotoCache = new Map(); // `${id}:${photo_updated_at}` -> blob URL
+async function loadDetailMemberPhoto(user) {
+  const img = document.getElementById("detail-member-photo");
+  if (!img) return;
+  if (!user.photo_updated_at) {
+    img.style.display = "none";
+    img.removeAttribute("src");
+    return;
+  }
+  const key = `${user.id}:${user.photo_updated_at}`;
+  let url = detailPhotoCache.get(key);
+  if (!url) {
+    img.style.display = "none"; // 받는 동안 이전 회원 사진이 남아 보이지 않게
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/users/${user.id}/photo`);
+      if (!res.ok) throw new Error(String(res.status));
+      url = URL.createObjectURL(await res.blob());
+      detailPhotoCache.set(key, url);
+    } catch (err) {
+      console.error("loadDetailMemberPhoto error:", err);
+      return;
+    }
+  }
+  if (currentDetailUserId !== user.id) return; // 받는 사이 다른 회원으로 넘어감
+  img.src = url;
+  img.style.display = "";
+}
+
+// 생년월일/나이를 입력하면 회원 구분을 기준(70세 이상 시니어)에 맞춰 바꿔준다(#inactive) -
+// 그 뒤에 관리자가 구분을 직접 바꾸는 건 그대로 둔다(입력할 때만 제안).
+const SENIOR_AGE = 70;
+function suggestSeniorType(typeId, birthId, ageId) {
+  const birth = document.getElementById(birthId).value;
+  const ageRaw = document.getElementById(ageId).value;
+  let age = null;
+  if (birth) {
+    const b = new Date(birth), t = new Date();
+    const beforeBirthday = t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate());
+    age = t.getFullYear() - b.getFullYear() - (beforeBirthday ? 1 : 0);
+  } else if (ageRaw !== "") {
+    age = parseInt(ageRaw, 10);
+  }
+  if (age == null || Number.isNaN(age)) return;
+  document.getElementById(typeId).value = age >= SENIOR_AGE ? "SENIOR" : "GENERAL";
+}
+
 async function toggleDetailUserStatus() {
   const user = users.find(u => u.id === currentDetailUserId);
   if (!user) return;
-  const newStatus = user.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-  const label = newStatus === "SUSPENDED" ? "정지" : "활성화";
+  const newStatus = user.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
+  const label = newStatus === "SUSPENDED" ? "정지" : "정지 해제(활성)";
   if (!(await showConfirmModal(`${user.name}님을 ${label}하시겠습니까? 정지된 회원은 즉시 결제가 차단됩니다.`))) return;
 
   try {
@@ -2386,10 +2488,10 @@ function depositNameMatchQuality(name, query) {
 function bestDepositCandidate() {
   const query = (document.getElementById("dd-user-search").value || "").trim();
   let best = null, bestRank = 0;
-  // 정지 회원은 충전 대상으로 잘못 골라 붙이기 쉬우니 후보에서 아예 뺀다 - 사용자
-  // 관리 탭 검색 목록과 같은 기준(users.js의 활성 회원 필터, admin.js 1560행 참고).
+  // 정지/비활성 회원은 충전할 수 없으니(서버가 거부, #inactive) 후보에서 아예 뺀다 -
+  // 비활성 회원 입금이면 회원 상세에서 먼저 활성화한 뒤 다시 처리한다.
   for (const u of users) {
-    if (u.status === "SUSPENDED") continue;
+    if (u.status !== "ACTIVE") continue;
     const quality = depositNameMatchQuality(u.name, query);
     const rank = quality === "exact" ? 2 : quality === "similar" ? 1 : 0;
     if (rank > bestRank) { bestRank = rank; best = u; }
@@ -2404,7 +2506,7 @@ function renderDepositUserOptions() {
   const queryLower = query.toLowerCase();
   const matchQualityRank = { exact: 2, similar: 1 };
   const matches = users
-    .filter(u => u.status !== "SUSPENDED")
+    .filter(u => u.status === "ACTIVE")
     .filter(u => !queryLower || u.name.toLowerCase().includes(queryLower) || (u.phone || "").includes(queryLower))
     .map(u => ({ u, quality: depositNameMatchQuality(u.name, query) }))
     .sort((a, b) => (matchQualityRank[b.quality] || 0) - (matchQualityRank[a.quality] || 0))
@@ -3160,6 +3262,7 @@ async function submitProxyRegister(btn) {
   const phone = document.getElementById("reg-phone").value.trim();
   const userType = document.getElementById("reg-type").value;
   const birthDate = document.getElementById("reg-birth-date").value;
+  const ageRaw = document.getElementById("reg-age").value;
   const credit = parseInt(document.getElementById("reg-credit").value) || 0;
 
   if (!name) {
@@ -3181,6 +3284,7 @@ async function submitProxyRegister(btn) {
           phone: phone,
           user_type: userType,
           birth_date: birthDate || null,
+          age: !birthDate && ageRaw !== "" ? parseInt(ageRaw, 10) : null,
           initial_credit: credit
         })
       });
@@ -3191,6 +3295,7 @@ async function submitProxyRegister(btn) {
         document.getElementById("reg-name").value = "";
         document.getElementById("reg-phone").value = "";
         document.getElementById("reg-birth-date").value = "";
+        document.getElementById("reg-age").value = "";
         document.getElementById("reg-credit").value = "0";
         await loadAdminUsers();
         await loadAdminCards();
@@ -3220,6 +3325,7 @@ function openEditUserModal(userId) {
   document.getElementById("edit-user-phone").value = user.phone || "";
   document.getElementById("edit-user-type").value = user.user_type === "SENIOR" ? "SENIOR" : "GENERAL";
   document.getElementById("edit-user-birth-date").value = user.birth_date || "";
+  document.getElementById("edit-user-age").value = !user.birth_date && user.age != null ? user.age : "";
   document.getElementById("edit-user-password").value = "";
   renderEditModalStatusButton(user);
 
@@ -3239,6 +3345,7 @@ async function submitUserInfoEdit(btn) {
   const phone = document.getElementById("edit-user-phone").value.trim();
   const userType = document.getElementById("edit-user-type").value;
   const birthDate = document.getElementById("edit-user-birth-date").value; // "" -> 지움
+  const ageRaw = document.getElementById("edit-user-age").value; // "" -> 지움(생년월일이 있으면 무시)
   const newPassword = document.getElementById("edit-user-password").value.trim();
 
   if (!name) {
@@ -3256,6 +3363,7 @@ async function submitUserInfoEdit(btn) {
           phone: phone,
           user_type: userType,
           birth_date: birthDate || null,
+          age: !birthDate && ageRaw !== "" ? parseInt(ageRaw, 10) : null,
           new_password: newPassword || null
         })
       });

@@ -15,7 +15,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261022_2301">
+  <link rel="stylesheet" href="src/style.css?v=20261022_2302">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20261022_2300">
   <script src="jsQR.min.js"></script>
   <script>
@@ -424,9 +424,19 @@
         <!-- #admin-b - 회원 앱 "내 정보"처럼 이름 + 연락처를 머리에 두고, 잔액은 회원 앱 홈과 같은
              남색 카드로. 일반/활성 같은 기본값 배지는 숨기고 시니어/정지만 띄운다(admin.js
              renderMemberDetail). 연락처/생년월일은 카드 안 설명문 대신 목록 행으로. -->
+        <!-- #inactive - 프로필 사진(있을 때만, admin.js loadDetailMemberPhoto)과 이름 오른쪽
+             활성/비활성 스위치(toggleDetailUserActive). 정지 회원/관리자는 스위치를 숨긴다 -
+             정지 해제는 정보수정 모달의 "계정 활성" 버튼에서. -->
         <div class="detail-header">
+          <img id="detail-member-photo" class="detail-member-photo" alt="" style="display: none;">
           <div class="detail-header-id">
-            <h2 id="detail-member-name">-</h2>
+            <div class="detail-name-row">
+              <h2 id="detail-member-name">-</h2>
+              <div class="detail-active-switch" id="detail-member-active-wrap" style="display: none;">
+                <span id="detail-member-active-label" class="switch-status">비활성</span>
+                <button id="detail-member-active-toggle" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="회원 활성" onclick="toggleDetailUserActive()"><span class="switch-knob"></span></button>
+              </div>
+            </div>
             <div class="detail-member-head-phone" id="detail-member-head-phone">-</div>
             <div class="detail-header-tags">
               <span id="detail-member-badge" class="badge-tag badge-senior" style="display: none;">시니어</span>
@@ -448,6 +458,8 @@
         <div class="glass-container user-list-group">
           <div class="user-list-row"><span>연락처 (로그인 ID)</span><span class="user-list-value" id="detail-member-phone">-</span></div>
           <div class="user-list-row"><span>생년월일</span><span class="user-list-value" id="detail-member-birth-date">-</span></div>
+          <div class="user-list-row"><span>나이</span><span class="user-list-value" id="detail-member-age">-</span></div>
+          <div class="user-list-row"><span>직분 · 소속</span><span class="user-list-value" id="detail-member-church">-</span></div>
           <div class="user-list-row"><span>회원 앱</span><span class="user-list-value" id="detail-member-app-status">-</span></div>
           <button type="button" class="user-list-row user-list-button" onclick="openSmsComposeModal(currentDetailUserId)"><span>문자 보내기</span><span class="user-list-value user-list-chev">›</span></button>
         </div>
@@ -583,7 +595,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">생년월일 (선택)</label>
-          <input type="date" id="reg-birth-date" class="form-control">
+          <input type="date" id="reg-birth-date" class="form-control" oninput="suggestSeniorType('reg-type', 'reg-birth-date', 'reg-age')">
+        </div>
+        <div class="form-group">
+          <label class="form-label">나이 (선택 - 생년월일을 모를 때, 70세 이상은 시니어)</label>
+          <input type="number" id="reg-age" class="form-control" min="0" max="130" inputmode="numeric" oninput="suggestSeniorType('reg-type', 'reg-birth-date', 'reg-age')">
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label">초기 크레딧 충전액 (원)</label>
@@ -745,7 +761,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">생년월일 (선택 - 비워두면 지워짐)</label>
-          <input type="date" id="edit-user-birth-date" class="form-control">
+          <input type="date" id="edit-user-birth-date" class="form-control" oninput="suggestSeniorType('edit-user-type', 'edit-user-birth-date', 'edit-user-age')">
+        </div>
+        <div class="form-group">
+          <label class="form-label">나이 (생년월일이 있으면 그쪽이 우선, 70세 이상은 시니어)</label>
+          <input type="number" id="edit-user-age" class="form-control" min="0" max="130" inputmode="numeric" oninput="suggestSeniorType('edit-user-type', 'edit-user-birth-date', 'edit-user-age')">
         </div>
         <div class="form-group">
           <label class="form-label">비밀번호 초기화 (선택 - 비워두면 변경 안 함)</label>
@@ -881,6 +901,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261022_2301"></script>
+  <script src="src/admin.js?v=20261022_2302"></script>
 </body>
 </html>

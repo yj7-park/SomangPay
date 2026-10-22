@@ -264,6 +264,33 @@
   `/user?deny=<입금id>-<회원id>-<서명>` → 회원 앱 모달 → `POST /api/deposits/deny/<토큰>`이
   입금을 ERROR(매칭 해제, 메모 "회원이 본인 입금 아님으로 알림")로 돌리고 관리자에게 알림.
   `PUBLIC_BASE_URL`은 docker-compose 기본값이 운영 도메인, dev 서버 `.env`엔 dev 도메인을 넣어 뒀다.
+  **활성(`status=ACTIVE`)이면서 가입한(`password_set`) 회원에게만** 보낸다(#inactive).
+
+## 회원 상태: 활성 / 비활성 / 정지 (2026-10-22, #inactive)
+
+- `users.status`는 `ACTIVE` / `INACTIVE` / `SUSPENDED`. **비활성(INACTIVE)**은 아직 서비스를 열어주지
+  않은 회원(교적 명단으로 일괄 등록한 사람 등) - 회원 목록엔 회색 "비활성" 배지로 그대로 보이고,
+  회원 상세 **이름 오른쪽 스위치**로 활성/비활성을 바꾼다. **정지(SUSPENDED)**는 분실 등으로 막은
+  회원이라 목록에서 숨기고(개발자 메뉴의 정지 목록), 정보수정 모달의 "계정 정지/정지 해제"로만 바꾼다.
+- 차단 쪽 코드는 전부 `status == "ACTIVE"`를 본다 - 그래서 비활성/정지는 똑같이 **로그인, 첫 로그인
+  인증 문자, 결제(`/api/payments/pay`), 입금 자동 매칭(→ ERROR + 메모 "비활성 회원(이름) 입금 - 활성화
+  후 처리"), 관리자 직권 충전/입금 지정, 모든 문자 발송**이 막힌다. 문자는 `enqueue_sms`가 받는 사람
+  (user_id 또는 그 번호의 회원)을 검사하고, APK claim 때 한 번 더 걸러 대기 중 비활성으로 바뀐 건은
+  FAILED로 버린다. 새 차단 경로를 만들 땐 `!= "SUSPENDED"`가 아니라 `== "ACTIVE"`로 검사할 것.
+- **나이/시니어**: 나이는 저장하지 않고 `users.birth_year`(= 등록한 해 - 그때 나이)로 두고 응답의
+  `age`(computed)로 계산한다(`services/member_age.py`, 생년월일이 있으면 그쪽 우선). 시니어 기준은
+  **70세 이상**(`SENIOR_AGE`) - 등록/수정 모달에서 생년월일·나이를 입력하면 구분을 자동으로 맞춰주지만,
+  가격 계산은 여전히 저장된 `user_type`을 본다(해가 바뀌어 70세가 돼도 자동으로 바뀌지는 않음).
+- 직분/소속은 `users.church_position` / `church_group`(참고용), 프로필 사진은 `user_photos` 테이블
+  (목록 조회를 가볍게 하려고 분리) + `users.photo_updated_at`(NULL이면 사진 없음). 사진 API
+  `GET /api/admin/users/{id}/photo`는 관리자 토큰이 필요해서 admin.js가 fetch → blob URL로 띄운다.
+- **교적 명단 일괄 등록**: `python -m app.tools.import_members <dir> [--apply]`(backend 컨테이너 안,
+  `--apply` 없으면 미리보기). `<dir>/members.jsonl` + `photos/`. 새 회원은 INACTIVE + 가입 전 + QR 발급,
+  같은 번호 회원이 있으면 비어 있는 참고 정보만 보강(상태는 안 건드림), 같은 이름의 다른 회원은 건너뜀,
+  명단 안에서 번호가 겹치면 뒤 사람은 번호 없이(username `noph-<이름>`). 다시 돌려도 안전.
+  명단은 실제 교인 개인정보라 **저장소에 넣지 말고** 컨테이너 /tmp에 잠깐 복사해 쓰고 지운다.
+  명단 원본은 지저스온 교회요람 > 직분자명단(802명)을 S25 Ultra에서 adb(uiautomator 덤프 + 화면
+  캡처 크롭)로 긁어 왔다(2026-10-22, 기본 아바타 27장은 사진 없음으로 처리).
 
 ## 개발/운영 환경 구분 (디버그 뱃지)
 

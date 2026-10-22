@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from sqlalchemy import Column, Integer, String, BigInteger, Boolean, Date, DateTime, ForeignKey, Text, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, BigInteger, Boolean, Date, DateTime, ForeignKey, Text, Enum, UniqueConstraint, LargeBinary
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -14,20 +14,43 @@ class User(Base):
     role = Column(String(20), default="USER") # USER, ADMIN, MERCHANT
     user_type = Column(String(20), default="GENERAL") # GENERAL, SENIOR
     birth_date = Column(Date, nullable=True) # 선택 입력 - 시니어 할인 등 참고용, 로그인/매칭에는 미사용
+    # 생년월일을 모르고 나이만 아는 회원(교적 앱에서 가져온 명단 등)용. 나이를 그대로 저장하면
+    # 해가 바뀔 때마다 틀어지므로 "올해 - 나이"로 출생연도를 저장하고 나이는 응답 때 계산한다
+    # (schemas.UserResponse.age). birth_date가 있으면 그쪽이 우선.
+    birth_year = Column(Integer, nullable=True)
+    church_position = Column(String(20), nullable=True) # 직분(집사/권사/장로 ...) - 참고용
+    church_group = Column(String(100), nullable=True) # 소속(공동체/교구/순) - 참고용
     bank_name = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)
     account_number = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)
     credit_balance = Column(Integer, default=0, nullable=False)
     password_hash = Column(String(200), default="1234", nullable=True) # 기본 비밀번호 1234
-    status = Column(String(20), default="ACTIVE") # ACTIVE, SUSPENDED
+    # ACTIVE / INACTIVE / SUSPENDED. INACTIVE(비활성)는 아직 서비스를 열어주지 않은 회원 -
+    # 회원 목록에는 그대로 보이지만 로그인/결제/입금 처리/문자 발송이 전부 막힌다(관리자가
+    # 회원 상세에서 토글). SUSPENDED(정지)는 분실 등으로 막은 회원이라 목록에서도 숨긴다.
+    # 막는 쪽 코드는 전부 `status == "ACTIVE"`로 검사하므로 두 상태가 똑같이 차단된다.
+    status = Column(String(20), default="ACTIVE")
     # 회원이 직접 비밀번호를 정했는지(#activation). False면 앱 로그인 전에 문자 인증번호 →
     # 비밀번호 설정을 먼저 거친다(앱 계정 "미활성"). 카드/키오스크 결제와는 무관 - status만 본다.
     password_set = Column(Boolean, default=False, nullable=False)
+    # 프로필 사진을 마지막으로 바꾼 시각 - NULL이면 사진 없음. 이미지 자체는 회원 목록 조회가
+    # 무거워지지 않게 user_photos에 따로 두고, 이 값은 사진 URL 캐시버스팅(?v=)에도 쓴다.
+    photo_updated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     cards = relationship("NFCCard", back_populates="owner")
     deposits = relationship("DepositHistory", foreign_keys="[DepositHistory.user_id]", back_populates="user")
     payments = relationship("PaymentTransaction", back_populates="user")
+
+class UserPhoto(Base):
+    """회원 프로필 사진(관리자 화면 표시용). users와 1:1 - 목록 조회 때 바이너리를 안 끌고
+    오도록 별도 테이블로 뺐다."""
+    __tablename__ = "user_photos"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    content_type = Column(String(50), nullable=False, default="image/png")
+    image = Column(LargeBinary, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class Product(Base):
     __tablename__ = "products"

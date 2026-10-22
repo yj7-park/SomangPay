@@ -74,7 +74,9 @@ def send_due_reminders(db: Session) -> int:
     sent = 0
     for txn in candidates:
         user = db.get(models.User, txn.matched_user_id)
-        if not user or user.status != "ACTIVE" or not user.phone:
+        # 활성 회원 중에서도 앱에 가입한(첫 로그인에서 비밀번호를 정한) 회원에게만 보낸다(#inactive) -
+        # 가입 전 회원은 문자 속 링크/앱으로 충전을 마칠 수가 없다.
+        if not user or user.status != "ACTIVE" or not user.password_set or not user.phone:
             continue
         claimed = db.query(models.BankTransaction).filter(
             models.BankTransaction.id == txn.id,

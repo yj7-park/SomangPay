@@ -82,6 +82,8 @@ def _sms_state(row: models.UserActivationCode, sms: models.SmsOutbox, now: datet
 def request_code(db: Session, user: models.User) -> models.UserActivationCode:
     if not needs_activation(user):
         raise ActivationError("이미 비밀번호를 정한 계정이에요. 비밀번호로 로그인해 주세요.")
+    if user.status == "INACTIVE":
+        raise ActivationError("아직 이용이 열리지 않은 계정이에요. 교회 사무실에 문의해 주세요.", 403)
     if user.status != "ACTIVE":
         raise ActivationError("이용이 정지된 계정이에요. 교회 사무실에 문의해 주세요.", 403)
     if not user.phone:

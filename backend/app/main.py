@@ -5,7 +5,7 @@ import json
 import os
 import uuid
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Header, Request, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Header, Request, WebSocket, WebSocketDisconnect, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +22,7 @@ from app.services.deposit_matcher import match_new_deposit
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
+from app.services.member_age import birth_year_from_age
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
 
 app = FastAPI(
@@ -556,6 +557,7 @@ async def admin_register_user(
         phone=phone,
         user_type=req.user_type,
         birth_date=req.birth_date,
+        birth_year=None if req.birth_date else birth_year_from_age(req.age),
         bank_name=req.bank_name,
         account_number=req.account_number,
         credit_balance=req.initial_credit,
@@ -610,8 +612,10 @@ async def admin_update_user(
             raise HTTPException(status_code=400, detail="이미 사용 중인 이름입니다. 동명이인이라면 구분되는 이름(예: 홍길동B)을 입력해주세요.")
         user.name = req.name
     if req.phone is not None:
-        phone = normalize_phone(req.phone)
-        if db.query(models.User).filter(models.User.phone == phone, models.User.id != user_id).first():
+        # 빈칸이면 ""가 아니라 NULL로 둔다 - phone은 유일 인덱스라 번호 없는 회원 둘이 ""를
+        # 저장하면 두 번째부터 수정이 막힌다(#inactive, 번호 없이 등록된 교적 명단 회원).
+        phone = normalize_phone(req.phone) or None
+        if phone and db.query(models.User).filter(models.User.phone == phone, models.User.id != user_id).first():
             raise HTTPException(status_code=400, detail="이미 등록된 전화번호입니다.")
         user.phone = phone
     if req.user_type is not None:
@@ -620,6 +624,8 @@ async def admin_update_user(
     # 선택 항목이라 비워서 지우는 것 자체가 유효한 수정이라, None을 "생략됨"으로 취급하면
     # 한 번 입력한 생년월일을 다시 지울 방법이 없어진다.
     user.birth_date = req.birth_date
+    if "age" in req.model_fields_set:
+        user.birth_year = birth_year_from_age(req.age)
     if req.bank_name is not None:
         user.bank_name = req.bank_name
     if req.account_number is not None:
@@ -639,6 +645,28 @@ async def admin_update_user(
     await notify_user(user.id, ["me"])
     return user
 
+def _require_active_for_deposit(user: models.User) -> None:
+    """비활성/정지 회원에게는 입금(충전)을 반영하지 않는다(#inactive)."""
+    if user.status != "ACTIVE":
+        state = "비활성" if user.status == "INACTIVE" else "정지"
+        raise HTTPException(status_code=400, detail=f"{user.name}님은 {state} 회원이라 충전할 수 없습니다. 먼저 활성화해 주세요.")
+
+
+@app.get("/api/admin/users/{user_id}/photo")
+def admin_get_user_photo(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """회원 프로필 사진(관리자 회원 상세용). 관리자 토큰이 헤더로 필요해 <img src>로 직접은
+    못 쓰고, admin.js가 fetch → blob URL로 띄운다."""
+    photo = db.get(models.UserPhoto, user_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="사진이 없습니다.")
+    return Response(content=photo.image, media_type=photo.content_type,
+                    headers={"Cache-Control": "private, max-age=86400"})
+
+
 @app.post("/api/admin/recharge-credit")
 async def admin_recharge_credit(
     req: schemas.AdminRechargeRequest,
@@ -651,6 +679,7 @@ async def admin_recharge_credit(
     user = db.query(models.User).filter(models.User.id == req.user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+    _require_active_for_deposit(user)
 
     user.credit_balance += req.amount
     db.add(models.DepositHistory(
@@ -716,14 +745,16 @@ async def update_user_status(
     db: Session = Depends(get_db),
     _admin: models.User = Depends(require_admin_auth),
 ):
-    """회원 정지/재활성화. 카드/휴대폰 분실 등으로 결제 자체를 즉시 막아야 할 때 사용."""
-    if req.status not in ("ACTIVE", "SUSPENDED"):
-        raise HTTPException(status_code=400, detail="status는 ACTIVE 또는 SUSPENDED만 가능합니다.")
+    """회원 활성/비활성/정지 전환. INACTIVE(비활성)는 아직 서비스를 열어주지 않은 회원(회원
+    상세 이름 옆 스위치), SUSPENDED(정지)는 카드/휴대폰 분실 등으로 결제를 즉시 막아야 할 때.
+    둘 다 로그인/결제/입금 처리/문자 발송이 막힌다(models.User.status 참고)."""
+    if req.status not in ("ACTIVE", "INACTIVE", "SUSPENDED"):
+        raise HTTPException(status_code=400, detail="status는 ACTIVE, INACTIVE, SUSPENDED만 가능합니다.")
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
-    if req.status == "SUSPENDED" and user.role == "ADMIN":
-        raise HTTPException(status_code=400, detail="관리자 계정은 정지할 수 없습니다.")
+    if req.status != "ACTIVE" and user.role == "ADMIN":
+        raise HTTPException(status_code=400, detail="관리자 계정은 비활성/정지할 수 없습니다.")
     user.status = req.status
     db.commit()
     await notify_admins(["users"])
@@ -1012,6 +1043,8 @@ def _process_nfc_payment_sync(db: Session, req: schemas.PaymentRequest):
         )
 
     user = db.query(models.User).filter(models.User.id == card.user_id).first()
+    if user and user.status == "INACTIVE":
+        raise HTTPException(status_code=400, detail="아직 이용이 열리지 않은 회원입니다. 교회 사무실에 문의해 주세요.")
     if not user or user.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="유효하지 않은 회원입니다.")
 
@@ -1086,6 +1119,8 @@ def _process_nfc_payment_sync(db: Session, req: schemas.PaymentRequest):
         .with_for_update()
         .first()
     )
+    if user and user.status == "INACTIVE":
+        raise HTTPException(status_code=400, detail="아직 이용이 열리지 않은 회원입니다. 교회 사무실에 문의해 주세요.")
     if not user or user.status != "ACTIVE":
         raise HTTPException(status_code=400, detail="유효하지 않은 회원입니다.")
 
@@ -1417,6 +1452,7 @@ async def admin_resolve_bank_transaction(
     user = db.query(models.User).filter(models.User.id == req.user_id).with_for_update().first()
     if not user:
         raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+    _require_active_for_deposit(user)
 
     txn.matched_user_id = user.id
     txn.status = "CREDITED_MANUAL"

@@ -1396,6 +1396,9 @@ body[data-theme="dark"] .pending-action-banner {
 .status-dot.suspended {
   background: var(--accent-danger);
 }
+.status-dot.inactive {
+  background: var(--text-muted);
+}
 
 /* 충전함(Inbox) - "최근 처리 내역" 피드(구 홈 탭 피드, 계좌 입금/충전 신청을 시간순으로
    합친 목록)를 보여준다. 예전엔 전용 스크롤 박스(.activity-feed-scroll)를 고정 높이로
@@ -1703,6 +1706,33 @@ body[data-theme="dark"] .pending-action-banner {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 회원 상세 머리(#inactive) - 프로필 사진(있을 때만) + 이름 오른쪽 활성/비활성 스위치. */
+.detail-member-photo {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-1);
+}
+.detail-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.detail-name-row h2 {
+  min-width: 0;
+  flex: 1;
+}
+.detail-active-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+.detail-active-switch .switch-status {
+  margin-left: 0;
+}
 .detail-header-tags {
   display: flex;
   align-items: center;
@@ -1858,6 +1888,12 @@ body[data-theme="dark"] .pending-action-banner {
   background: rgba(245, 158, 11, 0.18);
   color: var(--accent-senior);
   border: 1px solid rgba(245, 158, 11, 0.4);
+}
+/* 비활성 회원(#inactive) - 아직 서비스를 열어주지 않은 회원. 정지(빨강)와 구분되게 회색. */
+.badge-inactive {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.4);
 }
 
 .badge-general {
