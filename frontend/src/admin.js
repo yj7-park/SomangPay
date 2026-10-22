@@ -2421,7 +2421,10 @@ function openDepositDetailModal(txnId) {
   const txn = bankTransactions.find(t => t.id === txnId);
   if (!txn) return;
   _depositDetailTxn = txn;
-  _depositDetailSelectedUserId = txn.matched_user_id || null;
+  // 매칭 회원이라도 활성이 아니면(충전 불가, #inactive) 선택된 채로 시작하지 않는다 - 안 그러면
+  // 후보 목록엔 안 보이는데 버튼만 "충전 처리"가 된다.
+  const matched = users.find(u => u.id === txn.matched_user_id);
+  _depositDetailSelectedUserId = matched && matched.status === "ACTIVE" ? matched.id : null;
   renderDepositDetailModal();
   showModal("deposit-detail-modal");
 }
@@ -2530,6 +2533,8 @@ function renderDepositUserOptions() {
 
   if (matches.length === 0) {
     box.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">일치하는 회원이 없습니다.</p>`;
+    // 여기서 바로 끝내면 하단 버튼/메모가 직전에 연 모달 상태("충전 처리")로 남는다 - 항상 갱신.
+    renderDepositActionButton();
     return;
   }
 
