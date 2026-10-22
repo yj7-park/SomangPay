@@ -1,17 +1,17 @@
 {
   "kiosk": {
-    "versionCode": 47,
-    "versionName": "1.0.47",
+    "versionCode": 48,
+    "versionName": "1.0.48",
     "apkUrl": "/SomangPayKiosk.apk"
   },
   "admin": {
-    "versionCode": 47,
-    "versionName": "1.0.47",
+    "versionCode": 48,
+    "versionName": "1.0.48",
     "apkUrl": "/SomangPayAdmin.apk"
   },
   "user": {
-    "versionCode": 47,
-    "versionName": "1.0.47",
+    "versionCode": 48,
+    "versionName": "1.0.48",
     "apkUrl": "/SomangPayUser.apk"
   }
 }
