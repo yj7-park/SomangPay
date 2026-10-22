@@ -116,7 +116,8 @@ class BankTransaction(Base):
     상태: PENDING(회원 자동매칭됨, 회원이 앱에서 선택해 충전 대기) / ERROR(입금자명이 등록
     회원과 매칭 안 됨, 관리자만 조회 가능) / CREDITED(회원 본인이 선택해 충전 완료) /
     CREDITED_MANUAL(관리자가 회원을 지정해 대신 충전 완료) / OTHER(관리자가 사유를 남기고
-    충전 대상 아님으로 종결, 크레딧 미반영)."""
+    충전 대상 아님으로 종결, 크레딧 미반영) / INACTIVE(비활성 회원과 매칭 - 그 회원이 아직
+    시스템을 안 쓰던 때의 입금이라 아무 처리도 안 하고 그대로 둔다, 활성화해도 되살리지 않음)."""
     __tablename__ = "bank_transactions"
 
     id = Column(Integer, primary_key=True, index=True)

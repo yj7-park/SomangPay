@@ -1712,6 +1712,7 @@ const DEPOSIT_STATUS_META = {
   CREDITED: { text: "완료", cls: "status-done" },
   CREDITED_MANUAL: { text: "완료(예외)", cls: "status-done" },
   OTHER: { text: "기타", cls: "status-other" },
+  INACTIVE: { text: "비활성", cls: "status-inactive" },
 };
 
 // 충전함 제목 옆 필터 - 예전엔 키오스크 선택기와 같은 드롭다운(눌러야 펼쳐짐)이었는데(#26),
@@ -1719,8 +1720,17 @@ const DEPOSIT_STATUS_META = {
 // 처리할 게 있는지"가 중요한 화면이라 각 칩에 건수를 같이 보여주는 상시 노출 칩 행으로
 // 바꿨다(#redesign) - bankTransactions가 커서 없이 전체를 한 번에 불러오므로(loadBankTransactions)
 // 로컬 배열 길이를 세는 것만으로 카운트가 정확하다.
-const INBOX_FILTERS = ["ALL", "PENDING", "ERROR"];
-const INBOX_FILTER_LABEL = { ALL: "전체", PENDING: "대기", ERROR: "오류" };
+// 완료는 회원 본인 확정(CREDITED)과 관리자 대신 처리(CREDITED_MANUAL)를 합쳐 센다. 비활성
+// (INACTIVE, #inactive)은 비활성 회원과 매칭된 입금 - 아무 처리 없이 남겨 두는 건이라 오류와 따로 둔다.
+// 관리자가 사유를 남겨 종결한 "기타"(OTHER)는 전체에서만 보인다.
+const INBOX_FILTERS = ["ALL", "PENDING", "ERROR", "DONE", "INACTIVE"];
+const INBOX_FILTER_LABEL = { ALL: "전체", PENDING: "대기", ERROR: "오류", DONE: "완료", INACTIVE: "비활성" };
+const INBOX_FILTER_STATUSES = {
+  PENDING: ["PENDING"],
+  ERROR: ["ERROR"],
+  DONE: ["CREDITED", "CREDITED_MANUAL"],
+  INACTIVE: ["INACTIVE"],
+};
 let inboxDepositFilter = "ALL";
 
 function selectInboxFilter(filter) {
@@ -1734,8 +1744,11 @@ function renderInboxFilterSelector() {
   const row = document.getElementById("inbox-filter-chips");
   if (!row) return;
 
-  const counts = { ALL: bankTransactions.length, PENDING: 0, ERROR: 0 };
-  bankTransactions.forEach(t => { if (t.status === "PENDING" || t.status === "ERROR") counts[t.status]++; });
+  const counts = { ALL: bankTransactions.length };
+  for (const f of INBOX_FILTERS) {
+    if (f === "ALL") continue;
+    counts[f] = bankTransactions.filter(t => INBOX_FILTER_STATUSES[f].includes(t.status)).length;
+  }
 
   row.innerHTML = INBOX_FILTERS.map(f => `
     <button type="button" class="filter-chip ${f === "ERROR" ? "filter-chip-danger" : f === "PENDING" ? "filter-chip-amber" : ""} ${f === inboxDepositFilter ? "active" : ""}" onclick="selectInboxFilter('${f}')">
@@ -1746,7 +1759,7 @@ function renderInboxFilterSelector() {
 
 function buildDepositEvents(filter = inboxDepositFilter) {
   return bankTransactions
-    .filter(t => filter === "ALL" || t.status === filter)
+    .filter(t => filter === "ALL" || (INBOX_FILTER_STATUSES[filter] || [filter]).includes(t.status))
     .map(t => {
     // "SIM_" 접두사(processDepositDetection 참고)는 수신 시뮬레이션 버튼으로 등록된 테스트
     // 건이다 - 실제 입금과 겉모습이 똑같으면 관리자가 실제 수신으로 착각할 수 있어(실제로
@@ -1769,13 +1782,15 @@ function buildDepositEvents(filter = inboxDepositFilter) {
   }).sort((a, b) => new Date(b.time) - new Date(a.time));
 }
 
-// 심각도 우선(#redesign) - "전체" 필터에서는 처리 대기/오류가 먼저 정렬돼야 처리된 건들
-// 사이에 섞여 아래로 밀려나지 않는다. PENDING/ERROR만 보는 필터에서는 어차피 전부
-// needsAction이라 순서가 그대로다 - 이 함수는 항상 안전하게 호출해도 된다.
-function sortEventsBySeverity(events) {
-  const needsAction = events.filter(e => e.needsAction);
-  const resolved = events.filter(e => !e.needsAction);
-  return [...needsAction, ...resolved];
+// 충전함 날짜 묶음(#inactive) - 한국 시각 기준 날짜 키("2026. 10. 23. (금)" 형태)와 머리말 문구.
+function inboxDateKeyKST(iso) {
+  return new Date(iso).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
+}
+function inboxDateLabelKST(iso) {
+  const key = inboxDateKeyKST(iso);
+  if (key === inboxDateKeyKST(new Date().toISOString())) return "오늘";
+  if (key === inboxDateKeyKST(new Date(Date.now() - 86400000).toISOString())) return "어제";
+  return new Date(iso).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric", weekday: "short" });
 }
 
 function renderActivityLine(ev) {
@@ -1839,9 +1854,10 @@ function renderInboxActivityFeed() {
   const feed = document.getElementById("inbox-activity-feed");
   if (!feed) return;
 
-  // "전체" 필터에서는 처리 대기/오류를 먼저 보여준다 - PENDING/ERROR 단일 필터는 이미
-  // 전부 needsAction이라 순서가 그대로 유지된다.
-  activityFeedMergedCache = sortEventsBySeverity(buildDepositEvents());
+  // 모든 필터가 시간순(최신 먼저) - "전체"도 대기/완료/오류/비활성을 섞어 시간순으로 보여주고
+  // 날짜별로 묶는다(#inactive, 예전엔 대기/오류를 맨 위로 올리는 심각도 정렬이었다). 처리할 건은
+  // 필터 칩 건수와 대기/오류 필터로 찾는다.
+  activityFeedMergedCache = buildDepositEvents();
 
   feed.innerHTML = "";
   if (activityFeedMergedCache.length === 0) {
@@ -1850,15 +1866,15 @@ function renderInboxActivityFeed() {
   }
 
   const page = activityFeedMergedCache.slice(0, activityFeedLimit);
-  let dividedShown = false;
-  page.forEach((ev, i) => {
-    // 대기/오류 묶음에서 처리됨 묶음으로 넘어가는 첫 지점에 한 번만 구분선을 꽂는다.
-    if (!dividedShown && !ev.needsAction && i > 0 && page[i - 1].needsAction) {
-      const divider = document.createElement("div");
-      divider.className = "activity-resolved-divider";
-      divider.textContent = "처리됨";
-      feed.appendChild(divider);
-      dividedShown = true;
+  let lastDateKey = null;
+  page.forEach(ev => {
+    const dateKey = inboxDateKeyKST(ev.time);
+    if (dateKey !== lastDateKey) {
+      const header = document.createElement("div");
+      header.className = "activity-date-header";
+      header.textContent = inboxDateLabelKST(ev.time);
+      feed.appendChild(header);
+      lastDateKey = dateKey;
     }
     feed.appendChild(renderActivityCard(ev));
   });
@@ -2442,6 +2458,7 @@ function renderDepositDetailModal() {
   if (t.resolved_by_admin_name) infoLines.push(`처리자: ${escapeHtml(t.resolved_by_admin_name)}`);
   if (t.resolved_at) infoLines.push(`처리 시각: ${formatDateTimeKST(t.resolved_at)}`);
   if (t.resolution_memo) infoLines.push(`메모: ${escapeHtml(t.resolution_memo)}`);
+  if (t.status === "INACTIVE") infoLines.push("비활성 회원 앞으로 들어온 입금이라 충전하지 않고 그대로 둡니다(회원을 활성화해도 되살리지 않음).");
   if (infoLines.length > 0) {
     infoBox.style.display = "block";
     infoBox.innerHTML = infoLines.join("<br>");

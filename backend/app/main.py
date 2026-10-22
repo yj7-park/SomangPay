@@ -18,7 +18,7 @@ from app import models, schemas, security
 from app.cache import stats_cache
 from app.database import engine, get_db, init_db, SessionLocal
 from app.phone_utils import normalize_phone
-from app.services.deposit_matcher import match_new_deposit
+from app.services.deposit_matcher import match_new_deposit, park_inactive_deposits
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
@@ -150,6 +150,12 @@ def startup_db_seed():
             models.Product(name="특별 간식 세트", price_general=3500, price_senior=2500),
         ]
         db.add_all(products)
+
+    # 비활성 회원과 매칭되는 미처리 입금 정리(#inactive) - 다시 돌려도 안전, 대상이 없으면 무동작.
+    # 워커 4개가 동시에 돌아도 같은 행을 같은 값으로 바꿀 뿐이라 결과는 같다.
+    moved = park_inactive_deposits(db)
+    if moved:
+        print(f"bank_transactions: {moved}건을 비활성(INACTIVE)으로 분류")
 
     db.commit()
 
@@ -756,8 +762,9 @@ async def update_user_status(
     if req.status != "ACTIVE" and user.role == "ADMIN":
         raise HTTPException(status_code=400, detail="관리자 계정은 비활성/정지할 수 없습니다.")
     user.status = req.status
+    parked = park_inactive_deposits(db, user) if req.status == "INACTIVE" else 0
     db.commit()
-    await notify_admins(["users"])
+    await notify_admins(["users", "deposit_queue", "stats"] if parked else ["users"])
     await notify_user(user.id, ["me"])
     return {"success": True, "message": f"{user.name}님의 상태가 {req.status}로 변경되었습니다.", "status": user.status}
 

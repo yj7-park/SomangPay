@@ -26,6 +26,7 @@ import uuid
 from app import models, security
 from app.database import SessionLocal
 from app.phone_utils import normalize_phone
+from app.services.deposit_matcher import park_inactive_deposits
 from app.services.member_age import birth_year_from_age, user_type_for_age
 
 
@@ -146,6 +147,9 @@ def main(argv):
         if updated:
             more = f" 외 {len(updated) - 10}명" if len(updated) > 10 else ""
             print("  기존 회원:", ", ".join(updated[:10]) + more)
+        db.flush()
+        parked = park_inactive_deposits(db)
+        print(f"비활성 회원과 매칭되는 미처리 입금 {parked}건 -> 비활성 분류")
         if apply:
             db.commit()
             print("반영 완료")
