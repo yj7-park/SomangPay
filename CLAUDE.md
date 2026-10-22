@@ -225,6 +225,28 @@
   워커 로컬이라 다중 워커에서 일부 키오스크에 신호가 안 갈 수 있다. 근본 해결은
   매니저에 Redis pub/sub.
 
+## 문자(SMS) 발송 대기열 (2026-10-22, #sms-outbox)
+
+- 문자를 실제로 보낼 수 있는 건 **관리자 APK(안드로이드 SmsManager)뿐**이다. 웹/PWA 관리자 화면과
+  백엔드는 DB 대기열(`sms_outbox` 테이블)에 넣기만 하고, 설정 탭에서 **"이 기기에서 문자 발송"을
+  켠 관리자 APK**가 가져가 그 폰의 번호/요금제로 보낸다. 기본값은 꺼짐(켤 때 `SEND_SMS` 런타임 권한
+  요청) - 관리자 APK가 여러 대여도 켠 기기만 참여한다.
+- 백엔드에서 자동 발송을 붙일 땐 `app/services/sms_outbox.enqueue_sms(db, phone, body, source="system",
+  user_id=...)` 한 줄. API: `POST /api/admin/sms`(user_id 또는 to_phone), `GET /api/admin/sms`,
+  `GET /api/admin/sms/senders`, `POST /api/admin/sms/{id}/cancel|retry`, APK 전용
+  `POST /api/admin/sms/claim`, `POST /api/admin/sms/{id}/result`.
+- 흐름: QUEUED → (APK claim, `FOR UPDATE SKIP LOCKED`로 한 건은 한 기기만) SENDING → SENT/FAILED.
+  결과 보고 없이 10분 넘게 SENDING이면 다음 claim 때 QUEUED로 되돌림(3회 넘으면 FAILED), 24시간
+  아무 기기도 안 가져간 QUEUED는 만료(FAILED). 재시도는 새 행으로 다시 넣는다.
+- APK(`SmsOutboxSender.java`)는 `AdminAlertService`(상시 포그라운드 서비스)가 20초마다 폴링하고,
+  `notify_admins(["sms"])` 갱신 신호를 받으면 즉시 가져간다(WS가 워커 로컬이라 폴링이 기본).
+  폴링이 곧 하트비트라 `sms_sender_devices.last_seen_at` 90초 이내면 "연결됨"으로 표시된다.
+- 안드로이드는 짧은 시간에 많이 보내면(기본 30분 30건 안팎, 기기별 차이) 기기에 확인 팝업을 띄우고,
+  통신사도 하루 발송량/스팸 제한이 있다 - 대량 단체문자 용도가 아니다.
+- 이 서버(aarch64)엔 Android SDK가 없어 APK 빌드는 CI에서만 된다. 네이티브 코드 컴파일 확인은
+  android.jar(platform-35) + okhttp/zxing/androidx 클래스 jar를 classpath로 `javac`만 돌려서 했다
+  (BuildConfig/R은 스텁) - aapt/lint는 못 돌리니 CI 결과를 꼭 확인할 것.
+
 ## 개발/운영 환경 구분 (디버그 뱃지)
 
 개발 서버에서 뜨는 아이콘에는 빨간 "DEV" 리본이 붙어 운영과 눈으로 구분된다.

@@ -367,3 +367,51 @@ class UserStatsSummaryResponse(BaseModel):
     """유저 앱 홈 화면 기간 통계(오늘/이번달) - StatsSummaryResponse의 본인 전용 축소판."""
     today: StatsPeriod
     this_month: StatsPeriod
+
+# ---------------- 문자(SMS) 발송 대기열 (models.SmsOutbox) ----------------
+
+class SmsSendRequest(BaseModel):
+    """관리자 화면에서 문자 발송 요청. user_id를 주면 그 회원의 연락처로, 아니면 to_phone으로."""
+    user_id: Optional[int] = None
+    to_phone: Optional[str] = None
+    body: str
+
+class SmsOutboxResponse(BaseModel):
+    id: int
+    to_phone: str
+    body: str
+    status: str  # QUEUED, SENDING, SENT, FAILED, CANCELED
+    source: str
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    sender_device_id: Optional[str] = None
+    attempts: int
+    error: Optional[str] = None
+    created_at: UTCDatetime
+    claimed_at: Optional[UTCDatetime] = None
+    sent_at: Optional[UTCDatetime] = None
+
+    class Config:
+        from_attributes = True
+
+class SmsClaimRequest(BaseModel):
+    """관리자 APK가 보낼 문자를 가져갈 때 - device_id는 기기별 고정 식별자."""
+    device_id: str
+    device_name: Optional[str] = None
+    limit: int = 5
+
+class SmsClaimItem(BaseModel):
+    id: int
+    to_phone: str
+    body: str
+
+class SmsResultRequest(BaseModel):
+    device_id: str
+    success: bool
+    error: Optional[str] = None
+
+class SmsSenderStatus(BaseModel):
+    device_id: str
+    device_name: Optional[str] = None
+    last_seen_at: Optional[UTCDatetime] = None
+    online: bool

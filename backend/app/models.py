@@ -176,3 +176,37 @@ class PaymentLineItem(Base):
     quantity = Column(Integer, nullable=False)
     unit_price = Column(Integer, nullable=False)
     subtotal = Column(Integer, nullable=False)
+
+class SmsOutbox(Base):
+    """문자(SMS) 발송 대기열. 관리자 웹/PWA나 백엔드 코드는 여기에 행을 넣기만 하고(services/
+    sms_outbox.enqueue_sms), 실제 발송은 "이 기기에서 문자 발송"을 켠 관리자 APK가 주기적으로
+    POST /api/admin/sms/claim으로 가져가서 그 폰의 요금제/번호로 보낸 뒤 결과를 보고한다.
+    웹/PWA에는 문자를 보낼 방법이 없고, WS는 워커 로컬이라 신호가 안 닿을 수 있어 DB를 경유한다.
+
+    상태: QUEUED(대기) → SENDING(어느 기기가 가져감) → SENT(통신사 전송 성공) / FAILED(전송 실패 또는
+    만료). CANCELED(관리자가 대기 중 취소). SENDING에서 결과 보고 없이 오래 멈춰 있으면(기기가 꺼짐
+    등) 다음 claim 때 QUEUED로 되돌리거나 시도 횟수 초과 시 FAILED로 정리한다(sms_outbox.py)."""
+    __tablename__ = "sms_outbox"
+
+    id = Column(Integer, primary_key=True, index=True)
+    to_phone = Column(String(20), nullable=False)  # 숫자만(normalize_phone)
+    body = Column(Text, nullable=False)
+    status = Column(String(20), default="QUEUED", nullable=False, index=True)
+    source = Column(String(30), default="admin", nullable=False)  # admin(관리자 화면) / system(백엔드 자동) 등
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 받는 회원(회원 대상일 때만)
+    requested_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sender_device_id = Column(String(100), nullable=True)  # 가져간 APK 기기 식별자
+    attempts = Column(Integer, default=0, nullable=False)
+    error = Column(String(300), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    claimed_at = Column(DateTime, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+
+class SmsSenderDevice(Base):
+    """문자 발송을 켠 관리자 APK 기기 - claim 폴링마다 last_seen_at을 갱신한다. 관리자 화면에서
+    "지금 문자가 실제로 나갈 수 있는지(발송 기기가 살아 있는지)"를 보여주는 용도."""
+    __tablename__ = "sms_sender_devices"
+
+    device_id = Column(String(100), primary_key=True)
+    device_name = Column(String(100), nullable=True)
+    last_seen_at = Column(DateTime, nullable=True)

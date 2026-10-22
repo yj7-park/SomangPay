@@ -15,8 +15,8 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261022_1800">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20261022_1800">
+  <link rel="stylesheet" href="src/style.css?v=20261022_2000">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20261022_2000">
   <script src="jsQR.min.js"></script>
   <script>
     // 푸시 알림(Web Push)을 받으려면 서비스 워커 등록이 필요함 - kiosk.html/user.html과 동일한 패턴.
@@ -264,6 +264,30 @@
           </div>
         </div>
 
+        <!-- 문자 발송(#sms-outbox) - 웹/PWA는 문자를 직접 못 보내므로 백엔드 대기열(sms_outbox)에
+             넣기만 하고, "이 기기에서 문자 발송"을 켠 관리자 APK가 가져가 그 폰 번호로 보낸다.
+             위 스위치 행은 관리자 APK 안에서만 보인다(AndroidInterface.getSmsSenderStatus).
+             발송 기기가 하나도 안 켜져 있으면 문자는 대기열에 쌓이기만 하므로 요약 줄에서 경고한다
+             (admin.js renderSmsSenderSummary). -->
+        <div class="settings-group-label">문자 발송</div>
+        <div class="glass-container sms-settings-card">
+          <div id="sms-sender-device-section" style="display: none;">
+            <div class="settings-row">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">이 기기에서 문자 발송</span>
+              <span id="sms-sender-device-status" class="switch-status"></span>
+              <button id="sms-sender-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="이 기기에서 문자 발송" onclick="toggleSmsSenderOnThisDevice()"><span class="switch-knob"></span></button>
+            </div>
+            <p id="sms-sender-device-detail" class="sms-settings-note"></p>
+          </div>
+          <div id="sms-sender-summary" class="sms-sender-summary">발송 기기 확인 중…</div>
+          <button type="button" class="btn-action btn-primary sms-compose-open-btn" onclick="openSmsComposeModal()">문자 보내기</button>
+          <div class="user-recent-head sms-outbox-head">
+            <span>최근 발송</span>
+            <button type="button" class="user-recent-more" onclick="loadSmsOutbox()">새로고침</button>
+          </div>
+          <div id="sms-outbox-list"></div>
+        </div>
+
         <div class="settings-group-label">고급</div>
         <div class="glass-container" style="padding: 1.5rem;">
           <h3 id="dev-mode-toggle-header" style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: pointer;" onclick="toggleDevModeSection()">
@@ -424,6 +448,7 @@
         <div class="glass-container user-list-group">
           <div class="user-list-row"><span>연락처 (로그인 ID)</span><span class="user-list-value" id="detail-member-phone">-</span></div>
           <div class="user-list-row"><span>생년월일</span><span class="user-list-value" id="detail-member-birth-date">-</span></div>
+          <button type="button" class="user-list-row user-list-button" onclick="openSmsComposeModal(currentDetailUserId)"><span>문자 보내기</span><span class="user-list-value user-list-chev">›</span></button>
         </div>
 
         <div class="glass-container" style="padding: 1.2rem; margin-bottom: 1rem;">
@@ -502,6 +527,34 @@
 
       <div class="modal-footer">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeDepositDetailModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 문자 보내기(#sms-outbox) - 회원 상세에서 열면 받는 회원이 고정되고, 설정 탭에서 열면 번호를
+       직접 입력한다. 보내기는 대기열에 넣는 것까지만(submitSmsCompose) - 실제 발송은 관리자 APK. -->
+  <div id="sms-compose-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 440px;">
+      <h2 style="font-size: 1.3rem; margin-bottom: 1rem;">문자 보내기</h2>
+      <div class="modal-body">
+        <div class="form-group" id="sms-compose-user-row" style="display: none;">
+          <label class="form-label">받는 회원</label>
+          <div id="sms-compose-user" class="sms-compose-user"></div>
+        </div>
+        <div class="form-group" id="sms-compose-phone-row">
+          <label class="form-label">받는 번호</label>
+          <input type="text" id="sms-compose-phone" class="form-control" placeholder="010-0000-0000" maxlength="13" inputmode="tel" oninput="formatPhoneInput(this)">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">내용</label>
+          <textarea id="sms-compose-body" class="form-control sms-compose-body" rows="5" maxlength="1000" placeholder="보낼 내용을 입력하세요" oninput="updateSmsComposeCounter()"></textarea>
+          <div id="sms-compose-counter" class="sms-compose-counter"></div>
+        </div>
+        <p id="sms-compose-warning" class="sms-settings-note is-warn" style="display: none;"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="hideModal('sms-compose-modal')">취소</button>
+        <button class="btn-action btn-primary" onclick="submitSmsCompose(this)">보내기</button>
       </div>
     </div>
   </div>
@@ -827,6 +880,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261022_1800"></script>
+  <script src="src/admin.js?v=20261022_2000"></script>
 </body>
 </html>

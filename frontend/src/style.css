@@ -1135,6 +1135,106 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   color: var(--icon-danger);
 }
 
+/* 설정 탭 "문자 발송"(#sms-outbox) - 발송 기기 스위치(APK 전용) / 발송 기기 요약 / 보내기 버튼 /
+   최근 발송 목록. 목록 행 상태 배지는 충전함과 같은 .activity-status. */
+.sms-settings-card {
+  padding: 1.3rem 1.5rem;
+  margin-bottom: 1.2rem;
+}
+.sms-settings-note {
+  margin: 0.45rem 0 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.sms-settings-note.is-warn {
+  color: var(--accent-danger);
+}
+.sms-sender-summary {
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.sms-sender-summary.is-warn {
+  background: rgba(194, 65, 12, 0.08);
+  color: var(--admin-pending-ink, #9a3412);
+}
+.sms-compose-open-btn {
+  width: 100%;
+  margin: 0.8rem 0 0.4rem;
+}
+.sms-outbox-head {
+  margin-top: 0.9rem;
+}
+.sms-outbox-row {
+  padding: 0.65rem 0;
+}
+.sms-outbox-row + .sms-outbox-row {
+  border-top: 1px solid var(--border-glass);
+}
+.sms-outbox-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sms-outbox-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.sms-outbox-action {
+  margin-left: auto;
+  min-height: 0;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.sms-outbox-body {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sms-outbox-meta {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.sms-outbox-error {
+  color: var(--accent-danger);
+}
+.sms-compose-user {
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  font-weight: 600;
+}
+.sms-compose-body {
+  resize: vertical;
+  min-height: 7rem;
+  font: inherit;
+  line-height: 1.5;
+}
+.sms-compose-counter {
+  margin-top: 0.3rem;
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* 대시보드 "처리 대기" 배너(#redesign) - 대기/오류 타일 2개를 나란히 늘 띄우던 대신,
    하나로 합쳐서 0건이면 완전히 숨긴다(display:none, admin.js의 renderDashboard). 있을 때만
    보이므로 굳이 색을 옅게/진하게 나눌 필요가 없어 늘 경고색 톤 하나로 고정.

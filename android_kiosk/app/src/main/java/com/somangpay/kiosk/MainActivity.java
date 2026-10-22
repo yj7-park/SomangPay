@@ -631,6 +631,33 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
         }
     }
 
+    // 문자 발송(SmsOutboxSender) 권한 - 설정 탭에서 "이 기기에서 문자 발송"을 켤 때만 요청한다.
+    private static final int REQ_SEND_SMS = 107;
+
+    void requestSmsSendPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            requestPermissions(new String[]{android.Manifest.permission.SEND_SMS}, REQ_SEND_SMS);
+        } else {
+            notifySmsSenderStatusChanged();
+        }
+    }
+
+    void notifySmsSenderStatusChanged() {
+        if (webView == null) return;
+        webView.evaluateJavascript("window.onSmsSenderStatusChanged && window.onSmsSenderStatusChanged();", null);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_SEND_SMS) {
+            // 거부되면 발송 설정도 끈다 - 켜져 있는데 권한이 없어 조용히 안 나가는 상태를 남기지 않게.
+            if (!SmsOutboxSender.hasPermission(this)) SmsOutboxSender.setEnabled(this, false);
+            else SmsOutboxSender.pollAsync(this);
+            notifySmsSenderStatusChanged();
+        }
+    }
+
     // JS의 화면 방향 전환 요청 처리 - Screen Orientation API의 lock()은 전체화면(Fullscreen API) 상태가
     // 아니면 WebView에서 지원되지 않아 실패하므로, 이미 시작 시점에 쓰던 setRequestedOrientation()을
     // 그대로 재사용해 네이티브 레벨에서 처리한다. 설치 여부와 무관하게 항상 동작한다.
@@ -959,6 +986,27 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public void openNotificationAccessSettings() {
         activity.runOnUiThread(() -> activity.openNotificationAccessSettings());
+    }
+
+    // 문자 발송 대기열(SmsOutboxSender) - 설정 탭 "이 기기에서 문자 발송" 행이 쓴다.
+    // {"enabled","permission","telephony","deviceId","deviceName"} JSON 문자열.
+    @android.webkit.JavascriptInterface
+    public String getSmsSenderStatus() {
+        return SmsOutboxSender.statusJson(activity.getApplicationContext());
+    }
+
+    // 켤 때 SEND_SMS 권한이 없으면 권한 요청 팝업을 띄운다 - 허용 여부와 무관하게 결과가 나오면
+    // window.onSmsSenderStatusChanged()로 웹에 알려 화면을 다시 그리게 한다(onRequestPermissionsResult).
+    @android.webkit.JavascriptInterface
+    public void setSmsSenderEnabled(boolean enabled) {
+        android.content.Context ctx = activity.getApplicationContext();
+        SmsOutboxSender.setEnabled(ctx, enabled);
+        if (enabled && !SmsOutboxSender.hasPermission(ctx)) {
+            activity.runOnUiThread(activity::requestSmsSendPermission);
+            return;
+        }
+        if (enabled) SmsOutboxSender.pollAsync(ctx);
+        activity.runOnUiThread(activity::notifySmsSenderStatusChanged);
     }
 
     // AdminAlertService의 알림을 탭해 열렸을 때 이동할 처리 화면 정보(있으면 1회성) -

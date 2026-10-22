@@ -50,6 +50,9 @@ public class AdminAlertService extends Service {
     // DepositAutoDetector의 SharedPreferences에 즉시 반영되므로 다음 재시도 때 바로 붙는다.
     private static final long RETRY_NO_TOKEN_MS = 30_000;
     private static final long RECONNECT_MS = 5_000;
+    // 문자 발송 대기열 폴링 주기(SmsOutboxSender) - "sms" 갱신 신호가 오면 즉시도 가져가지만, WS가
+    // 워커 로컬이라 신호를 못 받을 수 있어 주기 폴링이 기본이다. 발송이 꺼진 기기는 아무것도 안 한다.
+    private static final long SMS_POLL_MS = 20_000;
 
     private OkHttpClient client;
     private WebSocket webSocket;
@@ -77,7 +80,17 @@ public class AdminAlertService extends Service {
                 .build();
         startForeground(SERVICE_NOTIF_ID, buildServiceNotification());
         connect();
+        handler.post(smsPollTick);
     }
+
+    private final Runnable smsPollTick = new Runnable() {
+        @Override
+        public void run() {
+            if (stopped) return;
+            SmsOutboxSender.pollAsync(AdminAlertService.this);
+            handler.postDelayed(this, SMS_POLL_MS);
+        }
+    };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -134,7 +147,19 @@ public class AdminAlertService extends Service {
     private void handleMessage(String text) {
         try {
             JSONObject json = new JSONObject(text);
-            if (!"alert".equals(json.optString("type"))) return; // "refresh"/"ping" 등은 무시
+            String type = json.optString("type");
+            // 문자 대기열이 바뀌었다는 갱신 신호(main.py _sms_changed) - 다음 주기를 기다리지 않고 바로 가져간다.
+            if ("refresh".equals(type)) {
+                org.json.JSONArray scopes = json.optJSONArray("scopes");
+                for (int i = 0; scopes != null && i < scopes.length(); i++) {
+                    if ("sms".equals(scopes.optString(i))) {
+                        SmsOutboxSender.pollAsync(this);
+                        break;
+                    }
+                }
+                return;
+            }
+            if (!"alert".equals(type)) return; // "ping" 등은 무시
             String title = json.optString("title", "소망페이 관리자");
             String body = json.optString("body", "");
             // category/entity_id는 notify_admins_alert()가 보내며, 알림을 탭했을 때 MainActivity가

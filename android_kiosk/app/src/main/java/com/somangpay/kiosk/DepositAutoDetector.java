@@ -297,7 +297,7 @@ final class DepositAutoDetector {
 
     // BuildConfig.TARGET_URL(예: "http://125.248.31.132:8080/admin")에서 호스트:포트만 뽑아
     // API 기본 주소("http://125.248.31.132:8080")를 만든다.
-    private static String apiBaseUrl() {
+    static String apiBaseUrl() { // SmsOutboxSender도 같은 주소 규칙을 쓴다
         try {
             URL u = new URL(AppConfig.TARGET_URL);
             String base = u.getProtocol() + "://" + u.getHost();

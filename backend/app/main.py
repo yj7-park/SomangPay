@@ -21,6 +21,7 @@ from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
+from app.services import sms_outbox
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
 
 app = FastAPI(
@@ -1368,6 +1369,140 @@ ADMIN_STATS_CACHE_KEY = "admin_stats"
 
 def _user_stats_cache_key(user_id: int) -> str:
     return f"user_stats:{user_id}"
+
+
+# ============ 문자(SMS) 발송 대기열 ============
+# 웹/PWA 관리자 화면(또는 백엔드 코드)은 대기열에 넣기만 하고, 실제 발송은 "이 기기에서 문자
+# 발송"을 켠 관리자 APK가 /api/admin/sms/claim으로 가져가 보낸다(services/sms_outbox.py).
+
+def _sms_response(db: Session, row: models.SmsOutbox) -> schemas.SmsOutboxResponse:
+    resp = schemas.SmsOutboxResponse.model_validate(row)
+    if row.user_id:
+        user = db.get(models.User, row.user_id)
+        resp.user_name = user.name if user else None
+    return resp
+
+
+async def _sms_changed():
+    # "sms" 갱신 신호 - 관리자 웹은 발송 목록을 다시 불러오고, APK(AdminAlertService)는 다음
+    # 폴링을 기다리지 않고 바로 claim한다. 워커 로컬 WS라 못 받는 쪽은 주기 폴링이 메운다.
+    await notify_admins(["sms"])
+
+
+@app.post("/api/admin/sms", response_model=schemas.SmsOutboxResponse)
+async def admin_enqueue_sms(
+    req: schemas.SmsSendRequest,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin_auth),
+):
+    to_phone = req.to_phone
+    if req.user_id is not None:
+        user = db.get(models.User, req.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+        if not user.phone:
+            raise HTTPException(status_code=400, detail="이 회원은 연락처가 없습니다.")
+        to_phone = user.phone
+    try:
+        row = sms_outbox.enqueue_sms(db, to_phone, req.body, source="admin", user_id=req.user_id, admin_id=admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await _sms_changed()
+    return _sms_response(db, row)
+
+
+@app.get("/api/admin/sms", response_model=List[schemas.SmsOutboxResponse])
+def admin_list_sms(
+    limit: int = Query(50, ge=1, le=200),
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    query = db.query(models.SmsOutbox)
+    if user_id is not None:
+        query = query.filter(models.SmsOutbox.user_id == user_id)
+    rows = query.order_by(models.SmsOutbox.id.desc()).limit(limit).all()
+    return [_sms_response(db, r) for r in rows]
+
+
+@app.get("/api/admin/sms/senders", response_model=List[schemas.SmsSenderStatus])
+def admin_list_sms_senders(
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    devices = db.query(models.SmsSenderDevice).order_by(models.SmsSenderDevice.last_seen_at.desc()).all()
+    return [
+        schemas.SmsSenderStatus(
+            device_id=d.device_id, device_name=d.device_name, last_seen_at=d.last_seen_at,
+            online=sms_outbox.sender_is_online(d),
+        )
+        for d in devices
+    ]
+
+
+@app.post("/api/admin/sms/{sms_id}/cancel", response_model=schemas.SmsOutboxResponse)
+async def admin_cancel_sms(
+    sms_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    row = db.get(models.SmsOutbox, sms_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="문자를 찾을 수 없습니다.")
+    if row.status != "QUEUED":
+        raise HTTPException(status_code=400, detail="대기 중인 문자만 취소할 수 있습니다.")
+    row.status = "CANCELED"
+    db.commit()
+    db.refresh(row)
+    await _sms_changed()
+    return _sms_response(db, row)
+
+
+@app.post("/api/admin/sms/{sms_id}/retry", response_model=schemas.SmsOutboxResponse)
+async def admin_retry_sms(
+    sms_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    row = db.get(models.SmsOutbox, sms_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="문자를 찾을 수 없습니다.")
+    if row.status not in ("FAILED", "CANCELED"):
+        raise HTTPException(status_code=400, detail="실패하거나 취소된 문자만 다시 보낼 수 있습니다.")
+    # 새 행으로 다시 넣는다 - 원래 건의 실패 기록은 그대로 남긴다.
+    new_row = sms_outbox.enqueue_sms(db, row.to_phone, row.body, source=row.source, user_id=row.user_id, admin_id=_admin.id)
+    await _sms_changed()
+    return _sms_response(db, new_row)
+
+
+@app.post("/api/admin/sms/claim", response_model=List[schemas.SmsClaimItem])
+def admin_claim_sms(
+    req: schemas.SmsClaimRequest,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 APK 전용 - 보낼 문자를 가져간다(QUEUED → SENDING). 빈 목록이어도 발송 기기
+    하트비트(last_seen_at)는 갱신된다."""
+    if not req.device_id.strip():
+        raise HTTPException(status_code=400, detail="device_id가 필요합니다.")
+    rows = sms_outbox.claim_messages(db, req.device_id.strip(), req.device_name, req.limit)
+    return [schemas.SmsClaimItem(id=r.id, to_phone=r.to_phone, body=r.body) for r in rows]
+
+
+@app.post("/api/admin/sms/{sms_id}/result", response_model=schemas.SmsOutboxResponse)
+async def admin_report_sms_result(
+    sms_id: int,
+    req: schemas.SmsResultRequest,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 APK 전용 - 발송 결과 보고(SENDING → SENT/FAILED)."""
+    try:
+        row = sms_outbox.report_result(db, sms_id, req.device_id.strip(), req.success, req.error)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    await _sms_changed()
+    return _sms_response(db, row)
 
 
 @app.get("/api/admin/stats/summary", response_model=schemas.StatsSummaryResponse)

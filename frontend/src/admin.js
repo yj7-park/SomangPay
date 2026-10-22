@@ -853,6 +853,9 @@ async function handleAdminRefreshEvent(scopes) {
   if (scopes.includes("users")) tasks.push(loadAdminUsers());
   if (scopes.includes("cards")) tasks.push(loadAdminCards());
   if (scopes.includes("deposit_queue")) tasks.push(loadBankTransactions());
+  if (scopes.includes("sms") && document.getElementById("admin-view-settings")?.classList.contains("active")) {
+    tasks.push(loadSmsOutbox());
+  }
   if (scopes.includes("stats")) {
     tasks.push(loadStatsSummary());
     tasks.push(loadBankTransactions());
@@ -934,7 +937,7 @@ function switchAdminView(viewName, inboxFilter) {
     });
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") { renderKioskList(); loadKiosks(); startKioskListPolling(); }
-    if (viewName === "settings") refreshAdminPushButtonUI();
+    if (viewName === "settings") { refreshAdminPushButtonUI(); refreshSmsSettings(); }
     if (viewName === "inbox") {
       if (inboxFilter) inboxDepositFilter = inboxFilter;
       activityFeedLimit = ACTIVITY_PAGE_SIZE;
@@ -2579,6 +2582,218 @@ function toggleDevModeSection() {
   const wasOpen = body.style.display !== "none";
   body.style.display = wasOpen ? "none" : "block";
   if (arrow) arrow.style.transform = wasOpen ? "rotate(0deg)" : "rotate(180deg)";
+}
+
+// ---------------- 문자 발송 대기열 (#sms-outbox) ----------------
+// 웹/PWA는 문자를 직접 못 보낸다 - POST /api/admin/sms로 대기열에 넣으면 "이 기기에서 문자 발송"을
+// 켠 관리자 APK(SmsOutboxSender.java)가 가져가 그 폰 번호로 보낸다. 발송 기기 목록/온라인 여부는
+// APK가 폴링할 때마다 갱신되는 last_seen_at 기준(백엔드 sms_outbox.sender_is_online).
+const SMS_STATUS_META = {
+  QUEUED: { text: "대기", cls: "status-pending" },
+  SENDING: { text: "보내는 중", cls: "status-pending" },
+  SENT: { text: "보냄", cls: "status-done" },
+  FAILED: { text: "실패", cls: "status-rejected" },
+  CANCELED: { text: "취소됨", cls: "status-other" },
+};
+let _smsSenders = [];
+let _smsComposeUserId = null;
+
+function refreshSmsSettings() {
+  refreshSmsSenderDeviceUi();
+  loadSmsSenders();
+  loadSmsOutbox();
+}
+
+function readSmsSenderDeviceStatus() {
+  if (!window.AndroidInterface || typeof window.AndroidInterface.getSmsSenderStatus !== "function") return null;
+  try { return JSON.parse(window.AndroidInterface.getSmsSenderStatus()); } catch (e) { return null; }
+}
+
+// 관리자 APK 안에서만 "이 기기에서 문자 발송" 스위치를 보여준다.
+function refreshSmsSenderDeviceUi() {
+  const section = document.getElementById("sms-sender-device-section");
+  if (!section) return;
+  const st = readSmsSenderDeviceStatus();
+  if (!st) { section.style.display = "none"; return; }
+  section.style.display = "";
+  const on = !!(st.enabled && st.permission);
+  const btn = document.getElementById("sms-sender-toggle-btn");
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-checked", on ? "true" : "false");
+  const detail = document.getElementById("sms-sender-device-detail");
+  detail.classList.toggle("is-warn", !st.telephony || (st.enabled && !st.permission));
+  detail.textContent = !st.telephony
+    ? "이 기기는 문자를 보낼 수 없어요(유심/전화 기능 없음)."
+    : on
+      ? `${st.deviceName || "이 기기"}의 번호로 대기 중인 문자를 보내요. 앱을 꺼도 계속 보냅니다.`
+      : st.enabled
+        ? "문자 발송 권한이 없어요. 스위치를 다시 켜서 권한을 허용해 주세요."
+        : "켜면 다른 관리자 화면이나 서버가 보낸 문자를 이 폰 번호로 대신 보냅니다.";
+}
+
+function toggleSmsSenderOnThisDevice() {
+  const st = readSmsSenderDeviceStatus();
+  if (!st) return;
+  const next = !(st.enabled && st.permission);
+  window.AndroidInterface.setSmsSenderEnabled(next);
+  refreshSmsSenderDeviceUi();
+}
+
+// 네이티브 권한 팝업 결과/스위치 변경 후 MainActivity가 부른다.
+window.onSmsSenderStatusChanged = function () {
+  refreshSmsSenderDeviceUi();
+  setTimeout(loadSmsSenders, 1500); // APK가 첫 폴링(하트비트)을 마칠 시간
+};
+
+async function loadSmsSenders() {
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/sms/senders`);
+    if (!res.ok) return;
+    _smsSenders = await res.json();
+  } catch (e) {
+    console.error("Failed to load sms senders:", e);
+  }
+  renderSmsSenderSummary();
+}
+
+function renderSmsSenderSummary() {
+  const el = document.getElementById("sms-sender-summary");
+  if (!el) return;
+  const online = _smsSenders.filter(d => d.online);
+  el.classList.toggle("is-warn", online.length === 0);
+  el.textContent = online.length > 0
+    ? `발송 기기: ${online.map(d => d.device_name || "관리자 앱").join(", ")} · 연결됨`
+    : "지금 문자를 보낼 기기가 없어요. 관리자 앱 설치 폰에서 \"이 기기에서 문자 발송\"을 켜 주세요. 그 전까지 보낸 문자는 대기열에 쌓였다가 기기가 켜지면 나갑니다(24시간 지나면 만료).";
+}
+
+async function loadSmsOutbox() {
+  const box = document.getElementById("sms-outbox-list");
+  if (!box) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/sms?limit=20`);
+    if (!res.ok) return;
+    renderSmsOutbox(await res.json());
+  } catch (e) {
+    console.error("Failed to load sms outbox:", e);
+  }
+}
+
+function renderSmsOutbox(rows) {
+  const box = document.getElementById("sms-outbox-list");
+  if (!box) return;
+  if (rows.length === 0) {
+    box.innerHTML = `<p class="admin-recent-empty">보낸 문자가 없어요.</p>`;
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    const meta = SMS_STATUS_META[r.status] || { text: r.status, cls: "status-other" };
+    const who = r.user_name ? `${escapeHtml(r.user_name)} · ${formatPhoneDisplay(r.to_phone)}` : formatPhoneDisplay(r.to_phone);
+    const action = r.status === "QUEUED"
+      ? `<button type="button" class="sms-outbox-action" onclick="cancelSms(${r.id}, this)">취소</button>`
+      : r.status === "FAILED"
+        ? `<button type="button" class="sms-outbox-action" onclick="retrySms(${r.id}, this)">다시 보내기</button>`
+        : "";
+    return `
+      <div class="sms-outbox-row">
+        <div class="sms-outbox-top">
+          <span class="sms-outbox-who">${who}</span>
+          <span class="activity-status ${meta.cls}">${meta.text}</span>
+          ${action}
+        </div>
+        <div class="sms-outbox-body">${escapeHtml(r.body)}</div>
+        <div class="sms-outbox-meta">${formatDateTimeKST(r.sent_at || r.created_at)}${r.error ? ` · <span class="sms-outbox-error">${escapeHtml(r.error)}</span>` : ""}</div>
+      </div>`;
+  }).join("");
+}
+
+async function cancelSms(id, btn) {
+  if (btn) btn.disabled = true;
+  const res = await adminFetch(`${API_BASE}/admin/sms/${id}/cancel`, { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showToast(data.detail || "취소하지 못했어요.");
+  }
+  loadSmsOutbox();
+}
+
+async function retrySms(id, btn) {
+  if (btn) btn.disabled = true;
+  const res = await adminFetch(`${API_BASE}/admin/sms/${id}/retry`, { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showToast(data.detail || "다시 보내지 못했어요.");
+  } else {
+    showToast("다시 보낼 문자로 넣었어요.");
+  }
+  loadSmsOutbox();
+}
+
+// userId를 주면(회원 상세) 받는 사람이 그 회원으로 고정되고, 없으면 번호를 직접 입력한다.
+function openSmsComposeModal(userId) {
+  _smsComposeUserId = userId || null;
+  const user = _smsComposeUserId ? users.find(u => u.id === _smsComposeUserId) : null;
+  document.getElementById("sms-compose-user-row").style.display = user ? "" : "none";
+  document.getElementById("sms-compose-phone-row").style.display = user ? "none" : "";
+  if (user) {
+    document.getElementById("sms-compose-user").textContent =
+      `${user.name} · ${user.phone ? formatPhoneDisplay(user.phone) : "연락처 없음"}`;
+  }
+  document.getElementById("sms-compose-phone").value = "";
+  document.getElementById("sms-compose-body").value = "";
+  updateSmsComposeCounter();
+
+  const warn = document.getElementById("sms-compose-warning");
+  const showSenderWarn = () => {
+    const none = !_smsSenders.some(d => d.online);
+    warn.style.display = none ? "" : "none";
+    warn.textContent = "지금 켜진 발송 기기가 없어요. 대기열에 넣어두면 기기가 켜질 때 나갑니다.";
+  };
+  showSenderWarn();
+  loadSmsSenders().then(showSenderWarn);
+  showModal("sms-compose-modal");
+}
+
+// 안드로이드는 한글이 섞이면 문자 한 건에 70자(여러 건으로 나뉘면 건당 67자), 영문/숫자만이면
+// 160자(153자)씩 나눠 보낸다 - 대략적인 건수를 미리 보여준다.
+function updateSmsComposeCounter() {
+  const body = document.getElementById("sms-compose-body").value;
+  const el = document.getElementById("sms-compose-counter");
+  if (!body) { el.textContent = ""; return; }
+  const unicode = /[^\x00-\x7F]/.test(body);
+  const single = unicode ? 70 : 160;
+  const per = unicode ? 67 : 153;
+  const parts = body.length <= single ? 1 : Math.ceil(body.length / per);
+  el.textContent = parts > 1 ? `${body.length}자 · 문자 ${parts}건으로 나뉘어 발송` : `${body.length}자`;
+}
+
+async function submitSmsCompose(btn) {
+  const body = document.getElementById("sms-compose-body").value.trim();
+  const payload = { body };
+  if (_smsComposeUserId) payload.user_id = _smsComposeUserId;
+  else payload.to_phone = document.getElementById("sms-compose-phone").value.trim();
+  if (!payload.user_id && !payload.to_phone) { showToast("받는 번호를 입력하세요."); return; }
+  if (!body) { showToast("보낼 내용을 입력하세요."); return; }
+
+  if (btn) btn.disabled = true;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/sms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.detail || "문자를 넣지 못했어요.");
+      return;
+    }
+    hideModal("sms-compose-modal");
+    showToast(_smsSenders.some(d => d.online) ? "문자를 보냈어요. 잠시 후 발송됩니다." : "대기열에 넣었어요. 발송 기기가 켜지면 나갑니다.");
+    loadSmsOutbox();
+  } catch (e) {
+    showToast("서버에 연결하지 못했어요.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ---------------- 알림 접근 권한 (BankNotificationListener용) ----------------
