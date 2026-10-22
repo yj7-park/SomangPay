@@ -33,6 +33,11 @@
 - **순서 주의**: android_kiosk 변경 후 `deploy.sh frontend`를 CI의 자체 커밋(위 1-2번)이
   push되기 *전에* 돌리면, 관리자 페이지 다운로드 링크가 옛 APK 바이너리를 계속 서빙한다.
   반드시 "push → CI 완료 대기 → CI 커밋 pull → `deploy.sh frontend`" 순서를 지킬 것.
+- 운영 서버는 `ubuntu@168.110.113.17`(`somangpay-a1`). Windows PC와 dev 서버 둘 다 `~/.ssh/config`에
+  `Host somangpay` 별칭을 등록해 둬서 `ssh somangpay`로 바로 붙는다(키 `~/.ssh/somangpay-new`, 원본은
+  dev 서버에도 있음). **Windows Git Bash엔 rsync가 없어** `deploy.sh`가 그대로는 안 돈다 - 2026-10-23엔
+  같은 단계를 로컬→서버 전송만 `tar -czf - ... | ssh somangpay 'tar -xzf - -C ...'`로 바꿔 수동 실행했다
+  (deploy.sh의 rsync도 `--delete` 없이 덮어쓰기라 결과 동일, 서버 쪽 명령은 원본 그대로).
 - `deploy.sh`는 `~/.ssh/somangpay-new`로 실서버에 SSH/rsync하는 스크립트다. 실제
   사용자에게 영향을 주는 프로덕션 액션이므로, 사용자가 명시적으로 배포를 요청한 게 아니라면
   임의로 실행하지 말고 먼저 확인받는다. `main`으로의 `git push`도 마찬가지 - 실제 APK
