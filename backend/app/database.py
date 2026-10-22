@@ -33,6 +33,12 @@ def _run_migration_step(db, sql, description=""):
     실행을 막지 않도록 각 구문을 별도 트랜잭션으로 분리한다."""
     from sqlalchemy import text
     try:
+        if not is_sqlite:
+            # ALTER TABLE ... IF NOT EXISTS도 컬럼이 이미 있든 없든 ACCESS EXCLUSIVE 잠금부터 잡는다.
+            # 다른 세션이 그 테이블 잠금을 쥐고 있으면 기다리는 동안 그 테이블의 모든 조회가 이 DDL
+            # 뒤에 줄을 서서 서비스 전체가 멈춘다(2026-10-23 운영 장애) - 오래 못 잡으면 이 단계만
+            # 건너뛰게 한다(이미 적용된 마이그레이션이면 건너뛰어도 무해, 다음 기동 때 다시 시도).
+            db.execute(text("SET LOCAL lock_timeout = '3s'"))
         db.execute(text(sql))
         db.commit()
     except Exception as e:

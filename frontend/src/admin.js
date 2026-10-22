@@ -2469,18 +2469,18 @@ function renderDepositDetailModal() {
   const resolveSection = document.getElementById("dd-resolve-section");
   const resolvable = t.status === "PENDING" || t.status === "ERROR";
   resolveSection.style.display = resolvable ? "block" : "none";
-  // "기타로 처리"는 예외 경로 - 모달을 열 때마다 접힌 상태로 되돌린다.
-  document.getElementById("dd-other-section").style.display = "none";
+  document.getElementById("dd-action-btn").style.display = resolvable ? "" : "none";
   if (resolvable) {
     // "매칭 오류"의 존재 이유가 입금자명인데 후보 목록이 빈 채로 시작했다 - 입금자명(동명이인
     // 구분용 꼬리 숫자는 떼고)으로 검색을 미리 채워 유사 회원이 바로 뜨게 한다.
     document.getElementById("dd-user-search").value = (t.depositor_name || "").replace(/\s*\d+\s*$/, "").trim();
-    document.getElementById("dd-resolve-memo").value = "";
-    document.getElementById("dd-other-reason").value = "";
+    _depositMemoTouched = false;
     // 이미 매칭 회원(오류 재처리 등)이 있으면 그대로 두고, 없으면 가장 유력한 후보를
     // 자동 선택해 둔다 - 관리자가 매번 "이 사람 맞나요?"에 답만 하고 바로 처리 버튼을
     // 누를 수 있게(#redesign, s-deposit 리뷰: "정작 입금자명은 뻔히 있는데 후보 목록이
     // 빈 채로 시작한다").
+    // 자동 선택은 이름 규칙(이름 그대로 또는 꼬리 A~Z)에 맞는 활성 회원이 딱 한 명일 때만 -
+    // 서버 자동 매칭(deposit_matcher.find_depositor_match)과 같은 기준이다.
     if (!_depositDetailSelectedUserId) {
       const best = bestDepositCandidate();
       if (best) _depositDetailSelectedUserId = best.id;
@@ -2498,22 +2498,19 @@ function depositNameMatchQuality(name, query) {
   const q = query.trim();
   if (!n) return null;
   if (n === q) return "exact";
+  // 동명이인 구분 꼬리(홍길동A/B/C...)는 같은 이름으로 본다 - 서버 매칭 규칙과 동일.
+  if (n.length === q.length + 1 && n.startsWith(q) && /[A-Z]$/.test(n)) return "exact";
   if (n.startsWith(q) || q.startsWith(n)) return "similar";
   return null;
 }
 
+// 입금자명과 이름 규칙이 맞는(이름 그대로 또는 꼬리 A~Z) 회원이 전체에서 딱 한 명이고 그 회원이
+// 활성일 때만 그 회원을 돌려준다 - 두 명 이상이면 누구 입금인지 모르니 자동 선택하지 않는다.
+// 정지/비활성 회원은 충전할 수 없어서(서버가 거부, #inactive) 자동 선택 대상이 아니다.
 function bestDepositCandidate() {
   const query = (document.getElementById("dd-user-search").value || "").trim();
-  let best = null, bestRank = 0;
-  // 정지/비활성 회원은 충전할 수 없으니(서버가 거부, #inactive) 후보에서 아예 뺀다 -
-  // 비활성 회원 입금이면 회원 상세에서 먼저 활성화한 뒤 다시 처리한다.
-  for (const u of users) {
-    if (u.status !== "ACTIVE") continue;
-    const quality = depositNameMatchQuality(u.name, query);
-    const rank = quality === "exact" ? 2 : quality === "similar" ? 1 : 0;
-    if (rank > bestRank) { bestRank = rank; best = u; }
-  }
-  return best;
+  const hits = users.filter(u => depositNameMatchQuality(u.name, query) === "exact");
+  return hits.length === 1 && hits[0].status === "ACTIVE" ? hits[0] : null;
 }
 
 function renderDepositUserOptions() {
@@ -2550,22 +2547,35 @@ function renderDepositUserOptions() {
     `;
   }).join("");
   hydrateIconPlaceholders(box);
-
-  const resolveBtn = document.getElementById("dd-resolve-btn");
-  const selectedUser = matches.find(m => m.u.id === _depositDetailSelectedUserId)?.u
-    || users.find(u => u.id === _depositDetailSelectedUserId);
-  resolveBtn.innerText = selectedUser ? `${selectedUser.name} 회원으로 충전 처리` : "선택한 회원으로 충전 처리(완료)";
+  renderDepositActionButton();
 }
 
-// "기타로 처리"는 예외 경로라 기본은 접어 두고, 눌렀을 때만 사유 입력을 펼친다
-// (#redesign, s-deposit 리뷰: "스크롤 아래로 묻힘 → 하단 보조 링크로").
-function toggleDepositOtherSection() {
-  const section = document.getElementById("dd-other-section");
-  section.style.display = section.style.display === "none" ? "block" : "none";
+// 하단 처리 버튼 하나를 선택 상태에 맞춘다(#deposit-modal) - 회원 선택됨 = 충전 처리, 없음 = 기타 처리.
+// 메모를 관리자가 안 건드렸으면 기본값도 같이 바꾼다.
+const DEPOSIT_MEMO_DEFAULT_RESOLVE = "확인 후 처리";
+const DEPOSIT_MEMO_DEFAULT_OTHER = "잘못된 입금";
+let _depositMemoTouched = false;
+function renderDepositActionButton() {
+  const btn = document.getElementById("dd-action-btn");
+  if (!btn) return;
+  const selected = !!_depositDetailSelectedUserId;
+  btn.innerText = selected ? "충전 처리" : "기타 처리";
+  btn.classList.toggle("btn-primary", selected);
+  btn.style.background = selected ? "" : "rgba(148,163,184,0.18)";
+  btn.style.color = selected ? "" : "var(--text-main)";
+  document.getElementById("dd-memo-label").innerText = selected ? "메모" : "메모 (기타 처리 사유)";
+  if (!_depositMemoTouched) {
+    document.getElementById("dd-resolve-memo").value = selected ? DEPOSIT_MEMO_DEFAULT_RESOLVE : DEPOSIT_MEMO_DEFAULT_OTHER;
+  }
 }
 
+function submitDepositAction(btn) {
+  return _depositDetailSelectedUserId ? submitDepositResolve(btn) : submitDepositMarkOther(btn);
+}
+
+// 이미 선택된 회원을 다시 누르면 선택 해제(#deposit-modal) - 그러면 처리 버튼이 "기타 처리"가 된다.
 function selectDepositUser(userId) {
-  _depositDetailSelectedUserId = userId;
+  _depositDetailSelectedUserId = _depositDetailSelectedUserId === userId ? null : userId;
   renderDepositUserOptions();
 }
 
@@ -2602,9 +2612,9 @@ async function submitDepositResolve(btn) {
 
 async function submitDepositMarkOther(btn) {
   if (!_depositDetailTxn) return;
-  const reason = document.getElementById("dd-other-reason").value.trim();
+  const reason = document.getElementById("dd-resolve-memo").value.trim();
   if (!reason) {
-    await showAlertModal("사유를 입력해주세요.");
+    await showAlertModal("기타 처리 사유를 메모에 입력해주세요.");
     return;
   }
   if (!(await showConfirmModal("이 입금 건을 충전 대상이 아닌 것으로 처리하시겠습니까? 크레딧이 반영되지 않습니다."))) return;

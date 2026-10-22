@@ -15,7 +15,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261023_0001">
+  <link rel="stylesheet" href="src/style.css?v=20261023_0002">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20261022_2300">
   <script src="jsQR.min.js"></script>
   <script>
@@ -487,10 +487,10 @@
          이중 스크롤이었다. renderDepositUserOptions()가 개수를 좁혀 보통 스크롤이
          필요 없게 한다.
        - 후보 행에 전화번호 대신(과 함께) 잔액, 그리고 입금자명과의 일치도 힌트 표시.
-         가장 근접한 후보는 자동 선택 + 강조(카카오페이식 "이 사람 맞나요?" 패턴) -
-         admin.js의 renderDepositUserOptions/openDepositDetailModal 참고.
-       - "기타로 처리"를 원래 크기의 보조 섹션에서 하단 텍스트 링크로 격하, 클릭해야
-         사유 입력이 펼쳐진다(toggleDepositOtherSection). -->
+         이름 규칙(그대로 또는 꼬리 A~Z)에 맞는 활성 회원이 딱 한 명이면 자동 선택 + 강조 -
+         admin.js의 renderDepositUserOptions/bestDepositCandidate 참고.
+       - (#deposit-modal) 처리 버튼은 하단 고정 줄의 닫기 왼쪽 하나 - 회원 선택됨 = 충전 처리,
+         선택 없음 = 기타 처리. 메모 칸을 기타 처리 사유로도 쓴다. 선택된 회원을 다시 누르면 해제. -->
   <div id="deposit-detail-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 460px;">
       <h2 style="font-size: 1.3rem; color: var(--accent-cyan); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="bank"></span> 계좌 입금 상세</h2>
@@ -518,27 +518,19 @@
             <input type="text" id="dd-user-search" class="form-control" placeholder="이름 또는 연락처로 검색" oninput="renderDepositUserOptions()">
           </div>
           <div id="dd-user-options" style="margin-bottom: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem;"></div>
-          <div class="form-group" style="margin-bottom: 0.6rem;">
-            <label class="form-label">메모 (선택)</label>
-            <input type="text" id="dd-resolve-memo" class="form-control" placeholder="예: 전화로 확인 후 대신 처리">
-          </div>
-          <button id="dd-resolve-btn" class="btn-action btn-primary" style="width: 100%;" onclick="submitDepositResolve(this)">선택한 회원으로 충전 처리(완료)</button>
-
-          <!-- 기본 접힘 - "기타로 처리"는 예외 경로라 눌러야만 사유 입력이 펼쳐진다. -->
-          <div style="text-align: center; margin-top: 0.9rem;">
-            <button type="button" id="dd-other-toggle" onclick="toggleDepositOtherSection()" style="background: none; border: none; padding: 0.2rem; font-size: 0.8rem; color: var(--text-muted); text-decoration: underline; cursor: pointer;">충전 대상이 아님 (기타로 처리)</button>
-          </div>
-          <div id="dd-other-section" style="display: none; border-top: 1px dashed var(--border-glass); padding-top: 0.8rem; margin-top: 0.8rem;">
-            <div class="form-group" style="margin-bottom: 0.6rem;">
-              <label class="form-label">충전 대상이 아님 - 사유</label>
-              <textarea id="dd-other-reason" class="form-control" rows="2" placeholder="예: 테스트 입금, 타 용도 입금 등"></textarea>
-            </div>
-            <button class="btn-action" style="width: 100%; background: rgba(148,163,184,0.15); color: var(--text-muted);" onclick="submitDepositMarkOther(this)">기타로 처리(충전 안 함)</button>
+          <!-- 메모는 충전 처리 메모이자 기타 처리 사유(#deposit-modal) - 회원이 선택돼 있으면
+               "확인 후 처리", 없으면 "잘못된 입금"이 기본값(관리자가 고치면 그대로 둔다). -->
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" id="dd-memo-label">메모</label>
+            <input type="text" id="dd-resolve-memo" class="form-control" oninput="_depositMemoTouched = true">
           </div>
         </div>
       </div>
 
+      <!-- 처리 버튼은 하나 - 회원이 선택돼 있으면 "충전 처리", 아니면 "기타 처리"(renderDepositActionButton).
+           대기/오류가 아닌 건(완료/기타/비활성)에선 숨기고 닫기만 남는다. -->
       <div class="modal-footer">
+        <button id="dd-action-btn" class="btn-action btn-primary" style="display: none;" onclick="submitDepositAction(this)">충전 처리</button>
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeDepositDetailModal()">닫기</button>
       </div>
     </div>
@@ -901,6 +893,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261023_0001"></script>
+  <script src="src/admin.js?v=20261023_0002"></script>
 </body>
 </html>

@@ -1784,6 +1784,10 @@ async def ws_admin(websocket: WebSocket, token: str = Query(...), db: Session = 
     admin = db.query(models.User).filter(
         models.User.id == admin_id, models.User.role == "ADMIN", models.User.status == "ACTIVE",
     ).first() if admin_id else None
+    # 인증 조회만 하고 세션을 바로 돌려준다 - 소켓이 살아 있는 내내 "idle in transaction"으로
+    # users 읽기 잠금을 쥐고 있으면, 다음 기동 워커의 마이그레이션 ALTER TABLE users가 그 뒤에서
+    # 기다리고 그 뒤로 모든 users 조회가 줄줄이 막힌다(2026-10-23 운영 장애).
+    db.close()
     if not admin:
         await websocket.close(code=1008)
         return
@@ -1800,6 +1804,7 @@ async def ws_user(websocket: WebSocket, token: str = Query(...), db: Session = D
     user = db.query(models.User).filter(
         models.User.id == user_id, models.User.status == "ACTIVE",
     ).first() if user_id else None
+    db.close()  # ws_admin과 같은 이유 - 소켓 수명 동안 users 잠금을 쥐지 않게
     if not user:
         await websocket.close(code=1008)
         return

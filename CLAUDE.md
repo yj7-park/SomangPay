@@ -229,6 +229,15 @@
 - **아직 안 고친 것**: 라이브 메뉴 갱신(`send_to_kiosk`/`broadcast_kiosks`)은 여전히
   워커 로컬이라 다중 워커에서 일부 키오스크에 신호가 안 갈 수 있다. 근본 해결은
   매니저에 Redis pub/sub.
+- **WS 핸들러는 DB 세션을 소켓 수명 동안 쥐고 있으면 안 된다(2026-10-23 운영 장애)**: `ws_admin`/
+  `ws_user`가 `Depends(get_db)`로 회원을 조회한 뒤 세션을 그대로 들고 있어서 "idle in transaction"으로
+  `users` 읽기 잠금이 소켓 내내 남았다. 배포 때 먼저 뜬 워커에 관리자 태블릿이 재접속한 상태에서 늦게
+  뜬 워커의 마이그레이션 `ALTER TABLE users ADD COLUMN IF NOT EXISTS`(컬럼이 있어도 ACCESS EXCLUSIVE를
+  잡는다)가 그 뒤에서 기다렸고, 그 뒤로 **모든 `users` 조회가 줄을 서서 로그인/결제가 12분간 멈췄다**.
+  `pg_terminate_backend`로 그 세션을 끊어 복구. 재발 방지: 두 핸들러가 인증 직후 `db.close()`,
+  `_run_migration_step`은 postgres에서 `SET LOCAL lock_timeout = '3s'`(못 잡으면 그 단계만 건너뜀).
+  진단: `docker exec somangpay-db psql ... -c "select pid,state,wait_event_type,now()-xact_start,
+  left(query,90) from pg_stat_activity ..."`에서 `idle in transaction` + 뒤에 줄 선 `Lock relation`을 본다.
 
 ## 문자(SMS) 발송 대기열 (2026-10-22, #sms-outbox)
 
@@ -288,8 +297,15 @@
   바로 쓴 입금이라 **나중에 활성화해도 되살리지 않는다**(사용자 결정). `deposit_matcher.park_inactive_deposits`
   가 미처리(PENDING/ERROR) 건을 INACTIVE로 옮기는데, 백엔드 기동 때(전체), 회원을 비활성으로 바꿀 때
   (그 회원), 명단 일괄 등록 때 돈다 - "본인 입금 아님"으로 돌아온 ERROR는 제외. 정지 회원 입금은 ERROR.
+- **입금자명 매칭 규칙**(`deposit_matcher.find_depositor_match`/`name_matches`, admin.js
+  `bestDepositCandidate`도 같은 기준): 회원 이름이 입금자명과 같거나 **입금자명 + 동명이인 꼬리 한 글자
+  (A~Z)**인 회원이 상태와 상관없이 **딱 한 명**이면 그 회원(활성=PENDING, 비활성=INACTIVE, 정지=ERROR).
+  홍길동과 홍길동B가 같이 있으면 ERROR로 두고 관리자가 지정한다. 숫자 꼬리(홍길동1)는 규칙 밖.
 - **충전함**: 모든 필터가 시간순(최신 먼저) + KST 날짜 머리말(오늘/어제/날짜)로 묶음. 필터는
   전체/대기/오류/완료(CREDITED+CREDITED_MANUAL)/비활성, 기타(OTHER)는 전체에서만 보인다.
+  입금 상세 모달(대기/오류만 처리 가능)은 하단 고정 줄에 처리 버튼 하나 + 닫기 - 회원이 선택돼 있으면
+  "충전 처리", 아니면 "기타 처리". 메모 칸이 기타 처리 사유를 겸하고, 관리자가 안 건드렸으면 기본값이
+  선택 상태를 따라간다("확인 후 처리" / "잘못된 입금"). 선택된 회원을 다시 누르면 해제.
 - **나이/시니어**: 나이는 저장하지 않고 `users.birth_year`(= 등록한 해 - 그때 나이)로 두고 응답의
   `age`(computed)로 계산한다(`services/member_age.py`, 생년월일이 있으면 그쪽 우선). 시니어 기준은
   **70세 이상**(`SENIOR_AGE`) - 등록/수정 모달에서 생년월일·나이를 입력하면 구분을 자동으로 맞춰주지만,

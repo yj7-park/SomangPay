@@ -1,5 +1,7 @@
+import re
 from typing import Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app import models
 
@@ -10,15 +12,43 @@ _DENY_MEMO_PREFIX = "회원이 본인 입금 아님"
 _LEGACY_INACTIVE_MEMO_PREFIX = "비활성 회원("
 
 
-def match_new_deposit(db: Session, txn: "models.BankTransaction") -> None:
-    """새로 등록된 계좌 입금 건을 입금자명으로 등록 회원과 자동 매칭한다. 회원 이름은
-    유일하므로(동명이인은 관리자가 구분 이름으로 등록) 정확히 일치하는 이름이 있으면 그
-    회원에게 매칭해 PENDING으로, 없으면 ERROR로 남겨 관리자가 수동 처리하게 한다.
+_SUFFIX = re.compile(r"[A-Z]")
 
-    비활성(INACTIVE) 회원과 일치하면 INACTIVE(#inactive) - 아직 이 시스템을 안 쓰는 회원이
+
+def name_matches(member_name: str, depositor_name: str) -> bool:
+    """입금자명과 회원 이름이 같은 사람으로 볼 만한지 - 이름이 그대로 같거나, 회원 이름이 입금자명 +
+    동명이인 구분 꼬리 한 글자(A~Z, 예: 홍길동B)일 때. 은행 입금자명엔 그 꼬리가 없다."""
+    m = (member_name or "").strip()
+    d = (depositor_name or "").strip()
+    if not m or not d:
+        return False
+    return m == d or (len(m) == len(d) + 1 and m.startswith(d) and bool(_SUFFIX.fullmatch(m[-1])))
+
+
+def find_depositor_match(db: Session, depositor_name: str) -> Optional["models.User"]:
+    """이름 규칙(name_matches)에 맞는 회원이 상태와 상관없이 딱 한 명이면 그 회원, 아니면 None.
+    홍길동과 홍길동B가 둘 다 있으면 누구 입금인지 모르니 매칭하지 않는다(관리자가 직접 지정)."""
+    d = (depositor_name or "").strip()
+    if not d:
+        return None
+    # 후보만 좁히는 1차 필터(이름 그대로 또는 한 글자 더) - 꼬리가 A~Z인지는 name_matches가 본다.
+    like = d.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "_"
+    rows = db.query(models.User).filter(
+        or_(models.User.name == d, models.User.name.like(like, escape="!"))
+    ).all()
+    hits = [u for u in rows if name_matches(u.name, d)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def match_new_deposit(db: Session, txn: "models.BankTransaction") -> None:
+    """새로 등록된 계좌 입금 건을 입금자명으로 등록 회원과 자동 매칭한다(find_depositor_match -
+    이름 그대로 또는 꼬리 A~Z가 붙은 회원이 딱 한 명일 때). 활성 회원이면 PENDING(회원이 앱에서
+    확정), 없거나 여러 명이면 ERROR로 남겨 관리자가 처리한다.
+
+    비활성(INACTIVE) 회원이면 INACTIVE(#inactive) - 아직 이 시스템을 안 쓰는 회원이
     현장에서 바로 쓰려고 낸 입금이라 충전하지도, 오류로 알리지도 않고 그대로 둔다(나중에
-    활성화해도 되살리지 않음). 정지(SUSPENDED) 회원은 지금처럼 ERROR로 관리자가 확인한다."""
-    user = db.query(models.User).filter(models.User.name == txn.depositor_name).first()
+    활성화해도 되살리지 않음). 정지(SUSPENDED) 회원은 ERROR로 관리자가 확인한다."""
+    user = find_depositor_match(db, txn.depositor_name)
     if user and user.status == "ACTIVE":
         txn.matched_user_id = user.id
         txn.status = "PENDING"
@@ -44,7 +74,13 @@ def park_inactive_deposits(db: Session, user: Optional["models.User"] = None) ->
     if not inactive:
         return 0
     by_id = {u.id: u for u in inactive}
-    by_name = {u.name: u for u in inactive}
+    # 매칭 안 된 입금은 이름 규칙으로 찾되, 후보는 상태와 상관없이 전체 회원에서 센다 - 활성
+    # 홍길동과 비활성 홍길동B가 같이 있으면 누구 입금인지 모르니 건드리지 않는다.
+    all_users = db.query(models.User.id, models.User.name).all()
+
+    def unique_owner(depositor_name: str) -> Optional["models.User"]:
+        hits = [uid for uid, name in all_users if name_matches(name, depositor_name)]
+        return by_id.get(hits[0]) if len(hits) == 1 else None
 
     moved = 0
     txns = db.query(models.BankTransaction).filter(models.BankTransaction.status.in_(["PENDING", "ERROR"])).all()
@@ -52,7 +88,7 @@ def park_inactive_deposits(db: Session, user: Optional["models.User"] = None) ->
         memo = t.resolution_memo or ""
         if memo.startswith(_DENY_MEMO_PREFIX):
             continue
-        owner = by_id.get(t.matched_user_id) if t.matched_user_id else by_name.get(t.depositor_name)
+        owner = by_id.get(t.matched_user_id) if t.matched_user_id else unique_owner(t.depositor_name)
         if owner is None:
             continue
         t.status = "INACTIVE"
