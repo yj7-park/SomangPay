@@ -15,8 +15,8 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20260908_2000">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20260903_0023">
+  <link rel="stylesheet" href="src/style.css?v=20261022_1800">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20261022_1800">
   <script src="jsQR.min.js"></script>
   <script>
     // 푸시 알림(Web Push)을 받으려면 서비스 워커 등록이 필요함 - kiosk.html/user.html과 동일한 패턴.
@@ -38,7 +38,7 @@
        kiosk.html/user.html은 별도 html 태그(별도 문서)라 영향 없음. -->
   <style>html { font-size: 17px; }</style>
 </head>
-<body>
+<body class="page-admin">
   <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC)을 막는다 - kiosk.html과
        동일한 패턴(setAdminTheme()/initAdminTheme(), admin.js 참고). body에 거는 이유는
        instagram-theme.css 참고(모달이 .admin-shell 밖에 있어서 래퍼 스코프로는 안 닿음). -->
@@ -90,46 +90,42 @@
 
       <!-- ================= HOME (대시보드) ================= -->
       <div id="admin-view-home" class="admin-view active">
-        <div class="glass-container hero-stat">
-          <div class="hero-stat-top">
-            <div class="stat-label">잔액 보유 회원수</div>
-            <div class="stat-value-sm" id="stat-users-with-balance">0명</div>
+        <!-- 잔액 카드(#admin-b) - 회원 앱 홈 잔액 카드(#home-b)와 같은 컴포넌트(.user-card-widget,
+             높이 11.5rem 고정)를 그대로 쓴다. 평소엔 남색 + "회원 N명의 보유 잔액" + 큰 금액.
+             처리 대기(대기/오류)가 있으면 회원 앱 충전 대기와 똑같이 카드 자체가 초록으로 바뀌어
+             위쪽에 "처리 대기 N건" + [충전함에서 처리하기], 아래 남색 띠에 총 보유 잔액(사용자
+             요청 - 예전엔 카드 아래 별도 빨간 배너였다). 렌더링은 admin.js renderDashboard. -->
+        <div id="admin-card-box" class="user-card-widget admin-card-widget">
+          <div class="user-card-normal">
+            <div class="user-card-label">회원 <span id="stat-users-with-balance">0</span>명의 보유 잔액</div>
+            <div id="stat-total-balance" class="user-balance-big">0원</div>
           </div>
-          <div class="hero-stat-bottom">
-            <div class="stat-label">총 보유 잔액 합계</div>
-            <div class="stat-value" id="stat-total-balance">0원</div>
-          </div>
+          <div id="admin-card-pending" class="user-card-pending"></div>
         </div>
 
-        <!-- 처리 대기 배너(#redesign) - 대기/오류 타일 2개를 하나로 합쳤다. 0건이면
-             admin.js가 display:none으로 완전히 숨긴다 - 처리할 게 없으면 조용해야 한다. -->
-        <div class="glass-container pending-action-banner" id="pending-action-banner" style="display: none;" onclick="switchAdminView('inbox')">
-          <span class="pending-action-icon" data-icon="alert"></span>
-          <div class="pending-action-text">
-            <div class="pending-action-title" id="pending-action-title">처리 대기 0건</div>
-            <div class="pending-action-sub" id="pending-action-sub"></div>
-          </div>
-          <span class="pending-action-chevron" data-icon="chevron-down" style="transform: rotate(-90deg);"></span>
+        <!-- 기간 요약(#admin-b) - 예전엔 오늘/이번달 토글 + 타일 2장이라 한 번에 한 기간만
+             보였다. 회원 앱 "이번 달 요약"처럼 토글을 없애고 표 한 장에 두 기간을 같이 둔다.
+             데이터는 그대로 /admin/stats/summary의 today/this_month. -->
+        <div class="glass-container admin-period-summary">
+          <span></span>
+          <span class="aps-head">오늘</span>
+          <span class="aps-head">이번 달</span>
+          <span class="aps-label">충전</span>
+          <span class="aps-value is-plus" id="stat-today-deposit">0원</span>
+          <span class="aps-value is-plus" id="stat-month-deposit">0원</span>
+          <span class="aps-label">결제</span>
+          <span class="aps-value" id="stat-today-payment">0원</span>
+          <span class="aps-value" id="stat-month-payment">0원</span>
         </div>
 
-        <!-- 4타일(오늘/이번달 × 충전/결제)이 한 화면에 다 있으니 정작 지금 뭘 보고 있는지
-             헷갈렸다 - 기간 토글 + 2타일로(#redesign, admin.js의 selectHomeStatsPeriod 참고). -->
-        <div class="admin-page-title-row" style="margin-bottom: 0.6rem;">
-          <span style="font-size: 0.85rem; color: var(--text-muted);">기간 통계</span>
-          <div class="seg-control" style="margin-left: auto;">
-            <button id="home-period-today-btn" type="button" onclick="selectHomeStatsPeriod('today')">오늘</button>
-            <button id="home-period-month-btn" type="button" onclick="selectHomeStatsPeriod('this_month')">이번달</button>
+        <!-- 최근 입금(#admin-b) - 회원 앱 홈 "최근 이용"처럼 충전함 최신 3건. 행 모양/클릭
+             동작(입금 상세 모달)은 충전함과 같은 renderActivityLine. -->
+        <div class="glass-container user-recent admin-recent">
+          <div class="user-recent-head">
+            <span>최근 입금</span>
+            <button type="button" class="user-recent-more" onclick="switchAdminView('inbox')">전체보기 ›</button>
           </div>
-        </div>
-        <div class="stat-grid">
-          <div class="glass-container stat-tile">
-            <div class="stat-label">충전액</div>
-            <div class="stat-value" id="stat-period-deposit">0원</div>
-          </div>
-          <div class="glass-container stat-tile">
-            <div class="stat-label">결제액</div>
-            <div class="stat-value" id="stat-period-payment">0원</div>
-          </div>
+          <div id="admin-recent-list"></div>
         </div>
       </div>
 
@@ -401,30 +397,33 @@
       <div id="admin-view-member-detail" class="admin-view">
         <!-- 뒤로가기는 이제 상단 고정 바(app-header-back)가 담당 - 화면 안에 중복으로 두지
              않는다(#redesign). -->
+        <!-- #admin-b - 회원 앱 "내 정보"처럼 이름 + 연락처를 머리에 두고, 잔액은 회원 앱 홈과 같은
+             남색 카드로. 일반/활성 같은 기본값 배지는 숨기고 시니어/정지만 띄운다(admin.js
+             renderMemberDetail). 연락처/생년월일은 카드 안 설명문 대신 목록 행으로. -->
         <div class="detail-header">
           <div class="detail-header-id">
             <h2 id="detail-member-name">-</h2>
+            <div class="detail-member-head-phone" id="detail-member-head-phone">-</div>
             <div class="detail-header-tags">
-              <span id="detail-member-badge" class="badge-tag badge-general">-</span>
-              <span id="detail-member-status" class="detail-status-chip"></span>
+              <span id="detail-member-badge" class="badge-tag badge-senior" style="display: none;">시니어</span>
+              <span id="detail-member-status" class="detail-status-chip is-suspended" style="display: none;">정지됨</span>
             </div>
           </div>
         </div>
 
-        <div class="glass-container" style="padding: 1.2rem; margin-bottom: 1rem; position: relative;">
-          <button class="icon-plain-btn" style="position: absolute; top: 0.9rem; right: 0.9rem;" onclick="openEditUserModal(currentDetailUserId)" title="정보수정" aria-label="정보수정"><span data-icon="edit"></span></button>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">현재 잔액</div>
-          <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-main);" id="detail-member-balance">0원</div>
-          <div style="margin-top: 0.7rem; font-size: 0.85rem; color: var(--text-muted);">
-            연락처 (로그인 ID): <strong id="detail-member-phone" style="color: var(--text-main);">-</strong>
-          </div>
-          <div style="margin-top: 0.3rem; font-size: 0.85rem; color: var(--text-muted);">
-            생년월일: <strong id="detail-member-birth-date" style="color: var(--text-main);">-</strong>
-          </div>
-          <div style="display: flex; gap: 0.6rem; margin-top: 0.9rem;">
-            <button class="btn-action btn-primary" style="flex: 1;" onclick="openDetailRechargeModal()"><span data-icon="plus"></span> 금액 충전</button>
-            <button class="btn-action" style="flex: 1; background: var(--accent-danger-glow); color: var(--icon-danger);" onclick="openDetailDeductModal()"><span data-icon="minus"></span> 금액 차감</button>
-          </div>
+        <div class="glass-container member-balance-card">
+          <button class="icon-plain-btn member-balance-edit" onclick="openEditUserModal(currentDetailUserId)" title="정보수정" aria-label="정보수정"><span data-icon="edit"></span></button>
+          <div class="stat-label">현재 잔액</div>
+          <div class="member-balance-value" id="detail-member-balance">0원</div>
+        </div>
+        <div class="member-balance-actions">
+          <button class="btn-action btn-primary member-recharge-btn" onclick="openDetailRechargeModal()"><span data-icon="plus"></span> 금액 충전</button>
+          <button class="btn-action member-deduct-btn" onclick="openDetailDeductModal()"><span data-icon="minus"></span> 금액 차감</button>
+        </div>
+
+        <div class="glass-container user-list-group">
+          <div class="user-list-row"><span>연락처 (로그인 ID)</span><span class="user-list-value" id="detail-member-phone">-</span></div>
+          <div class="user-list-row"><span>생년월일</span><span class="user-list-value" id="detail-member-birth-date">-</span></div>
         </div>
 
         <div class="glass-container" style="padding: 1.2rem; margin-bottom: 1rem;">
@@ -758,7 +757,7 @@
     <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary);">
       <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.6rem; color: var(--text-main); margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">대시보드 접근을 위해 관리자 PIN 번호를 입력하세요.</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">관리자 PIN 번호를 입력하세요.</p>
 
       <!-- 앱 안에서만 보임(showAdminPinDetectNoticeIfNative, admin.js) - 로그인이 실시간 입금
            자동감지 활성화의 전제조건이라는 걸 처음 설치했을 때부터 명확히 안내한다. -->
@@ -772,7 +771,10 @@
              전용 숫자 키패드로만 입력받는다. 물리 키보드 입력/onkeyup Enter 제출은
              inputmode와 무관하게 그대로 동작한다(포커스/값 자체는 막지 않음, 화면
              키보드 팝업만 억제). -->
-        <input type="password" id="admin-pin-input" class="form-control pin-code-input" placeholder="PIN 번호 입력" maxlength="8" inputmode="none" autocomplete="off" onkeyup="if(event.key==='Enter') submitAdminPin();">
+        <input type="password" id="admin-pin-input" class="form-control pin-code-input" placeholder="PIN 번호 입력" maxlength="8" inputmode="none" autocomplete="off" onkeyup="if(event.key==='Enter') submitAdminPin();" oninput="clearAdminPinError()">
+        <!-- 오류는 알림 모달 대신 입력칸 바로 아래 한 줄로(#admin-b, 회원 앱 로그인 #login-b와
+             같은 방식) - 모달을 닫는 한 번의 탭 없이 바로 다시 입력할 수 있다. -->
+        <div id="admin-pin-error" class="ig-login-error" role="alert" style="display: none;"></div>
       </div>
 
       <!-- 숫자 키패드(#redesign) - 텍스트 필드 하나뿐이던 화면 대신 실제 잠금 화면처럼 탭으로
@@ -793,7 +795,7 @@
         <button type="button" class="pin-key pin-key-backspace" id="admin-pin-backspace" aria-label="한 글자 지우기"><span data-icon="backspace"></span></button>
       </div>
 
-      <button class="btn-action btn-primary pin-lock-actions" style="margin-top: 1rem;" onclick="submitAdminPin()">인증하기</button>
+      <button class="btn-action btn-primary pin-lock-actions admin-pin-submit" style="margin-top: 1rem;" onclick="submitAdminPin()">인증하기</button>
     </div>
   </div>
 
@@ -825,6 +827,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20260928_1500"></script>
+  <script src="src/admin.js?v=20261022_1800"></script>
 </body>
 </html>

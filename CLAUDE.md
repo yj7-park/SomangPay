@@ -185,6 +185,18 @@
   → 키오스크는 보류 쪽으로 검토안 제시). 이번 홈 변경은 회원 앱 전용 클래스와 새 토큰
   (`--user-pending-bg`/`--user-pending-ink`, instagram-theme.css `:root`)만 써서 다른 화면에
   영향 없음.
+- 관리자 앱(admin.html)에도 같은 원칙 적용(2026-10-22, #admin-b): `<body class="page-admin">`로
+  차콜 글자색 공유, 홈 = 회원 앱과 같은 잔액 카드 컴포넌트(`.user-card-widget` 재사용, 11.5rem 고정,
+  "회원 N명의 보유 잔액") + 오늘/이번 달
+  표(토글 없앰, `.admin-period-summary`) + 최근 입금 3건(`renderHomeRecentDeposits`, 평범한
+  "완료" 배지는 뺌), 회원 목록/상세는 "일반"/"활성" 같은 기본값 배지를 숨기고 연락처를
+  `formatPhoneDisplay`로 하이픈 표시, 회원 상세 잔액은 남색 카드 + 아래 충전/차감 버튼, PIN
+  오류는 모달 대신 `#admin-pin-error` 한 줄, 인증 버튼은 남색(`.admin-pin-submit`). 처리 대기
+  (대기+오류)는 별도 빨간 배너를 없애고 회원 앱 충전 대기처럼 **카드 자체를 대기 상태**로
+  바꿔 위쪽에 "처리 대기 N건" + [충전함에서 처리하기], 아래 남색 띠에 총 보유 잔액/회원수를
+  둔다(사용자 요청 "충전 처리랑 똑같이", `renderDashboard`). 색만 회원 앱 초록 대신 주황
+  `--admin-pending-bg #c2410c`(사용자 요청). `buildDepositEvents(filter)`는
+  인자를 안 주면 충전함 필터를 따른다.
 
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 

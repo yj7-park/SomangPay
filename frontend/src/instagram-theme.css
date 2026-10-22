@@ -51,6 +51,10 @@
      --user-pending-ink는 그 위 흰 버튼의 글자색. 카드 배경처럼 라이트/다크 공통. */
   --user-pending-bg: #0a7d5a;
   --user-pending-ink: #075c43;
+  /* 관리자 홈 카드 처리 대기(#admin-b) - 회원 앱 초록 대신 주황(사용자 요청). 남색 띠와 보색
+     대비로 어울리는 번트 오렌지, 흰 글씨 대비 5.2:1. 흰 버튼 글자는 한 단계 진한 톤. */
+  --admin-pending-bg: #c2410c;
+  --admin-pending-ink: #9a3412;
 
   --accent-cyan: #6781c0;    /* 메인 액센트 (버튼/링크/포커스) - 로고 중간 톤 */
   --accent-cyan-glow: rgba(103, 129, 192, 0.18);
@@ -199,18 +203,27 @@ body[data-theme="light"] {
   --shadow-subtle: 0 4px 18px rgba(0, 0, 0, 0.08);
 }
 
-/* 회원 앱(user.html, body.page-user) 라이트 모드 본문 글자색 - #262626(거의 검정)이 남색 잔액
+/* 회원 앱(user.html, body.page-user)·관리자 앱(body.page-admin) 라이트 모드 본문 글자색 - #262626(거의 검정)이 남색 잔액
    카드/초록 대기 카드와 나란히 있으면 너무 까맣게 떠 보인다는 피드백(2026-10-15)으로, 키오스크
    메뉴 이름(--text-menu-name)처럼 회색이 섞인 차콜로 한 단계 낮춘다. 살짝 남색 쪽으로 기울여
    브랜드 남색과 어울리게 했고, #fafafa 배경 대비는 약 11:1이라 가독성 문제는 없다. 관리자/
    키오스크 화면은 이 클래스가 없어 영향 없음. 다크 모드(흰 글자)는 그대로. */
 @media (prefers-color-scheme: light) {
-  body.page-user:not([data-theme="dark"]) {
+  body.page-user:not([data-theme="dark"]),
+  body.page-admin:not([data-theme="dark"]) {
     --text-main: #383a45;
   }
 }
-body.page-user[data-theme="light"] {
+body.page-user[data-theme="light"],
+body.page-admin[data-theme="light"] {
   --text-main: #383a45;
+}
+
+/* 관리자 앱(admin.html)도 같은 차콜로(#admin-b, 2026-10-22). PIN 인증 버튼은 회원 앱 로그인
+   버튼(.ig-login-btn)처럼 남색 - 공용 액센트(--accent-cyan) 결정과 무관하게 이 버튼만. */
+body.page-admin .admin-pin-submit {
+  background: var(--user-card-bg, #2d326e);
+  color: #fff;
 }
 
 /* 위 body[data-theme="light"]와 같은 이유(html:has(body:not([data-theme="dark"]))

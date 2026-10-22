@@ -184,6 +184,13 @@ function _resolveConfirmModal(result) {
   if (_confirmModalResolve) { _confirmModalResolve(result); _confirmModalResolve = null; }
 }
 
+// 목록/상세 표시용 - 저장값은 숫자만(01012345678)이라 읽기 쉽게 하이픈을 넣는다(#admin-b).
+// 11자리 휴대폰 번호가 아니면 손대지 않고 그대로 돌려준다.
+function formatPhoneDisplay(phone) {
+  const d = String(phone || "").replace(/\D/g, "");
+  return d.length === 11 ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : (phone || "");
+}
+
 // 전화번호 입력 필드에 실시간으로 하이픈을 자동 삽입한다 (010-1234-5678 형태).
 function formatPhoneInput(input) {
   const digits = input.value.replace(/\D/g, "").slice(0, 11);
@@ -727,20 +734,36 @@ function appendAdminPinDigit(digit) {
   if (!input) return;
   const max = Number(input.getAttribute("maxlength")) || 8;
   if (input.value.length >= max) return;
+  clearAdminPinError();
   input.value += digit;
 }
 
 function removeAdminPinDigit() {
   const input = document.getElementById("admin-pin-input");
   if (!input) return;
+  clearAdminPinError();
   input.value = input.value.slice(0, -1);
+}
+
+// PIN 오류는 입력칸 아래 한 줄(#admin-pin-error)로(#admin-b) - 회원 앱 로그인의
+// showLoginError/clearLoginError와 같은 방식.
+function showAdminPinError(message) {
+  const el = document.getElementById("admin-pin-error");
+  if (!el) return;
+  el.textContent = message;
+  el.style.display = "";
+}
+
+function clearAdminPinError() {
+  const el = document.getElementById("admin-pin-error");
+  if (el) { el.style.display = "none"; el.textContent = ""; }
 }
 
 async function submitAdminPin() {
   const pinInput = document.getElementById("admin-pin-input");
   const pin = pinInput ? pinInput.value.trim() : "";
   if (!pin) {
-    await showAlertModal("PIN 번호를 입력하세요.");
+    showAdminPinError("PIN 번호를 입력하세요.");
     return;
   }
 
@@ -763,14 +786,14 @@ async function submitAdminPin() {
       syncAdminTokenToNative();
       checkNativeNotificationDeepLink();
     } else if (res.status === 429) {
-      await showAlertModal(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
+      showAdminPinError(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
-      await showAlertModal("관리자 PIN 번호가 올바르지 않습니다.");
+      showAdminPinError("PIN 번호가 맞지 않아요. 다시 입력해 주세요.");
       if (pinInput) pinInput.value = "";
     }
   } catch (err) {
     console.error("PIN Auth error:", err);
-    await showAlertModal("서버 연결 오류. 잠시 후 다시 시도하세요.");
+    showAdminPinError("서버에 연결하지 못했어요. 잠시 후 다시 시도하세요.");
   }
 }
 
@@ -1542,45 +1565,47 @@ function statAmountHtml(value, unit = "원") {
   return `${Number(value).toLocaleString()}<small class="stat-unit">${unit}</small>`;
 }
 
-// 홈 탭 기간 통계(오늘/이번달) 토글(#redesign) - stats.today/stats.this_month는 이미 한 번의
-// /admin/stats/summary 응답에 같이 오므로, 토글은 재조회 없이 캐시해둔 stats만 다시 그린다.
-let _lastDashboardStats = null;
-let homeStatsPeriod = "today";
-
-function selectHomeStatsPeriod(period) {
-  homeStatsPeriod = period;
-  renderHomePeriodStats();
-}
-
-function renderHomePeriodStats() {
-  document.getElementById("home-period-today-btn")?.classList.toggle("is-on", homeStatsPeriod === "today");
-  document.getElementById("home-period-month-btn")?.classList.toggle("is-on", homeStatsPeriod === "this_month");
-  if (!_lastDashboardStats) return;
-  const period = _lastDashboardStats[homeStatsPeriod];
-  document.getElementById("stat-period-deposit").innerHTML = statAmountHtml(period.deposit_amount);
-  document.getElementById("stat-period-payment").innerHTML = statAmountHtml(period.payment_amount);
+// 홈 기간 요약(#admin-b) - 오늘/이번 달을 토글 없이 표 한 장에 같이 그린다.
+function renderHomePeriodStats(stats) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = statAmountHtml(v); };
+  set("stat-today-deposit", stats.today.deposit_amount);
+  set("stat-today-payment", stats.today.payment_amount);
+  set("stat-month-deposit", stats.this_month.deposit_amount);
+  set("stat-month-payment", stats.this_month.payment_amount);
 }
 
 function renderDashboard(stats) {
-  _lastDashboardStats = stats;
-  document.getElementById("stat-total-balance").innerHTML = statAmountHtml(stats.total_balance);
-  document.getElementById("stat-users-with-balance").innerHTML = statAmountHtml(stats.users_with_balance, "명");
-  renderHomePeriodStats();
+  const totalBalance = Number(stats.total_balance).toLocaleString();
+  const memberCount = Number(stats.users_with_balance).toLocaleString();
+  document.getElementById("stat-total-balance").innerHTML = `${totalBalance}<span class="user-balance-unit">원</span>`;
+  document.getElementById("stat-users-with-balance").innerText = memberCount;
+  renderHomePeriodStats(stats);
 
-  // 처리 대기 배너 - 0건이면 조용히 숨긴다(#redesign). 대기/오류가 섞여 있으면 둘 다
-  // 소계로 보여줘서 배너 하나만 봐도 어느 쪽이 몇 건인지 알 수 있게 한다.
+  // 처리 대기(대기/오류)는 잔액 카드 자체를 초록 대기 상태로 바꿔 보여준다(#admin-b) - 회원 앱
+  // 충전 대기 카드(user.js renderPendingDepositCard)와 같은 마크업/클래스. 0건이면 평소 카드.
   const pendingCount = stats.pending_deposit_count;
   const errorCount = stats.error_deposit_count;
   const totalCount = pendingCount + errorCount;
-  const banner = document.getElementById("pending-action-banner");
-  if (banner) {
-    banner.style.display = totalCount > 0 ? "flex" : "none";
+  const card = document.getElementById("admin-card-box");
+  const slot = document.getElementById("admin-card-pending");
+  if (card && slot) {
+    card.classList.toggle("has-pending", totalCount > 0);
     if (totalCount > 0) {
-      document.getElementById("pending-action-title").innerText = `처리 대기 ${totalCount}건`;
       const subParts = [];
       if (pendingCount > 0) subParts.push(`대기 ${pendingCount}건`);
       if (errorCount > 0) subParts.push(`오류 ${errorCount}건`);
-      document.getElementById("pending-action-sub").innerText = subParts.join(" · ");
+      slot.innerHTML = `
+        <div class="ucp-top">
+          <div class="ucp-when">${subParts.join(" · ")}</div>
+          <div class="ucp-title">처리 대기 ${totalCount}건</div>
+          <button type="button" class="ucp-btn" onclick="switchAdminView('inbox')">충전함에서 처리하기</button>
+        </div>
+        <div class="ucp-band">
+          <span><span class="ucp-band-label">총 보유 잔액</span> <strong>${totalBalance}<small>원</small></strong></span>
+          <span class="ucp-band-after">회원 <strong>${memberCount}명</strong></span>
+        </div>`;
+    } else {
+      slot.innerHTML = "";
     }
   }
 
@@ -1603,9 +1628,9 @@ function renderMemberFeedCard(u) {
     <div class="member-card-info">
       <div class="member-card-name">
         <span class="status-dot ${isActive ? '' : 'suspended'}"></span>${u.name}
-        <span class="badge-tag ${u.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}" style="margin-left: 0.4rem;">${u.user_type === 'SENIOR' ? '시니어' : '일반'}</span>
+        ${u.user_type === 'SENIOR' ? '<span class="badge-tag badge-senior" style="margin-left: 0.4rem;">시니어</span>' : ''}
       </div>
-      <div class="member-card-sub">${u.phone || '연락처 없음'}</div>
+      <div class="member-card-sub">${u.phone ? formatPhoneDisplay(u.phone) : '연락처 없음'}</div>
     </div>
     <div class="member-card-balance">${u.credit_balance.toLocaleString()}원</div>
   `;
@@ -1714,9 +1739,9 @@ function renderInboxFilterSelector() {
   `).join('');
 }
 
-function buildDepositEvents() {
+function buildDepositEvents(filter = inboxDepositFilter) {
   return bankTransactions
-    .filter(t => inboxDepositFilter === "ALL" || t.status === inboxDepositFilter)
+    .filter(t => filter === "ALL" || t.status === filter)
     .map(t => {
     // "SIM_" 접두사(processDepositDetection 참고)는 수신 시뮬레이션 버튼으로 등록된 테스트
     // 건이다 - 실제 입금과 겉모습이 똑같으면 관리자가 실제 수신으로 착각할 수 있어(실제로
@@ -1780,6 +1805,29 @@ function renderActivityCard(ev) {
   div.onclick = () => openDepositDetailModal(ev.id);
   div.innerHTML = renderActivityLine(ev);
   return div;
+}
+
+// 홈 "최근 입금"(#admin-b) - 충전함과 같은 행 마크업으로 시간순 최신 3건만. 처리 대기 정렬은
+// 안 한다(대기/오류는 바로 위 배너가 이미 따로 알려준다).
+function renderHomeRecentDeposits() {
+  const box = document.getElementById("admin-recent-list");
+  if (!box) return;
+  const events = buildDepositEvents("ALL").slice(0, 3);
+  if (events.length === 0) {
+    box.innerHTML = `<p class="admin-recent-empty">아직 입금 내역이 없어요.</p>`;
+    return;
+  }
+  box.innerHTML = "";
+  events.forEach(ev => {
+    const row = document.createElement("div");
+    row.className = "activity-row admin-recent-row";
+    row.onclick = () => openDepositDetailModal(ev.id);
+    row.innerHTML = renderActivityLine(ev);
+    // 평범한 "완료" 배지는 홈에선 뺀다 - 대부분이 완료라 이름만 좁아진다. 대기/오류/완료(예외)/
+    // 테스트처럼 평소와 다른 상태만 남긴다.
+    if (ev.status === "완료") row.querySelector(".activity-status.status-done")?.remove();
+    box.appendChild(row);
+  });
 }
 
 function renderInboxActivityFeed() {
@@ -1851,14 +1899,15 @@ function renderMemberDetail() {
   const isActive = user.status === "ACTIVE";
   document.getElementById("detail-member-name").innerText = user.name;
   document.getElementById("admin-header-title").innerText = user.name; // 상단 고정 바 제목(#redesign)
+  // 기본값(일반/활성)은 배지로 안 띄운다(#admin-b, 회원 앱에서 "일반" 배지를 뺀 것과 같은
+  // 원칙) - 시니어/정지처럼 평소와 다를 때만 보여야 눈에 들어온다.
   const badge = document.getElementById("detail-member-badge");
-  badge.innerText = user.user_type === 'SENIOR' ? '시니어' : '일반';
-  badge.className = `badge-tag ${user.user_type === 'SENIOR' ? 'badge-senior' : 'badge-general'}`;
+  badge.style.display = user.user_type === 'SENIOR' ? "" : "none";
   const statusEl = document.getElementById("detail-member-status");
-  statusEl.textContent = isActive ? "활성" : "정지됨";
-  statusEl.className = `detail-status-chip ${isActive ? "is-active" : "is-suspended"}`;
+  statusEl.style.display = isActive ? "none" : "";
+  document.getElementById("detail-member-head-phone").innerText = user.phone ? formatPhoneDisplay(user.phone) : "연락처 없음";
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
-  document.getElementById("detail-member-phone").innerText = user.phone || "-";
+  document.getElementById("detail-member-phone").innerText = user.phone ? formatPhoneDisplay(user.phone) : "-";
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
 
   renderDetailCardSlots();
@@ -2188,6 +2237,7 @@ async function loadBankTransactions() {
     if (!res.ok) return;
     bankTransactions = await res.json();
     renderInboxActivityFeed();
+    renderHomeRecentDeposits();
     renderInboxFilterSelector(); // 칩 건수가 bankTransactions 기준이라 목록 새로고침마다 같이 갱신
     if (_depositDetailTxn) {
       _depositDetailTxn = bankTransactions.find(t => t.id === _depositDetailTxn.id) || null;

@@ -967,9 +967,6 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   opacity: 0.16;
   pointer-events: none;
 }
-.hero-stat-bottom {
-  text-align: right;
-}
 .hero-stat .stat-label {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -1036,6 +1033,106 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 /* 통계 그리드 셀은 라벨/값 모두 우측 정렬. */
 .stat-grid .stat-tile {
   text-align: right;
+}
+
+/* 홈 기간 요약(#admin-b) - 행(충전/결제) × 열(오늘/이번 달) 표 한 장. 회원 앱
+   .user-month-summary와 같은 글자 크기/색 규칙(충전은 초록, 단위는 작게). */
+.admin-period-summary {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: baseline;
+  column-gap: 1rem;
+  row-gap: 0.45rem;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1rem;
+}
+.aps-head,
+.aps-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.aps-head {
+  text-align: right;
+}
+.aps-value {
+  text-align: right;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-main);
+}
+.aps-value.is-plus {
+  color: var(--accent-success);
+}
+.aps-value .stat-unit {
+  font-size: 0.7em;
+  font-weight: 500;
+  margin-left: 0.1em;
+  color: inherit;
+}
+
+/* 홈 최근 입금(#admin-b) - 카드 안 행이라 충전함 행(.glass-container.activity-row)의 카드
+   배경/좌우 여백 없이, 행 사이 구분선만. */
+.admin-recent-row {
+  padding: 0.6rem 0;
+  cursor: pointer;
+}
+.admin-recent-row + .admin-recent-row {
+  border-top: 1px solid var(--border-glass);
+}
+.admin-recent-empty {
+  padding: 0.8rem 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* 회원 상세(#admin-b) - 이름 아래 연락처, 남색 잔액 카드(회원 앱 홈 카드와 같은 톤),
+   카드 아래 충전/차감 버튼 한 줄. */
+.detail-member-head-phone {
+  margin-top: 0.1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.member-balance-card {
+  position: relative;
+  padding: 1.2rem 1.3rem 1.3rem;
+  margin-bottom: 0.7rem;
+  background: var(--user-card-bg, #2d326e);
+  border: none;
+}
+.member-balance-card .stat-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a8a8a8;
+}
+.member-balance-value {
+  margin-top: 0.2rem;
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fafafa;
+  font-variant-numeric: tabular-nums;
+}
+.member-balance-card .member-balance-edit {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  color: #fafafa;
+}
+.member-balance-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.member-balance-actions .btn-action {
+  flex: 1;
+  margin: 0;
+}
+.member-balance-actions .member-deduct-btn {
+  background: var(--accent-danger-glow);
+  color: var(--icon-danger);
 }
 
 /* 대시보드 "처리 대기" 배너(#redesign) - 대기/오류 타일 2개를 나란히 늘 띄우던 대신,
@@ -1837,6 +1934,17 @@ body[data-theme="dark"] .pending-action-banner {
 }
 .ucp-band-after strong {
   font-size: 0.92rem;
+}
+
+/* 관리자 홈 잔액 카드(#admin-b)는 같은 컴포넌트를 쓰고 워터마크만 관리자 로고로. */
+.admin-card-widget::before {
+  background-image: url('/icons/logo-mark-admin.svg');
+}
+.admin-card-widget.has-pending {
+  background: var(--admin-pending-bg, #c2410c);
+}
+.admin-card-widget .ucp-btn {
+  color: var(--admin-pending-ink, #9a3412);
 }
 
 /* 홈 탭 아이콘 초록 점 - 다른 탭에 가 있어도 충전 대기가 남았다는 표시. */
