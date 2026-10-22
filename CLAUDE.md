@@ -147,7 +147,8 @@
   기본 드라이버가 psycopg2 → psycopg(v3)로 바뀌어 `ModuleNotFoundError: No module named
   'psycopg'`로 기동 실패한다(dev에서 재빌드하다 발견). `<2.1` 상한을 걸어 해결 - 올리려면
   `psycopg[binary]`를 추가하거나 URL을 `postgresql+psycopg2://`로 명시할 것. 운영
-  (`deploy.sh backend`)도 이 상한이 들어간 뒤에 재빌드해야 안 죽는다.
+  (`deploy.sh backend`)도 이 상한이 들어간 뒤에 재빌드해야 안 죽는다 - 2026-10-22 운영 재빌드에서
+  2.0.55로 정상 기동 확인.
 - 참고로 이 작업 중 **운영 서버에 인증서 자동 갱신이 아예 안 걸려 있던 것**을
   발견해서 같이 고쳤다(2026-09-06) - `certbot`이 발급 당시엔 있었는데 이후 지워져서
   crontab/systemd timer/바이너리가 전부 없었다. snap certbot 재설치로
