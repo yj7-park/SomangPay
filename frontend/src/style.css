@@ -642,6 +642,10 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 
 .admin-main {
   flex: 1;
+  /* >=900px에선 .admin-shell이 row flex라 기본 min-width:auto면 nowrap 텍스트(최근 발송의
+     긴 문자 본문 .sms-outbox-body 등)의 전체 길이만큼 .admin-main이 오른쪽으로 늘어난다.
+     0으로 풀어야 자식의 ellipsis가 실제로 잘린다. */
+  min-width: 0;
   padding: clamp(0.75rem, 2vw, 1.5rem);
   padding-bottom: 5.5rem; /* 하단 탭바에 안 가리게 */
 }
