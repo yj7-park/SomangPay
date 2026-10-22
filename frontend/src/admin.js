@@ -1912,6 +1912,8 @@ function renderMemberDetail() {
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("detail-member-phone").innerText = user.phone ? formatPhoneDisplay(user.phone) : "-";
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
+  // 앱 비밀번호를 직접 정했는지(#activation) - 안 정했으면 첫 로그인 때 문자 인증을 거친다.
+  document.getElementById("detail-member-app-status").innerText = user.password_set ? "사용 중" : "아직 가입 전 (첫 로그인 때 문자 인증)";
 
   renderDetailCardSlots();
   renderDetailHistory();
@@ -2588,6 +2590,7 @@ function toggleDevModeSection() {
 // 웹/PWA는 문자를 직접 못 보낸다 - POST /api/admin/sms로 대기열에 넣으면 "이 기기에서 문자 발송"을
 // 켠 관리자 APK(SmsOutboxSender.java)가 가져가 그 폰 번호로 보낸다. 발송 기기 목록/온라인 여부는
 // APK가 폴링할 때마다 갱신되는 last_seen_at 기준(백엔드 sms_outbox.sender_is_online).
+const SMS_SOURCE_LABEL = { activation: "인증번호", deposit_reminder: "충전 안내" };
 const SMS_STATUS_META = {
   QUEUED: { text: "대기", cls: "status-pending" },
   SENDING: { text: "보내는 중", cls: "status-pending" },
@@ -2690,7 +2693,7 @@ function renderSmsOutbox(rows) {
     const who = r.user_name ? `${escapeHtml(r.user_name)} · ${formatPhoneDisplay(r.to_phone)}` : formatPhoneDisplay(r.to_phone);
     const action = r.status === "QUEUED"
       ? `<button type="button" class="sms-outbox-action" onclick="cancelSms(${r.id}, this)">취소</button>`
-      : r.status === "FAILED"
+      : r.status === "FAILED" && r.source !== "activation"
         ? `<button type="button" class="sms-outbox-action" onclick="retrySms(${r.id}, this)">다시 보내기</button>`
         : "";
     return `
@@ -2698,6 +2701,7 @@ function renderSmsOutbox(rows) {
         <div class="sms-outbox-top">
           <span class="sms-outbox-who">${who}</span>
           <span class="activity-status ${meta.cls}">${meta.text}</span>
+          ${SMS_SOURCE_LABEL[r.source] ? `<span class="activity-status status-other">${SMS_SOURCE_LABEL[r.source]}</span>` : ""}
           ${action}
         </div>
         <div class="sms-outbox-body">${escapeHtml(r.body)}</div>

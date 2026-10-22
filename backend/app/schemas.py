@@ -42,7 +42,8 @@ class UserStatusUpdate(BaseModel):
 
 class UserLoginRequest(BaseModel):
     phone: str
-    password: str
+    # 비밀번호를 아직 안 정한 회원(#activation)은 비워서 보내도 된다 - 서버가 문자 인증 단계로 안내.
+    password: str = ""
 
 class UserAdminUpdateInfo(BaseModel):
     """관리자가 회원 정보를 수정할 때 쓰는 스키마. new_password는 회원이 비밀번호를
@@ -65,6 +66,7 @@ class UserResponse(UserBase):
     id: int
     credit_balance: int
     status: str
+    password_set: bool = False  # 앱 비밀번호를 직접 정했는지(#activation) - False면 앱 미활성
     created_at: UTCDatetime
 
     class Config:
@@ -415,3 +417,39 @@ class SmsSenderStatus(BaseModel):
     device_name: Optional[str] = None
     last_seen_at: Optional[UTCDatetime] = None
     online: bool
+
+# ---------------- 앱 계정 활성화(#activation, services/account_activation.py) ----------------
+
+class ActivationRequest(BaseModel):
+    phone: str
+
+class ActivationRequestResponse(BaseModel):
+    request_id: int
+    phone_masked: str
+
+class ActivationStatusRequest(BaseModel):
+    phone: str
+    request_id: int
+
+class ActivationStatusResponse(BaseModel):
+    state: str  # sending / sent / expired / failed
+    expires_in: int
+
+class ActivationVerifyRequest(BaseModel):
+    phone: str
+    request_id: int
+    code: str
+
+class ActivationVerifyResponse(BaseModel):
+    activation_token: str
+
+class ActivationCompleteRequest(BaseModel):
+    activation_token: str
+    new_password: str
+
+# ---------------- 미완료 충전 안내 문자의 "본인 입금 아님" 링크(#deposit-reminder) ----------------
+
+class DepositDenyInfo(BaseModel):
+    amount: int
+    transaction_at: UTCDatetime
+    state: str  # pending(아직 처리 전) / denied(본인 아님으로 처리됨) / done(이미 충전 등 다른 처리)

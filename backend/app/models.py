@@ -19,6 +19,9 @@ class User(Base):
     credit_balance = Column(Integer, default=0, nullable=False)
     password_hash = Column(String(200), default="1234", nullable=True) # 기본 비밀번호 1234
     status = Column(String(20), default="ACTIVE") # ACTIVE, SUSPENDED
+    # 회원이 직접 비밀번호를 정했는지(#activation). False면 앱 로그인 전에 문자 인증번호 →
+    # 비밀번호 설정을 먼저 거친다(앱 계정 "미활성"). 카드/키오스크 결제와는 무관 - status만 본다.
+    password_set = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -105,6 +108,7 @@ class BankTransaction(Base):
     resolution_memo = Column(String(200), nullable=True) # OTHER 처리 사유, 또는 관리자 처리 메모
     resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    reminder_sent_at = Column(DateTime, nullable=True) # 미완료 충전 안내 문자 보낸 시각(services/deposit_reminder.py, 건당 1회)
 
     matched_user = relationship("User", foreign_keys=[matched_user_id])
 
@@ -210,3 +214,17 @@ class SmsSenderDevice(Base):
     device_id = Column(String(100), primary_key=True)
     device_name = Column(String(100), nullable=True)
     last_seen_at = Column(DateTime, nullable=True)
+
+class UserActivationCode(Base):
+    """앱 계정 활성화용 문자 인증번호(#activation). 비밀번호를 아직 안 정한 회원이 로그인을 시도하면
+    6자리 번호를 만들어 문자 대기열(SmsOutbox)로 보낸다. 번호는 해시만 저장하고, 유효시간(1분)은
+    문자가 실제로 발송된 시각(sms.sent_at)부터 잰다 - 발송 기기 폴링 지연만큼 손해 보지 않게."""
+    __tablename__ = "user_activation_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    code_hash = Column(String(200), nullable=False)
+    sms_id = Column(Integer, ForeignKey("sms_outbox.id"), nullable=True)
+    attempts = Column(Integer, default=0, nullable=False)
+    verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

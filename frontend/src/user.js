@@ -30,6 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     restoreSession();
   }
   initUserTheme();
+  checkDepositDenyLink();
 });
 
 // 상단 고정 바 실제 높이 → --header-h(#redesign) - .admin-shell의 min-height 계산이
@@ -207,8 +208,10 @@ async function userLogin() {
   const password = document.getElementById("login-password").value.trim();
   const btn = document.getElementById("login-submit-btn");
 
-  if (!phone || !password) {
-    showLoginError(!phone ? "휴대폰 번호를 입력해 주세요." : "비밀번호를 입력해 주세요.");
+  // 비밀번호는 비워도 보낸다 - 아직 비밀번호를 안 정한 회원(#activation)은 서버가 문자 인증
+  // 단계로 안내하고, 이미 정한 회원이면 서버가 "비밀번호를 입력해 주세요"로 돌려준다.
+  if (!phone) {
+    showLoginError("휴대폰 번호를 입력해 주세요.");
     return;
   }
   if (btn.disabled) return;
@@ -224,8 +227,12 @@ async function userLogin() {
     });
 
     const data = await res.json().catch(() => ({}));
+    if (res.status === 403 && data.detail && data.detail.code === "activation_required") {
+      startActivation(phone);
+      return;
+    }
     if (!res.ok) {
-      showLoginError(data.detail || "휴대폰 번호 또는 비밀번호가 맞지 않아요.");
+      showLoginError(typeof data.detail === "string" ? data.detail : "휴대폰 번호 또는 비밀번호가 맞지 않아요.");
       return;
     }
 
@@ -240,6 +247,284 @@ async function userLogin() {
     btn.disabled = false;
     btn.textContent = "로그인";
   }
+}
+
+// ============ 앱 계정 활성화(#activation) - 문자 인증번호 → 비밀번호 설정 ============
+// 서버 로직은 backend services/account_activation.py. 인증 문자는 관리자 APK가 문자 대기열에서
+// 가져가 보내므로 몇 초~20초쯤 걸릴 수 있다 - 상태를 2초마다 확인하다가 실제로 발송된 순간부터
+// 1분 카운트다운을 시작한다(유효시간도 서버가 발송 시각부터 잰다).
+let _activation = null; // { phone, requestId, token, pollTimer, tickTimer, expiresAt }
+
+function showLoginStep(step) {
+  document.getElementById("login-step-login").style.display = step === "login" ? "" : "none";
+  document.getElementById("login-step-login-hint").style.display = step === "login" ? "" : "none";
+  document.getElementById("login-step-verify").style.display = step === "verify" ? "" : "none";
+  document.getElementById("login-step-password").style.display = step === "password" ? "" : "none";
+  const sub = document.querySelector(".ig-login-sub");
+  if (sub) sub.style.display = step === "login" ? "" : "none";
+}
+
+function stopActivationTimers() {
+  if (!_activation) return;
+  clearInterval(_activation.pollTimer);
+  clearInterval(_activation.tickTimer);
+  _activation.pollTimer = _activation.tickTimer = null;
+}
+
+function showActivationError(message, id = "act-error") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function clearActivationError() {
+  ["act-error", "act-pw-error"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.hidden = true; el.textContent = ""; }
+  });
+}
+
+function setActivationTimer(text, warn = false) {
+  const el = document.getElementById("act-timer");
+  el.textContent = text;
+  el.classList.toggle("is-warn", warn);
+}
+
+function startActivation(phone) {
+  stopActivationTimers();
+  _activation = { phone, requestId: null, token: null, pollTimer: null, tickTimer: null, expiresAt: 0 };
+  document.getElementById("act-code").value = "";
+  clearActivationError();
+  showLoginStep("verify");
+  requestActivationCode();
+}
+
+async function requestActivationCode() {
+  if (!_activation) return;
+  stopActivationTimers();
+  clearActivationError();
+  document.getElementById("act-resend-btn").disabled = true;
+  document.getElementById("act-verify-btn").disabled = true;
+  setActivationTimer("인증 문자를 보내는 중이에요…");
+  try {
+    const res = await fetch(`${API_BASE}/users/activation/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: _activation.phone }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setActivationTimer("");
+      showActivationError(data.detail || "인증 문자를 보내지 못했어요.");
+      document.getElementById("act-resend-btn").disabled = false;
+      return;
+    }
+    _activation.requestId = data.request_id;
+    document.getElementById("act-phone-masked").textContent = data.phone_masked;
+    pollActivationStatus();
+    _activation.pollTimer = setInterval(pollActivationStatus, 2000);
+  } catch (e) {
+    setActivationTimer("");
+    showActivationError("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    document.getElementById("act-resend-btn").disabled = false;
+  }
+}
+
+async function pollActivationStatus() {
+  if (!_activation || !_activation.requestId) return;
+  try {
+    const res = await fetch(`${API_BASE}/users/activation/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: _activation.phone, request_id: _activation.requestId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !_activation) return;
+    if (data.state === "sending") return;
+    clearInterval(_activation.pollTimer);
+    _activation.pollTimer = null;
+    if (data.state === "sent") {
+      _activation.expiresAt = Date.now() + data.expires_in * 1000;
+      document.getElementById("act-verify-btn").disabled = false;
+      document.getElementById("act-code").focus();
+      tickActivationTimer();
+      _activation.tickTimer = setInterval(tickActivationTimer, 500);
+    } else {
+      setActivationTimer(data.state === "expired" ? "인증 시간이 지났어요." : "인증 문자를 보내지 못했어요. 다시 받아 주세요.", true);
+      document.getElementById("act-resend-btn").disabled = false;
+    }
+  } catch (e) { /* 다음 폴링에서 재시도 */ }
+}
+
+function tickActivationTimer() {
+  if (!_activation) return;
+  const left = Math.max(0, Math.ceil((_activation.expiresAt - Date.now()) / 1000));
+  if (left <= 0) {
+    clearInterval(_activation.tickTimer);
+    _activation.tickTimer = null;
+    setActivationTimer("인증 시간(1분)이 지났어요. 인증번호를 다시 받아 주세요.", true);
+    document.getElementById("act-resend-btn").disabled = false;
+    document.getElementById("act-verify-btn").disabled = true;
+    return;
+  }
+  setActivationTimer(`남은 시간 0:${String(left).padStart(2, "0")}`, left <= 10);
+}
+
+async function submitActivationCode() {
+  if (!_activation || !_activation.requestId) return;
+  const code = document.getElementById("act-code").value.trim();
+  if (code.length !== 6) {
+    showActivationError("인증번호 6자리를 입력해 주세요.");
+    return;
+  }
+  const btn = document.getElementById("act-verify-btn");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/users/activation/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: _activation.phone, request_id: _activation.requestId, code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showActivationError(data.detail || "인증번호를 확인하지 못했어요.");
+      // 번호가 틀렸을 뿐이면 다시 입력할 수 있게, 시간이 지났거나 다시 받아야 하면 재요청 버튼을 연다.
+      if (/다시 받아/.test(data.detail || "")) document.getElementById("act-resend-btn").disabled = false;
+      else btn.disabled = false;
+      return;
+    }
+    stopActivationTimers();
+    _activation.token = data.activation_token;
+    document.getElementById("act-new-password").value = "";
+    document.getElementById("act-new-password2").value = "";
+    clearActivationError();
+    showLoginStep("password");
+    document.getElementById("act-new-password").focus();
+  } catch (e) {
+    showActivationError("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    btn.disabled = false;
+  }
+}
+
+async function submitActivationPassword() {
+  if (!_activation || !_activation.token) return;
+  const pw = document.getElementById("act-new-password").value.trim();
+  const pw2 = document.getElementById("act-new-password2").value.trim();
+  if (pw.length < 4) { showActivationError("비밀번호는 4자 이상으로 정해 주세요.", "act-pw-error"); return; }
+  if (pw !== pw2) { showActivationError("두 비밀번호가 서로 달라요. 다시 확인해 주세요.", "act-pw-error"); return; }
+  const btn = document.getElementById("act-complete-btn");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/users/activation/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activation_token: _activation.token, new_password: pw }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showActivationError(data.detail || "비밀번호를 정하지 못했어요.", "act-pw-error");
+      return;
+    }
+    _activation = null;
+    showLoginStep("login");
+    document.getElementById("login-password").value = "";
+    userToken = data.token;
+    localStorage.setItem("user_token", userToken);
+    loggedInUser = data;
+    onLoginSuccess(loggedInUser);
+  } catch (e) {
+    showActivationError("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.", "act-pw-error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function cancelActivation() {
+  stopActivationTimers();
+  _activation = null;
+  clearActivationError();
+  showLoginStep("login");
+}
+
+// ============ 미완료 충전 안내 문자의 "본인 입금 아님" 링크(#deposit-reminder) ============
+// /user?deny=<토큰> 으로 들어오면(로그인 여부 무관) 그 입금 내용을 보여주고 확인을 받는다.
+function clearDenyParam() {
+  const url = new URL(location.href);
+  url.searchParams.delete("deny");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
+}
+
+async function checkDepositDenyLink() {
+  const token = new URLSearchParams(location.search).get("deny");
+  if (!token) return;
+  try {
+    const res = await fetch(`${API_BASE}/deposits/deny/${encodeURIComponent(token)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      renderDepositDeny("링크 확인", data.detail || "링크가 올바르지 않아요.", null);
+    } else {
+      renderDepositDenyState(token, data);
+    }
+  } catch (e) {
+    renderDepositDeny("링크 확인", "서버에 연결하지 못했어요. 잠시 후 다시 열어 주세요.", null);
+    return;
+  }
+  showModal("deposit-deny-modal");
+}
+
+function renderDepositDenyState(token, data) {
+  const when = formatDateTimeKST(data.transaction_at);
+  const amount = Number(data.amount).toLocaleString();
+  if (data.state === "pending") {
+    renderDepositDeny(
+      "본인이 입금하지 않았나요?",
+      `${when}에 들어온 ${amount}원이 회원님 앞으로 확인돼 있어요.\n본인이 입금한 게 아니라면 알려 주세요. 교회 사무실에서 확인할게요.`,
+      token,
+    );
+  } else if (data.state === "denied") {
+    renderDepositDeny("알려 주셔서 고마워요", `${amount}원 입금은 교회 사무실에서 확인할게요.`, null);
+  } else {
+    renderDepositDeny("이미 처리된 입금이에요", `${amount}원 입금은 이미 충전되었거나 처리가 끝났어요.`, null);
+  }
+}
+
+function renderDepositDeny(title, message, token) {
+  document.getElementById("deny-title").textContent = title;
+  document.getElementById("deny-message").textContent = message;
+  const actions = document.getElementById("deny-actions");
+  if (token) {
+    actions.innerHTML = `
+      <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeDepositDeny()">제가 한 게 맞아요</button>
+      <button class="btn-action btn-primary" id="deny-confirm-btn">제가 안 했어요</button>`;
+    document.getElementById("deny-confirm-btn").onclick = () => confirmDepositDeny(token);
+  } else {
+    actions.innerHTML = `<button class="btn-action btn-primary" onclick="closeDepositDeny()">확인</button>`;
+  }
+}
+
+async function confirmDepositDeny(token) {
+  const btn = document.getElementById("deny-confirm-btn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/deposits/deny/${encodeURIComponent(token)}`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      renderDepositDeny("처리하지 못했어요", data.detail || "잠시 후 다시 시도해 주세요.", null);
+      return;
+    }
+    renderDepositDenyState(token, data);
+    if (userToken) loadMyDeposits();
+  } catch (e) {
+    renderDepositDeny("처리하지 못했어요", "서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.", null);
+  }
+}
+
+function closeDepositDeny() {
+  hideModal("deposit-deny-modal");
+  clearDenyParam();
 }
 
 // 로그아웃 후에도 서버에 이 기기 구독 행이 남아 있으면 로그아웃한 회원의 충전/결제 알림이 계속

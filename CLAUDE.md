@@ -247,6 +247,24 @@
   android.jar(platform-35) + okhttp/zxing/androidx 클래스 jar를 classpath로 `javac`만 돌려서 했다
   (BuildConfig/R은 스텁) - aapt/lint는 못 돌리니 CI 결과를 꼭 확인할 것.
 
+### 문자를 쓰는 기능
+
+- **첫 로그인 문자 인증(#activation)**: `users.password_set`이 False인 회원(직접 비밀번호를 정한 적
+  없음 - 컬럼 추가 시점에 기본 1234가 아닌 회원만 True로 이전)은 로그인하면 403
+  `{"code":"activation_required"}` → 회원 앱이 `/api/users/activation/request|status|verify|complete`
+  로 6자리 인증번호(문자) → 비밀번호 설정(재확인) → 활성 + 자동 로그인. 유효시간 1분은 **문자가
+  실제로 발송된 시각(sms.sent_at)부터** 잰다(APK 폴링 지연 보정). 1분 안 재요청은 같은 번호 재사용,
+  하루 10번, 번호당 5번 틀리면 재발급. **켜진 발송 기기가 없으면 503으로 인증 자체를 못 하므로**
+  운영에 발송 기기(관리자 APK) 하나는 항상 켜 둬야 미가입 회원이 로그인할 수 있다. 카드/키오스크
+  결제는 `password_set`과 무관(`status`만 봄). 관리자 화면 발송 목록에선 인증번호를 가린다.
+- **미완료 충전 안내(#deposit-reminder)**: 회원에게 매칭된 PENDING 입금이 24시간 넘게 확정 안 되면
+  문자 1회(`bank_transactions.reminder_sent_at`, 7일 넘은 건은 제외). 기동 시 뜨는 루프가 10분마다
+  `services/deposit_reminder.send_due_reminders` - 워커 4개가 같이 돌아도 조건부 UPDATE로 한 번만.
+  문자 링크: 충전 `PUBLIC_BASE_URL/user`(설치된 PWA가 있으면 그 앱으로 열림), 본인 아님
+  `/user?deny=<입금id>-<회원id>-<서명>` → 회원 앱 모달 → `POST /api/deposits/deny/<토큰>`이
+  입금을 ERROR(매칭 해제, 메모 "회원이 본인 입금 아님으로 알림")로 돌리고 관리자에게 알림.
+  `PUBLIC_BASE_URL`은 docker-compose 기본값이 운영 도메인, dev 서버 `.env`엔 dev 도메인을 넣어 뒀다.
+
 ## 개발/운영 환경 구분 (디버그 뱃지)
 
 개발 서버에서 뜨는 아이콘에는 빨간 "DEV" 리본이 붙어 운영과 눈으로 구분된다.

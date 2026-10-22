@@ -94,6 +94,37 @@ def verify_user_token(token: str) -> Optional[int]:
     return _verify_signed_token(token)
 
 
+# 용도 한정 토큰(#activation) - 로그인 토큰과 형식/서명 대상이 달라 서로 바꿔 쓸 수 없다.
+# 예: 문자 인증을 마친 뒤 비밀번호 설정까지만 쓰는 "activate" 토큰(10분).
+def create_purpose_token(purpose: str, subject_id: int, ttl_seconds: int) -> str:
+    expires_at = int(time.time()) + ttl_seconds
+    payload = f"{purpose}|{subject_id}|{expires_at}"
+    sig = hmac.new(ADMIN_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
+
+
+def verify_purpose_token(token: str, purpose: str) -> Optional[int]:
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        got_purpose, subject_id_str, expires_at_str, sig = raw.split("|")
+        payload = f"{got_purpose}|{subject_id_str}|{expires_at_str}"
+        expected = hmac.new(ADMIN_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
+        if got_purpose != purpose or not hmac.compare_digest(expected, sig):
+            return None
+        if int(expires_at_str) < int(time.time()):
+            return None
+        return int(subject_id_str)
+    except Exception:
+        return None
+
+
+def short_signature(text: str, length: int = 12) -> str:
+    """문자에 넣을 짧은 링크용 서명(예: 입금 "본인 아님" 링크). 대상 상태(대기 중인 입금이
+    그 회원에게 매칭돼 있는지)를 서버가 따로 확인하므로 만료 시각은 넣지 않는다."""
+    digest = hmac.new(ADMIN_SECRET_KEY, text.encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:length]
+
+
 # 인메모리 PIN 브루트포스 시도 제한 (IP당 5분 내 5회).
 # 다중 워커/재시작 시 리셋되는 한계는 있지만 단일 프로세스 배포 기준으로는 충분한 억제 효과.
 _pin_attempts: dict[str, list[float]] = {}

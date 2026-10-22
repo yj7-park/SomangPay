@@ -58,6 +58,8 @@ services:
       - CHURCH_BANK_NAME=${CHURCH_BANK_NAME}
       - CHURCH_ACCOUNT_NUMBER=${CHURCH_ACCOUNT_NUMBER}
       - CHURCH_ACCOUNT_HOLDER=${CHURCH_ACCOUNT_HOLDER}
+      # 문자 속 링크 주소(services/deposit_reminder.py). 운영은 .env에 없어도 기본값, dev는 .env에서 덮어씀.
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://somangpay.duckdns.org}
     volumes:
       - ./backend:/app
     depends_on:

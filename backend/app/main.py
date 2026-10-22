@@ -16,12 +16,12 @@ from fastapi.concurrency import run_in_threadpool
 
 from app import models, schemas, security
 from app.cache import stats_cache
-from app.database import engine, get_db, init_db
+from app.database import engine, get_db, init_db, SessionLocal
 from app.phone_utils import normalize_phone
 from app.services.deposit_matcher import match_new_deposit
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
-from app.services import sms_outbox
+from app.services import sms_outbox, account_activation, deposit_reminder
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
 
 app = FastAPI(
@@ -167,6 +167,18 @@ def user_login(req: schemas.UserLoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=400, detail="존재하지 않는 전화번호입니다.")
 
+    # 비밀번호를 아직 안 정한 회원(#activation)은 입력한 비밀번호와 상관없이 문자 인증 →
+    # 비밀번호 설정을 먼저 거친다. 화면(user.js)은 이 code를 보고 인증번호 단계로 넘어간다.
+    if account_activation.needs_activation(user):
+        if user.status != "ACTIVE":
+            raise HTTPException(status_code=400, detail="비활성화되거나 정지된 회원 계정입니다.")
+        raise HTTPException(status_code=403, detail={
+            "code": "activation_required",
+            "message": "처음 로그인이라 휴대폰 문자 인증이 필요해요.",
+        })
+    if not req.password:
+        raise HTTPException(status_code=400, detail="비밀번호를 입력해 주세요.")
+
     # 비밀번호 검증 (기본값 1234 또는 설정한 비밀번호). 레거시 평문 해시는 검증 성공 시
     # 그 자리에서 PBKDF2 해시로 자동 승급시켜 저장한다(migrate-on-login).
     stored_pass = user.password_hash or "1234"
@@ -184,7 +196,7 @@ def user_login(req: schemas.UserLoginRequest, db: Session = Depends(get_db)):
         id=user.id, username=user.username, name=user.name, phone=user.phone,
         role=user.role, user_type=user.user_type, bank_name=user.bank_name,
         account_number=user.account_number, credit_balance=user.credit_balance,
-        status=user.status, created_at=user.created_at, token=token,
+        status=user.status, password_set=user.password_set, created_at=user.created_at, token=token,
     )
 
 @app.get("/api/users/me", response_model=schemas.UserResponse)
@@ -210,8 +222,136 @@ def change_my_password(
 ):
     """회원 본인이 로그인 후 비밀번호를 변경."""
     user.password_hash = security.hash_password(req.new_password)
+    user.password_set = True
     db.commit()
     return {"success": True, "message": "비밀번호가 변경되었습니다."}
+
+# ================= 앱 계정 활성화 (#activation) =================
+# 비밀번호를 아직 안 정한 회원의 첫 로그인: 문자 인증번호(1분) → 비밀번호 설정(재확인) → 활성.
+# 로직은 services/account_activation.py, 인증 문자 발송은 문자 대기열(관리자 APK)을 탄다.
+
+def _activation_user(db: Session, phone: str) -> models.User:
+    user = db.query(models.User).filter(models.User.phone == normalize_phone(phone)).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="존재하지 않는 전화번호입니다.")
+    return user
+
+
+def _activation_call(fn, *args):
+    try:
+        return fn(*args)
+    except account_activation.ActivationError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@app.post("/api/users/activation/request", response_model=schemas.ActivationRequestResponse)
+async def request_activation_code(req: schemas.ActivationRequest, db: Session = Depends(get_db)):
+    user = _activation_user(db, req.phone)
+    row = _activation_call(account_activation.request_code, db, user)
+    await notify_admins(["sms"])  # 발송 기기(APK)가 다음 폴링을 기다리지 않고 바로 가져가게
+    return schemas.ActivationRequestResponse(request_id=row.id, phone_masked=account_activation.mask_phone(user.phone))
+
+
+@app.post("/api/users/activation/status", response_model=schemas.ActivationStatusResponse)
+def activation_code_status(req: schemas.ActivationStatusRequest, db: Session = Depends(get_db)):
+    user = _activation_user(db, req.phone)
+    return _activation_call(account_activation.code_status, db, user, req.request_id)
+
+
+@app.post("/api/users/activation/verify", response_model=schemas.ActivationVerifyResponse)
+def verify_activation_code(req: schemas.ActivationVerifyRequest, db: Session = Depends(get_db)):
+    user = _activation_user(db, req.phone)
+    token = _activation_call(account_activation.verify_code, db, user, req.request_id, req.code)
+    return schemas.ActivationVerifyResponse(activation_token=token)
+
+
+@app.post("/api/users/activation/complete", response_model=schemas.UserLoginResponse)
+def complete_activation(req: schemas.ActivationCompleteRequest, db: Session = Depends(get_db)):
+    user = _activation_call(account_activation.complete, db, req.activation_token, req.new_password)
+    return schemas.UserLoginResponse(
+        id=user.id, username=user.username, name=user.name, phone=user.phone,
+        role=user.role, user_type=user.user_type, bank_name=user.bank_name,
+        account_number=user.account_number, credit_balance=user.credit_balance,
+        status=user.status, password_set=user.password_set, created_at=user.created_at,
+        token=security.create_user_token(user.id),
+    )
+
+# ================= 미완료 충전 안내 문자 - "본인 입금 아님" 링크 (#deposit-reminder) =================
+# 문자 속 링크(/user?deny=<토큰>)를 누르면 회원 앱이 이 API로 내용을 보여주고 확인을 받는다.
+# 로그인 없이 동작한다 - 토큰이 서명돼 있고, 그 회원에게 매칭된 대기 입금일 때만 처리한다.
+
+DEPOSIT_DENY_MEMO_PREFIX = "회원이 본인 입금 아님으로 알림"
+
+
+def _deny_target(db: Session, token: str):
+    txn, user_id = deposit_reminder.resolve_deny_token(db, token)
+    if not txn:
+        raise HTTPException(status_code=404, detail="링크가 올바르지 않아요.")
+    return txn, user_id
+
+
+def _deny_state(txn: models.BankTransaction, user_id: int) -> str:
+    if txn.status == "PENDING" and txn.matched_user_id == user_id:
+        return "pending"
+    if txn.status == "ERROR" and (txn.resolution_memo or "").startswith(DEPOSIT_DENY_MEMO_PREFIX):
+        return "denied"
+    return "done"
+
+
+
+@app.get("/api/deposits/deny/{token}", response_model=schemas.DepositDenyInfo)
+def get_deposit_deny_info(token: str, db: Session = Depends(get_db)):
+    txn, user_id = _deny_target(db, token)
+    return schemas.DepositDenyInfo(amount=txn.amount, transaction_at=txn.transaction_at, state=_deny_state(txn, user_id))
+
+
+@app.post("/api/deposits/deny/{token}", response_model=schemas.DepositDenyInfo)
+async def deny_deposit(token: str, db: Session = Depends(get_db)):
+    txn, user_id = _deny_target(db, token)
+    state = _deny_state(txn, user_id)
+    if state != "pending":
+        return schemas.DepositDenyInfo(amount=txn.amount, transaction_at=txn.transaction_at, state=state)
+
+    user = db.get(models.User, user_id)
+    # 매칭을 풀고 "오류(매칭 안 됨)"로 돌려 관리자가 충전함에서 다시 확인하게 한다.
+    txn.status = "ERROR"
+    txn.matched_user_id = None
+    txn.resolution_memo = f"{DEPOSIT_DENY_MEMO_PREFIX}({user.name if user else user_id})"
+    db.commit()
+
+    title = "본인 입금 아님 신고"
+    body = f"{user.name if user else '회원'}님이 입금자명 '{txn.depositor_name}' {txn.amount:,}원은 본인 입금이 아니라고 알렸습니다"
+    await notify_admins(["deposit_queue", "stats", "deposits"])
+    await notify_user(user_id, ["me", "deposits"])
+    send_push_to_admins(db, title, body, category="deposit_error", entity_id=txn.id)
+    await notify_admins_alert(title, body, category="deposit_error", entity_id=txn.id)
+    return schemas.DepositDenyInfo(amount=txn.amount, transaction_at=txn.transaction_at, state="denied")
+
+
+def _run_deposit_reminders() -> int:
+    db = SessionLocal()
+    try:
+        return deposit_reminder.send_due_reminders(db)
+    finally:
+        db.close()
+
+
+# 미완료 충전 안내 루프 - 워커마다 하나씩 돌지만 send_due_reminders가 건별 조건부 UPDATE로
+# 한 워커만 보내게 한다. 기동 직후 마이그레이션과 겹치지 않게 조금 기다렸다 시작.
+@app.on_event("startup")
+async def start_deposit_reminder_loop():
+    async def _loop():
+        await asyncio.sleep(60)
+        while True:
+            try:
+                sent = await run_in_threadpool(_run_deposit_reminders)
+                if sent:
+                    print(f"deposit reminder: queued {sent} sms")
+                    await notify_admins(["sms"])
+            except Exception as e:
+                print(f"deposit reminder loop error: {e}")
+            await asyncio.sleep(deposit_reminder.CHECK_INTERVAL_SECONDS)
+    asyncio.create_task(_loop())
 
 # ================= Web Push 구독 =================
 
@@ -485,7 +625,9 @@ async def admin_update_user(
     if req.account_number is not None:
         user.account_number = req.account_number
     if req.new_password:
+        # 관리자가 정해서 알려준 비밀번호 - 회원이 그걸로 바로 로그인할 수 있게 활성으로 본다.
         user.password_hash = security.hash_password(req.new_password)
+        user.password_set = True
 
     try:
         db.commit()
@@ -1377,6 +1519,10 @@ def _user_stats_cache_key(user_id: int) -> str:
 
 def _sms_response(db: Session, row: models.SmsOutbox) -> schemas.SmsOutboxResponse:
     resp = schemas.SmsOutboxResponse.model_validate(row)
+    # 인증번호 문자는 관리자 화면에서도 번호를 가린다 - 관리자가 남의 계정을 대신 활성화할 수 없게.
+    if row.source == "activation":
+        import re
+        resp.body = re.sub(r"\d{6}", "******", row.body)
     if row.user_id:
         user = db.get(models.User, row.user_id)
         resp.user_name = user.name if user else None
@@ -1469,6 +1615,8 @@ async def admin_retry_sms(
         raise HTTPException(status_code=404, detail="문자를 찾을 수 없습니다.")
     if row.status not in ("FAILED", "CANCELED"):
         raise HTTPException(status_code=400, detail="실패하거나 취소된 문자만 다시 보낼 수 있습니다.")
+    if row.source == "activation":
+        raise HTTPException(status_code=400, detail="인증번호 문자는 다시 보낼 수 없습니다. 회원이 앱에서 다시 받아야 합니다.")
     # 새 행으로 다시 넣는다 - 원래 건의 실패 기록은 그대로 남긴다.
     new_row = sms_outbox.enqueue_sms(db, row.to_phone, row.body, source=row.source, user_id=row.user_id, admin_id=_admin.id)
     await _sms_changed()

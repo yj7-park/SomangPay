@@ -15,8 +15,8 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261015_1800">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20261015_1800">
+  <link rel="stylesheet" href="src/style.css?v=20261022_2300">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20261022_2300">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -65,7 +65,11 @@
         <p class="ig-login-sub">가입할 때 등록한 휴대폰 번호로 로그인하세요</p>
       </div>
 
-      <form class="ig-login-form" onsubmit="event.preventDefault(); userLogin();" novalidate>
+      <!-- 로그인 화면은 세 단계를 오간다(#activation, user.js showLoginStep): 휴대폰+비밀번호 →
+           (비밀번호를 아직 안 정한 회원만) 문자 인증번호 → 비밀번호 설정(재확인). 인증 문자는
+           관리자 APK가 대신 보내므로(문자 대기열) 화면은 "보내는 중"을 거쳐 실제 발송된 뒤부터
+           1분 카운트다운을 보여준다. -->
+      <form id="login-step-login" class="ig-login-form" onsubmit="event.preventDefault(); userLogin();" novalidate>
         <label class="ig-field">
           <input type="tel" id="login-phone" class="ig-input" placeholder=" " maxlength="13" autocomplete="username" inputmode="numeric" oninput="formatPhoneInput(this); clearLoginError();">
           <span class="ig-field-label">휴대폰 번호</span>
@@ -79,10 +83,45 @@
         <button type="submit" id="login-submit-btn" class="ig-login-btn">로그인</button>
       </form>
 
-      <p class="ig-login-hint">
-        처음이라면 초기 비밀번호는 <strong>1234</strong>예요.<br>
-        로그인한 뒤 내 정보에서 바꿀 수 있어요.
+      <p class="ig-login-hint" id="login-step-login-hint">
+        처음이라면 비밀번호 칸은 비워 두고 <strong>로그인</strong>을 누르세요.<br>
+        문자로 인증번호를 보내드려요.
       </p>
+
+      <form id="login-step-verify" class="ig-login-form" style="display: none;" onsubmit="event.preventDefault(); submitActivationCode();" novalidate>
+        <div class="act-step-head">
+          <h2 class="act-step-title">문자 인증</h2>
+          <p class="act-step-desc"><strong id="act-phone-masked">-</strong>로<br>인증번호 6자리를 보냈어요.</p>
+        </div>
+        <label class="ig-field">
+          <input type="text" id="act-code" class="ig-input act-code-input" placeholder=" " maxlength="6" inputmode="numeric" autocomplete="one-time-code" oninput="this.value = this.value.replace(/\D/g, ''); clearActivationError();">
+          <span class="ig-field-label">인증번호 6자리</span>
+        </label>
+        <p id="act-timer" class="act-timer"></p>
+        <p id="act-error" class="ig-login-error" role="alert" hidden></p>
+        <button type="submit" id="act-verify-btn" class="ig-login-btn">확인</button>
+        <div class="act-links">
+          <button type="button" id="act-resend-btn" class="act-link-btn" onclick="requestActivationCode()" disabled>인증번호 다시 받기</button>
+          <button type="button" class="act-link-btn" onclick="cancelActivation()">처음으로</button>
+        </div>
+      </form>
+
+      <form id="login-step-password" class="ig-login-form" style="display: none;" onsubmit="event.preventDefault(); submitActivationPassword();" novalidate>
+        <div class="act-step-head">
+          <h2 class="act-step-title">비밀번호 정하기</h2>
+          <p class="act-step-desc">다음부터 이 비밀번호로 로그인해요.<br>4자 이상으로 정해 주세요.</p>
+        </div>
+        <label class="ig-field">
+          <input type="password" id="act-new-password" class="ig-input" placeholder=" " autocomplete="new-password" oninput="clearActivationError();">
+          <span class="ig-field-label">새 비밀번호</span>
+        </label>
+        <label class="ig-field">
+          <input type="password" id="act-new-password2" class="ig-input" placeholder=" " autocomplete="new-password" oninput="clearActivationError();">
+          <span class="ig-field-label">비밀번호 다시 입력</span>
+        </label>
+        <p id="act-pw-error" class="ig-login-error" role="alert" hidden></p>
+        <button type="submit" id="act-complete-btn" class="ig-login-btn">설정 완료</button>
+      </form>
     </div>
 
     <div class="ig-login-footer">
@@ -328,6 +367,17 @@
     </main>
   </div>
 
+  <!-- 미완료 충전 안내 문자의 "본인이 입금한 게 아니라면" 링크(/user?deny=<토큰>, #deposit-reminder) -
+       로그인 여부와 상관없이 뜬다(user.js checkDepositDenyLink). 확인하면 그 입금은 회원 앞 대기
+       목록에서 빠지고 관리자 충전함의 확인 대상(오류)으로 돌아간다. -->
+  <div id="deposit-deny-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 400px;">
+      <h2 id="deny-title" style="font-size: 1.3rem; color: var(--text-main); margin-bottom: 0.8rem;">입금 확인</h2>
+      <p id="deny-message" style="font-size: 0.95rem; color: var(--text-muted); white-space: pre-line; margin-bottom: 1.5rem;"></p>
+      <div class="modal-footer" id="deny-actions"></div>
+    </div>
+  </div>
+
   <!-- Generic Alert Modal (alert() 대체) -->
   <div id="generic-alert-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 400px;">
@@ -356,6 +406,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/user.js?v=20261015_1800"></script>
+  <script src="src/user.js?v=20261022_2300"></script>
 </body>
 </html>

@@ -158,6 +158,27 @@ def _backfill_qr_uuids(db):
     print("QR UUID reissue complete.")
 
 
+def _add_password_set_column(db):
+    """users.password_set(#activation, 2026-10-22) - 회원이 직접 비밀번호를 정했는지. 이 값이
+    False인 회원은 앱 로그인 전에 문자 인증번호 → 비밀번호 설정을 거쳐야 한다(main.py 회원
+    인증 API). 컬럼을 처음 추가할 때 한 번만, 이미 기본값(1234)이 아닌 비밀번호로 바꾼 회원은
+    True로 채운다 - 그 회원들까지 다시 인증하게 만들 필요는 없다."""
+    from sqlalchemy import text
+    from . import security
+    exists = db.execute(text(
+        "SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'password_set'"
+    )).first()
+    if exists:
+        return
+    db.execute(text("ALTER TABLE users ADD COLUMN password_set BOOLEAN NOT NULL DEFAULT FALSE"))
+    rows = db.execute(text("SELECT id, password_hash FROM users WHERE role <> 'ADMIN'")).all()
+    changed = [r.id for r in rows if r.password_hash and not security.verify_password("1234", r.password_hash)]
+    if changed:
+        db.execute(text("UPDATE users SET password_set = TRUE WHERE id = ANY(:ids)"), {"ids": changed})
+    db.commit()
+    print(f"users.password_set added - {len(changed)} of {len(rows)} members already had their own password")
+
+
 def _migrate_and_seed():
     from . import models
 
@@ -229,6 +250,15 @@ def _migrate_and_seed():
         # 여부는 DB가 아니라 ws_manager의 인메모리 WS 연결로 판단하고(admin_list_kiosks 참고),
         # 이 컬럼은 오프라인일 때 보여줄 "마지막으로 연결됐던 시각"만 담는다.
         _run_migration_step(db, "ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;", "kiosk_devices.last_seen_at")
+
+        # 미완료 충전 안내 문자(services/deposit_reminder.py) - 한 입금 건에 한 번만 보내기 위한 표시.
+        _run_migration_step(db, "ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;", "bank_transactions.reminder_sent_at")
+        if not is_sqlite:
+            try:
+                _add_password_set_column(db)
+            except Exception as e:
+                db.rollback()
+                print(f"users.password_set migration error: {e}")
 
         # 키오스크별 매출 집계(_kiosk_sales_for)와 관리자 키오스크 목록이 payment_transactions를
         # kiosk_device_id로 반복 필터/집계하는데 인덱스가 없어 목록 응답이 5~10초씩 걸렸다

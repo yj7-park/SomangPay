@@ -813,6 +813,66 @@ body[data-theme="light"] .ig-field {
   color: var(--text-main);
 }
 
+/* ---- 첫 로그인 문자 인증 / 비밀번호 정하기 단계(#activation, user.js showLoginStep) ---- */
+.act-step-head {
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+.act-step-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.act-step-desc {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.act-step-desc strong {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+.act-code-input {
+  letter-spacing: 0.35em;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.act-timer {
+  min-height: 1.2em;
+  margin: 0 0.2rem;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.act-timer.is-warn {
+  color: var(--accent-danger);
+  font-weight: 600;
+}
+.act-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.3rem;
+}
+.act-link-btn {
+  min-height: 0;
+  padding: 0.4rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.act-link-btn:disabled {
+  opacity: 0.4;
+  text-decoration: none;
+  cursor: default;
+}
+
 /* ---- 하단 안내 ("계정이 없으신가요?") - 박스 없이 얇은 상단 실선으로만 구분 ---- */
 .ig-login-footer {
   margin-top: 2rem;
