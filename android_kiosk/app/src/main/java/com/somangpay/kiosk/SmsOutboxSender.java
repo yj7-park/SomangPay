@@ -73,6 +73,13 @@ final class SmsOutboxSender {
         return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY);
     }
 
+    // 배터리 최적화 예외(설정 > 배터리 > "제한 없음")인지 - 아니면 절전(Doze) 중에 폴링이 멈춘다.
+    static boolean isIgnoringBatteryOptimizations(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        android.os.PowerManager pm = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
+    }
+
     // 기기별 고정 식별자 - 앱 데이터를 지우지 않는 한 유지된다(ANDROID_ID 대신 앱 자체 UUID).
     static synchronized String deviceId(Context context) {
         SharedPreferences p = prefs(context);
@@ -99,6 +106,7 @@ final class SmsOutboxSender {
             o.put("telephony", hasTelephony(context));
             o.put("deviceId", deviceId(context));
             o.put("deviceName", deviceName());
+            o.put("batteryUnrestricted", isIgnoringBatteryOptimizations(context));
         } catch (Exception ignored) {
         }
         return o.toString();

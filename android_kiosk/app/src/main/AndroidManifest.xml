@@ -15,6 +15,12 @@
     <!-- 문자 발송 대기열(관리자 앱 전용, SmsOutboxSender) - 설정 탭에서 "이 기기에서 문자 발송"을
          켤 때 런타임으로 요청한다. 켜지 않은 기기는 권한을 안 받고 발송에도 참여하지 않는다. -->
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- 문자 발송을 켠 기기는 화면이 꺼져도 대기열 확인(20초 주기)이 멈추면 안 된다 - 절전(Doze)에서
+         CPU가 잠들면 Handler 타이머가 안 돌아 인증번호 문자가 안 나갔다(2026-10-25 실제 발생).
+         발송이 켜져 있는 동안만 PARTIAL_WAKE_LOCK을 잡고, 배터리 최적화 예외를 요청한다
+         (예외가 없으면 Doze에서 wake lock과 네트워크가 무시된다). -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- AdminAlertService(관리자 앱 전용) - 서버 알림을 네이티브 알림으로 띄우는 데 필요.
          POST_NOTIFICATIONS는 안드로이드 13+, FOREGROUND_SERVICE*는 14+(API 34)부터 포그라운드
          서비스 시작/타입 선언에 각각 필요하다. 타입은 dataSync가 아니라 specialUse다 -

@@ -87,10 +87,33 @@ public class AdminAlertService extends Service {
         @Override
         public void run() {
             if (stopped) return;
+            syncSmsWakeLock();
             SmsOutboxSender.pollAsync(AdminAlertService.this);
             handler.postDelayed(this, SMS_POLL_MS);
         }
     };
+
+    // 문자 발송이 켜져 있는 동안만 CPU를 깨워 둔다(화면이 꺼져도 20초 폴링이 계속 돌게). 꺼지면 바로
+    // 놓는다 - 발송 기기는 보통 충전기에 꽂아 두는 전용 폰/태블릿이라 배터리 부담은 감수한다.
+    private android.os.PowerManager.WakeLock smsWakeLock;
+
+    private void syncSmsWakeLock() {
+        boolean want = SmsOutboxSender.isEnabled(this) && SmsOutboxSender.hasPermission(this);
+        if (want && smsWakeLock == null) {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm == null) return;
+            smsWakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "somangpay:sms-sender");
+            smsWakeLock.setReferenceCounted(false);
+            smsWakeLock.acquire();
+        } else if (!want && smsWakeLock != null) {
+            releaseSmsWakeLock();
+        }
+    }
+
+    private void releaseSmsWakeLock() {
+        if (smsWakeLock != null && smsWakeLock.isHeld()) smsWakeLock.release();
+        smsWakeLock = null;
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -106,6 +129,7 @@ public class AdminAlertService extends Service {
     public void onDestroy() {
         stopped = true;
         handler.removeCallbacksAndMessages(null);
+        releaseSmsWakeLock();
         if (webSocket != null) webSocket.close(1000, null);
         super.onDestroy();
     }

@@ -1177,6 +1177,17 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 .sms-settings-note.is-warn {
   color: var(--accent-danger);
 }
+.sms-battery-btn {
+  min-height: 0;
+  margin-left: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+}
 .sms-sender-summary {
   padding: 0.7rem 0.9rem;
   border-radius: var(--radius-sm);

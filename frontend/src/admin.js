@@ -2761,6 +2761,13 @@ function refreshSmsSenderDeviceUi() {
       : st.enabled
         ? "문자 발송 권한이 없어요. 스위치를 다시 켜서 권한을 허용해 주세요."
         : "켜면 다른 관리자 화면이나 서버가 보낸 문자를 이 폰 번호로 대신 보냅니다.";
+  // 배터리 최적화 예외가 아니면 화면이 꺼진 뒤 절전에 걸려 발송이 멈춘다(2026-10-25 실제 발생) -
+  // 켜져 있는데 예외가 아니면 경고와 함께 시스템 확인 창을 여는 버튼을 붙인다. 이 값을 모르는
+  // 옛 APK(batteryUnrestricted 없음)에선 아무것도 안 붙인다.
+  if (on && st.batteryUnrestricted === false && typeof window.AndroidInterface.requestIgnoreBatteryOptimizations === "function") {
+    detail.classList.add("is-warn");
+    detail.innerHTML = `화면이 꺼지면 절전 때문에 문자 발송이 멈출 수 있어요. <button type="button" class="sms-battery-btn" onclick="window.AndroidInterface.requestIgnoreBatteryOptimizations()">배터리 최적화 끄기</button>`;
+  }
 }
 
 function toggleSmsSenderOnThisDevice() {

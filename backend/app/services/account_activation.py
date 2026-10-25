@@ -97,9 +97,9 @@ def request_code(db: Session, user: models.User) -> models.UserActivationCode:
         if state in ("sending", "sent"):
             return last  # 1분 안 재요청은 같은 번호를 그대로 쓴다(문자 중복 방지)
 
-    online = [d for d in db.query(models.SmsSenderDevice).all() if sms_outbox.sender_is_online(d)]
-    if not online:
-        raise ActivationError("지금은 인증 문자를 보낼 수 없어요. 잠시 후 다시 시도하거나 교회 사무실에 문의해 주세요.", 503)
+    # 발송 기기가 지금 "연결됨"이 아니어도 바로 거절하지 않는다(2026-10-25) - 기기가 절전 등으로
+    # 잠깐 폴링을 놓쳤을 뿐인 경우가 많다. 대기열에 넣고 SEND_TIMEOUT_SECONDS 안에 못 나가면
+    # code_status가 실패로 보고 그 문자를 취소한다(뒤늦게 엉뚱한 인증번호가 가지 않게).
 
     day_ago = now - datetime.timedelta(days=1)
     today_count = db.query(models.UserActivationCode).filter(
@@ -129,6 +129,10 @@ def code_status(db: Session, user: models.User, request_id: int) -> dict:
         raise ActivationError("인증 요청을 찾을 수 없어요. 처음부터 다시 시도해 주세요.", 404)
     sms = db.get(models.SmsOutbox, row.sms_id) if row.sms_id else None
     state, expires_in = _sms_state(row, sms, _now())
+    if state == "failed" and sms is not None and sms.status == "QUEUED":
+        sms.status = "CANCELED"
+        sms.error = "발송 기기가 시간 안에 가져가지 않아 인증번호 문자를 취소함"
+        db.commit()
     return {"state": state, "expires_in": expires_in}
 
 

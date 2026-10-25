@@ -322,6 +322,10 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             qrScannerView.resume();
         }
         cardReaderManager.onResume();
+        // 배터리 최적화/문자 권한 설정 화면에서 돌아왔을 때 설정 탭 "문자 발송" 표시를 갱신.
+        if (BuildConfig.SMS_DETECT_ENABLED) notifySmsSenderStatusChanged();
+        // 발송이 켜진 기기라면 앱을 열 때마다 서비스를 다시 깨운다(시스템이 죽였을 수도 있음).
+        if (BuildConfig.SMS_DETECT_ENABLED) AdminAlertService.start(this);
     }
 
     @Override
@@ -639,6 +643,21 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             requestPermissions(new String[]{android.Manifest.permission.SEND_SMS}, REQ_SEND_SMS);
         } else {
             notifySmsSenderStatusChanged();
+        }
+    }
+
+    // 시스템 "배터리 최적화 중지" 확인 창을 띄운다(앱 하나만 대상). 실패하면 전체 목록 화면으로.
+    void requestIgnoreBatteryOptimizations() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return;
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    android.net.Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -1006,7 +1025,16 @@ class KioskWebAppInterface implements Runnable {
             return;
         }
         if (enabled) SmsOutboxSender.pollAsync(ctx);
+        if (enabled && !SmsOutboxSender.isIgnoringBatteryOptimizations(ctx)) {
+            activity.runOnUiThread(activity::requestIgnoreBatteryOptimizations);
+        }
         activity.runOnUiThread(activity::notifySmsSenderStatusChanged);
+    }
+
+    // 설정 화면 "배터리 최적화 예외" 버튼 - 문자 발송 기기가 절전에 걸려 멈추지 않게.
+    @android.webkit.JavascriptInterface
+    public void requestIgnoreBatteryOptimizations() {
+        activity.runOnUiThread(activity::requestIgnoreBatteryOptimizations);
     }
 
     // AdminAlertService의 알림을 탭해 열렸을 때 이동할 처리 화면 정보(있으면 1회성) -

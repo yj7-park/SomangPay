@@ -293,7 +293,10 @@ function setActivationTimer(text, warn = false) {
 
 function startActivation(phone) {
   stopActivationTimers();
-  _activation = { phone, requestId: null, token: null, pollTimer: null, tickTimer: null, expiresAt: 0 };
+  _activation = { phone, requestId: null, token: null, pollTimer: null, tickTimer: null, expiresAt: 0, sendingSince: 0 };
+  // 서버 응답 전에도 받는 번호가 보이게 - 응답이 실패하면 "-로 보냈어요"처럼 비어 보이던 문제.
+  const d = phone.replace(/\D/g, "");
+  document.getElementById("act-phone-masked").textContent = d.length === 11 ? `${d.slice(0, 3)}-****-${d.slice(7)}` : phone;
   document.getElementById("act-code").value = "";
   clearActivationError();
   showLoginStep("verify");
@@ -321,6 +324,7 @@ async function requestActivationCode() {
       return;
     }
     _activation.requestId = data.request_id;
+    _activation.sendingSince = Date.now();
     document.getElementById("act-phone-masked").textContent = data.phone_masked;
     pollActivationStatus();
     _activation.pollTimer = setInterval(pollActivationStatus, 2000);
@@ -341,7 +345,13 @@ async function pollActivationStatus() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !_activation) return;
-    if (data.state === "sending") return;
+    if (data.state === "sending") {
+      // 발송 기기(관리자 앱)가 문자를 가져가는 데 보통 20초 안쪽 - 넘어가면 기다려 달라고 알린다.
+      if (Date.now() - _activation.sendingSince > 20000) {
+        setActivationTimer("문자 발송이 늦어지고 있어요. 조금만 기다려 주세요…");
+      }
+      return;
+    }
     clearInterval(_activation.pollTimer);
     _activation.pollTimer = null;
     if (data.state === "sent") {
