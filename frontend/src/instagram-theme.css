@@ -354,13 +354,52 @@ button,
   background-image: none;
   border-radius: var(--radius-sm);
   font-weight: 600;
-  transition: filter 0.15s ease, opacity 0.15s ease;
+  transition: filter 0.15s ease, opacity 0.15s ease, scale 0.12s ease, box-shadow 0.12s ease;
 }
 
-button:hover,
-.btn-action:hover,
-.btn-primary:hover {
-  filter: brightness(1.08);
+/* 호버 밝기는 실제 마우스가 있는 기기에서만 - 터치 기기에서 :hover를 걸어두면 탭한 뒤에도
+   버튼이 밝은 채로 "끈적하게" 남는다. */
+@media (hover: hover) {
+  button:hover,
+  .btn-action:hover,
+  .btn-primary:hover {
+    filter: brightness(1.08);
+  }
+}
+
+/* ---------------- 눌림(:active) 피드백 - 관리자/회원/키오스크 공통 ----------------
+   예전엔 style.css의 -webkit-tap-highlight-color(청록 반투명 사각형 번쩍임)가 전부였다.
+   지금은 그걸 투명으로 끄고, 누르고 있는 동안
+   1) 살짝 축소(0.97) - `transform`이 아니라 개별 속성 `scale`을 쓴다. 검색창 지우기 버튼처럼
+      이미 transform: translateY(-50%)로 위치를 잡은 버튼이 있어서, transform을 덮어쓰면
+      버튼이 튀어 버린다. scale은 transform과 합성되므로 기존 위치/회전을 안 건드린다.
+      레이아웃 박스도 안 바뀌어서 주변 요소가 밀리지 않는다.
+   2) 글자색(currentColor) 14% 덮개 - inset box-shadow로 배경 위·내용 아래에 깐다. 흰 글자의
+      채운 버튼은 살짝 밝아지고, 배경 없는 목록/아이콘 버튼은 글자색 톤의 옅은 회색 면이
+      생긴다(Material의 state layer 방식). 글자색을 따라가므로 라이트/다크 테마 분기가 필요 없다.
+   비활성 버튼은 제외. 키오스크 메뉴 카드(.menu-card)는 div라 여기 안 걸리고 자체
+   transform: scale(0.97) 피드백을 그대로 쓴다. */
+button:not(:disabled):not([aria-disabled="true"]):active,
+.btn:not(:disabled):not(.disabled):active,
+.btn-action:not(:disabled):active,
+.btn-primary:not(:disabled):active,
+.btn-senior:not(:disabled):active,
+.nav-item:active {
+  scale: 0.97;
+  box-shadow: inset 0 0 0 100vmax rgba(128, 128, 128, 0.18);
+  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor 14%, transparent);
+  transition-duration: 0.06s;
+}
+/* 채운(브랜드색/앰버 등 배경이 있는) 버튼은 글자색(흰색) 덮개를 쓰면 밝아져서 "비활성"처럼
+   흐려 보인다 - 이쪽은 테마와 상관없이 검정 덮개로 살짝 어둡게 눌린다. :is()로 묶어 위 공통
+   규칙보다 우선순위를 높였다(공통 쪽이 button 태그 선택자만큼 더 구체적이라). */
+:is(.btn-primary, .btn-senior, .touch-qty-btn, .ig-login-btn):not(:disabled):not([aria-disabled="true"]):active {
+  box-shadow: inset 0 0 0 100vmax rgba(0, 0, 0, 0.16);
+}
+/* 카드 가로폭을 꽉 채우는 목록 행 버튼은 축소하면 카드 테두리와 사이가 벌어져 어색하다 -
+   덮개(회색 면)만 남기고 축소는 끈다(iOS/안드로이드 설정 목록과 같은 방식). */
+:is(.user-list-row):not(:disabled):not([aria-disabled="true"]):active {
+  scale: none;
 }
 
 .btn-primary {
@@ -586,6 +625,11 @@ button:hover,
 .menu-card:active {
   transform: scale(0.97);
 }
+/* 카드 안의 -/+ 수량 버튼을 누를 때는 :active가 조상인 카드에도 걸려 카드 전체가 같이
+   줄어든다(버튼 0.97 x 카드 0.97 이중 축소). 수량 버튼만 눌린 것처럼 보이게 카드 축소는 끈다. */
+.menu-card:has(.touch-qty-box:active) {
+  transform: none;
+}
 @media (hover: hover) {
   .menu-card:hover {
     border-color: var(--accent-cyan);
@@ -789,14 +833,13 @@ body[data-theme="light"] .ig-field {
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.1s ease;
+  transition: filter 0.15s ease, scale 0.12s ease, box-shadow 0.12s ease;
 }
 .ig-login-btn:hover {
   filter: brightness(1.08);
 }
-.ig-login-btn:active {
-  transform: scale(0.99);
-}
+/* 눌림 피드백은 위 공통 "눌림(:active) 피드백" 블록(scale 0.97 + 덮개)이 맡는다 - 여기서
+   transform: scale을 따로 주면 공통 scale과 곱해져 이중으로 줄어든다. */
 .ig-login-btn:disabled {
   opacity: 0.7;
   cursor: default;

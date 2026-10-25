@@ -363,7 +363,9 @@ body {
 /* Global Mobile Touch & Button Protection against Event Blocking */
 button, .btn, .btn-action, .btn-primary, .btn-senior, select, input, .nav-item {
   touch-action: manipulation !important; /* Eliminate 300ms touch delay */
-  -webkit-tap-highlight-color: rgba(6, 182, 212, 0.3) !important;
+  /* 시스템 탭 하이라이트(예전엔 청록 rgba(6,182,212,.3) 번쩍임)는 끄고, 실제 눌림 피드백은
+     instagram-theme.css의 "눌림(:active) 피드백" 블록(살짝 축소 + 글자색 옅은 덮개)이 맡는다. */
+  -webkit-tap-highlight-color: transparent !important;
   pointer-events: auto !important; /* Force click/touchability */
   cursor: pointer !important;
   position: relative;
