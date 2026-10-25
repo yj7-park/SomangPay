@@ -42,6 +42,13 @@ class UserProxyCreate(BaseModel):
 class UserStatusUpdate(BaseModel):
     status: str  # ACTIVE, INACTIVE, SUSPENDED
 
+class LoginCheckRequest(BaseModel):
+    phone: str
+
+class LoginCheckResponse(BaseModel):
+    # password: 비밀번호를 정한 활성 회원 → 비밀번호 입력 / verify: 활성인데 아직 가입 전 → 문자 인증
+    next: str
+
 class UserLoginRequest(BaseModel):
     phone: str
     # 비밀번호를 아직 안 정한 회원(#activation)은 비워서 보내도 된다 - 서버가 문자 인증 단계로 안내.

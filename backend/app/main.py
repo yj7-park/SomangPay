@@ -165,20 +165,42 @@ def read_root():
 
 # ================= 회원 인증 & 자기 서비스 APIs =================
 
+def _login_block_reason(user: Optional[models.User]) -> Optional[str]:
+    """로그인을 아예 못 하는 경우의 안내 문구(없으면 None)."""
+    if not user:
+        return "등록되지 않은 번호예요. 교회 사무실에 문의해 주세요."
+    if user.status == "INACTIVE":
+        return "아직 이용이 열리지 않은 계정이에요. 교회 사무실에 문의해 주세요."
+    if user.status != "ACTIVE":
+        return "이용이 정지된 계정이에요. 교회 사무실에 문의해 주세요."
+    return None
+
+
+@app.post("/api/users/login/check", response_model=schemas.LoginCheckResponse)
+def user_login_check(req: schemas.LoginCheckRequest, db: Session = Depends(get_db)):
+    """로그인 1단계(휴대폰 번호만) - 회원 앱이 다음 화면을 고른다(2026-10-25 사용자 요청 플로우).
+    비밀번호를 정한 활성 회원 → 비밀번호 입력, 활성인데 아직 가입 전 → 문자 인증,
+    그 밖(없는 번호/비활성/정지)은 400으로 안내 문구."""
+    user = db.query(models.User).filter(models.User.phone == normalize_phone(req.phone)).first()
+    reason = _login_block_reason(user)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
+    return schemas.LoginCheckResponse(next="verify" if account_activation.needs_activation(user) else "password")
+
+
 @app.post("/api/users/login", response_model=schemas.UserLoginResponse)
 def user_login(req: schemas.UserLoginRequest, db: Session = Depends(get_db)):
     """회원 로그인 API. ID는 전화번호(하이픈 유무 무관)."""
     phone = normalize_phone(req.phone)
     user = db.query(models.User).filter(models.User.phone == phone).first()
 
-    if not user:
-        raise HTTPException(status_code=400, detail="존재하지 않는 전화번호입니다.")
+    reason = _login_block_reason(user)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
 
     # 비밀번호를 아직 안 정한 회원(#activation)은 입력한 비밀번호와 상관없이 문자 인증 →
     # 비밀번호 설정을 먼저 거친다. 화면(user.js)은 이 code를 보고 인증번호 단계로 넘어간다.
     if account_activation.needs_activation(user):
-        if user.status != "ACTIVE":
-            raise HTTPException(status_code=400, detail="비활성화되거나 정지된 회원 계정입니다.")
         raise HTTPException(status_code=403, detail={
             "code": "activation_required",
             "message": "처음 로그인이라 휴대폰 문자 인증이 필요해요.",
@@ -190,7 +212,7 @@ def user_login(req: schemas.UserLoginRequest, db: Session = Depends(get_db)):
     # 그 자리에서 PBKDF2 해시로 자동 승급시켜 저장한다(migrate-on-login).
     stored_pass = user.password_hash or "1234"
     if not security.verify_password(req.password, stored_pass):
-        raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다. (초기 비밀번호: 1234)")
+        raise HTTPException(status_code=400, detail="비밀번호가 맞지 않아요.")
     if security.needs_rehash(stored_pass):
         user.password_hash = security.hash_password(req.password)
         db.commit()

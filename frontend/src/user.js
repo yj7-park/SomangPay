@@ -203,20 +203,65 @@ function toggleLoginPasswordVisibility() {
   btn.setAttribute("aria-label", show ? "비밀번호 숨기기" : "비밀번호 보기");
 }
 
+// 로그인은 두 단계(2026-10-25): 휴대폰 번호 → "다음" → 서버(/users/login/check)가 고른 단계로.
+// 비밀번호를 정한 회원은 비밀번호 칸이 열리고, 가입 전 활성 회원은 문자 인증(startActivation),
+// 없는 번호/비활성/정지는 오류 줄. 비밀번호 칸이 열린 뒤 번호를 고치면 다시 1단계로 돌아간다.
+let _loginNeedsPassword = false;
+
+function resetLoginPasswordStep() {
+  if (!_loginNeedsPassword) return;
+  _loginNeedsPassword = false;
+  document.getElementById("login-password-field").style.display = "none";
+  document.getElementById("login-password").value = "";
+  document.getElementById("login-submit-btn").textContent = "다음";
+}
+
 async function userLogin() {
   const phone = document.getElementById("login-phone").value.trim();
-  const password = document.getElementById("login-password").value.trim();
   const btn = document.getElementById("login-submit-btn");
-
-  // 비밀번호는 비워도 보낸다 - 아직 비밀번호를 안 정한 회원(#activation)은 서버가 문자 인증
-  // 단계로 안내하고, 이미 정한 회원이면 서버가 "비밀번호를 입력해 주세요"로 돌려준다.
   if (!phone) {
     showLoginError("휴대폰 번호를 입력해 주세요.");
     return;
   }
   if (btn.disabled) return;
-
   clearLoginError();
+
+  if (!_loginNeedsPassword) {
+    btn.disabled = true;
+    btn.textContent = "확인 중…";
+    try {
+      const res = await fetch(`${API_BASE}/users/login/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showLoginError(typeof data.detail === "string" ? data.detail : "휴대폰 번호를 확인하지 못했어요.");
+        return;
+      }
+      if (data.next === "verify") {
+        startActivation(phone);
+        return;
+      }
+      _loginNeedsPassword = true;
+      document.getElementById("login-password-field").style.display = "";
+      document.getElementById("login-password").focus();
+    } catch (err) {
+      console.error("Login check error:", err);
+      showLoginError("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = _loginNeedsPassword ? "로그인" : "다음";
+    }
+    return;
+  }
+
+  const password = document.getElementById("login-password").value.trim();
+  if (!password) {
+    showLoginError("비밀번호를 입력해 주세요.");
+    return;
+  }
   btn.disabled = true;
   btn.textContent = "로그인 중…";
   try {
@@ -239,13 +284,14 @@ async function userLogin() {
     userToken = data.token;
     localStorage.setItem("user_token", userToken);
     loggedInUser = data;
+    resetLoginPasswordStep();
     onLoginSuccess(loggedInUser);
   } catch (err) {
     console.error("Login Error:", err);
     showLoginError("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
   } finally {
     btn.disabled = false;
-    btn.textContent = "로그인";
+    btn.textContent = _loginNeedsPassword ? "로그인" : "다음";
   }
 }
 
@@ -562,6 +608,7 @@ function userLogout() {
   userToken = null;
   loggedInUser = null;
   disconnectUserWebSocket();
+  resetLoginPasswordStep();
   document.getElementById("user-login-wrapper").style.display = "flex";
   document.getElementById("user-shell").style.display = "none";
   _myDeposits = [];

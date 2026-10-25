@@ -269,6 +269,10 @@
 
 ### 문자를 쓰는 기능
 
+- **로그인 화면 순서**(2026-10-25 사용자 요청): 처음엔 휴대폰 번호만 → "다음" → `POST /api/users/login/check`
+  가 고른 단계로 간다. 비밀번호를 정한 활성 회원 → 비밀번호 칸이 열림(그다음 `/api/users/login`),
+  가입 전 활성 회원 → 문자 인증, 없는 번호/비활성/정지 → 오류 줄(`_login_block_reason` 문구).
+  비밀번호 칸이 열린 뒤 번호를 고치면 1단계로 돌아간다(user.js `resetLoginPasswordStep`).
 - **첫 로그인 문자 인증(#activation)**: `users.password_set`이 False인 회원(직접 비밀번호를 정한 적
   없음 - 컬럼 추가 시점에 기본 1234가 아닌 회원만 True로 이전)은 로그인하면 403
   `{"code":"activation_required"}` → 회원 앱이 `/api/users/activation/request|status|verify|complete`

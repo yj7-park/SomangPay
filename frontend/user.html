@@ -62,7 +62,7 @@
       <div class="ig-login-brand">
         <img src="/icons/logo-mark-user.svg" alt="" class="ig-login-logo">
         <h1 class="ig-login-wordmark">소망페이</h1>
-        <p class="ig-login-sub">가입할 때 등록한 휴대폰 번호로 로그인하세요</p>
+        <p class="ig-login-sub">휴대폰 번호로 로그인하세요.</p>
       </div>
 
       <!-- 로그인 화면은 세 단계를 오간다(#activation, user.js showLoginStep): 휴대폰+비밀번호 →
@@ -71,21 +71,24 @@
            1분 카운트다운을 보여준다. -->
       <form id="login-step-login" class="ig-login-form" onsubmit="event.preventDefault(); userLogin();" novalidate>
         <label class="ig-field">
-          <input type="tel" id="login-phone" class="ig-input" placeholder=" " maxlength="13" autocomplete="username" inputmode="numeric" oninput="formatPhoneInput(this); clearLoginError();">
+          <input type="tel" id="login-phone" class="ig-input" placeholder=" " maxlength="13" autocomplete="username" inputmode="numeric" oninput="formatPhoneInput(this); clearLoginError(); resetLoginPasswordStep();">
           <span class="ig-field-label">휴대폰 번호</span>
         </label>
-        <label class="ig-field ig-field-password">
+        <!-- 처음엔 휴대폰 번호만 받는다(2026-10-25) - "다음"을 누르면 /api/users/login/check가 고른
+             단계로: 비밀번호를 정한 회원은 이 칸이 열리고, 가입 전 활성 회원은 문자 인증으로 넘어가고,
+             없는 번호/비활성/정지는 아래 오류 줄로 안내한다(user.js userLogin). -->
+        <label class="ig-field ig-field-password" id="login-password-field" style="display: none;">
           <input type="password" id="login-password" class="ig-input" placeholder=" " autocomplete="current-password" oninput="clearLoginError();">
           <span class="ig-field-label">비밀번호</span>
           <button type="button" id="login-password-toggle" class="ig-reveal-btn" aria-label="비밀번호 보기" aria-pressed="false" onclick="toggleLoginPasswordVisibility()">보기</button>
         </label>
         <p id="login-error" class="ig-login-error" role="alert" hidden></p>
-        <button type="submit" id="login-submit-btn" class="ig-login-btn">로그인</button>
+        <button type="submit" id="login-submit-btn" class="ig-login-btn">다음</button>
       </form>
 
       <p class="ig-login-hint" id="login-step-login-hint">
-        처음이라면 비밀번호 칸은 비워 두고 <strong>로그인</strong>을 누르세요.<br>
-        문자로 인증번호를 보내드려요.
+        휴대폰 번호를 넣고 <strong>다음</strong>을 누르세요.<br>
+        처음이라면 문자로 인증번호를 보내드려요.
       </p>
 
       <form id="login-step-verify" class="ig-login-form" style="display: none;" onsubmit="event.preventDefault(); submitActivationCode();" novalidate>
@@ -406,6 +409,6 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/user.js?v=20261025_1300"></script>
+  <script src="src/user.js?v=20261025_1400"></script>
 </body>
 </html>
