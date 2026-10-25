@@ -458,7 +458,6 @@
         <div class="glass-container user-list-group">
           <div class="user-list-row"><span>연락처 (로그인 ID)</span><span class="user-list-value" id="detail-member-phone">-</span></div>
           <div class="user-list-row"><span>생년월일</span><span class="user-list-value" id="detail-member-birth-date">-</span></div>
-          <div class="user-list-row"><span>나이</span><span class="user-list-value" id="detail-member-age">-</span></div>
           <div class="user-list-row"><span>직분 · 소속</span><span class="user-list-value" id="detail-member-church">-</span></div>
           <div class="user-list-row"><span>회원 앱</span><span class="user-list-value" id="detail-member-app-status">-</span></div>
           <button type="button" class="user-list-row user-list-button" onclick="openSmsComposeModal(currentDetailUserId)"><span>문자 보내기</span><span class="user-list-value user-list-chev">›</span></button>
@@ -586,12 +585,8 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">생년월일 (선택)</label>
-          <input type="date" id="reg-birth-date" class="form-control" oninput="suggestSeniorType('reg-type', 'reg-birth-date', 'reg-age')">
-        </div>
-        <div class="form-group">
-          <label class="form-label">나이 (선택 - 생년월일을 모를 때, 70세 이상은 시니어)</label>
-          <input type="number" id="reg-age" class="form-control" min="0" max="130" inputmode="numeric" oninput="suggestSeniorType('reg-type', 'reg-birth-date', 'reg-age')">
+          <label class="form-label">생년월일 (선택 - 있으면 만 70세 이상은 자동으로 시니어)</label>
+          <input type="date" id="reg-birth-date" class="form-control" oninput="suggestSeniorType('reg-type', 'reg-birth-date')">
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label">초기 크레딧 충전액 (원)</label>
@@ -752,12 +747,8 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">생년월일 (선택 - 비워두면 지워짐)</label>
-          <input type="date" id="edit-user-birth-date" class="form-control" oninput="suggestSeniorType('edit-user-type', 'edit-user-birth-date', 'edit-user-age')">
-        </div>
-        <div class="form-group">
-          <label class="form-label">나이 (생년월일이 있으면 그쪽이 우선, 70세 이상은 시니어)</label>
-          <input type="number" id="edit-user-age" class="form-control" min="0" max="130" inputmode="numeric" oninput="suggestSeniorType('edit-user-type', 'edit-user-birth-date', 'edit-user-age')">
+          <label class="form-label">생년월일 (비워두면 지워짐 - 있으면 만 70세 이상은 자동으로 시니어)</label>
+          <input type="date" id="edit-user-birth-date" class="form-control" oninput="suggestSeniorType('edit-user-type', 'edit-user-birth-date')">
         </div>
         <div class="form-group">
           <label class="form-label">비밀번호 초기화 (선택 - 비워두면 변경 안 함)</label>
@@ -893,6 +884,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261023_0003"></script>
+  <script src="src/admin.js?v=20261025_1200"></script>
 </body>
 </html>

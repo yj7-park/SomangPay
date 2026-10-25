@@ -1933,7 +1933,6 @@ function renderMemberDetail() {
   document.getElementById("detail-member-balance").innerText = `${user.credit_balance.toLocaleString()}원`;
   document.getElementById("detail-member-phone").innerText = user.phone ? formatPhoneDisplay(user.phone) : "-";
   document.getElementById("detail-member-birth-date").innerText = user.birth_date || "-";
-  document.getElementById("detail-member-age").innerText = user.age != null ? `${user.age}세` : "-";
   document.getElementById("detail-member-church").innerText =
     [user.church_position, user.church_group].filter(Boolean).join(" · ") || "-";
   // 앱 비밀번호를 직접 정했는지(#activation) - 안 정했으면 첫 로그인 때 문자 인증을 거친다.
@@ -2145,21 +2144,17 @@ async function loadDetailMemberPhoto(user) {
   img.style.display = "";
 }
 
-// 생년월일/나이를 입력하면 회원 구분을 기준(70세 이상 시니어)에 맞춰 바꿔준다(#inactive) -
-// 그 뒤에 관리자가 구분을 직접 바꾸는 건 그대로 둔다(입력할 때만 제안).
+// 생년월일을 입력하면 회원 구분을 만 나이 기준(70세 이상 시니어)으로 맞춰 보여준다. 생년월일이
+// 있으면 서버(services/member_age.py)가 저장할 때 어차피 이 기준으로 정하므로, 화면도 미리 맞춘다.
+// 나이 입력칸(출생연도 저장)은 교인 명단에 생년월일이 생겨서 뺐다(2026-10-25).
 const SENIOR_AGE = 70;
-function suggestSeniorType(typeId, birthId, ageId) {
+function suggestSeniorType(typeId, birthId) {
   const birth = document.getElementById(birthId).value;
-  const ageRaw = document.getElementById(ageId).value;
-  let age = null;
-  if (birth) {
-    const b = new Date(birth), t = new Date();
-    const beforeBirthday = t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate());
-    age = t.getFullYear() - b.getFullYear() - (beforeBirthday ? 1 : 0);
-  } else if (ageRaw !== "") {
-    age = parseInt(ageRaw, 10);
-  }
-  if (age == null || Number.isNaN(age)) return;
+  if (!birth) return;
+  const b = new Date(birth), t = new Date();
+  const beforeBirthday = t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate());
+  const age = t.getFullYear() - b.getFullYear() - (beforeBirthday ? 1 : 0);
+  if (Number.isNaN(age)) return;
   document.getElementById(typeId).value = age >= SENIOR_AGE ? "SENIOR" : "GENERAL";
 }
 
@@ -3294,7 +3289,6 @@ async function submitProxyRegister(btn) {
   const phone = document.getElementById("reg-phone").value.trim();
   const userType = document.getElementById("reg-type").value;
   const birthDate = document.getElementById("reg-birth-date").value;
-  const ageRaw = document.getElementById("reg-age").value;
   const credit = parseInt(document.getElementById("reg-credit").value) || 0;
 
   if (!name) {
@@ -3316,7 +3310,6 @@ async function submitProxyRegister(btn) {
           phone: phone,
           user_type: userType,
           birth_date: birthDate || null,
-          age: !birthDate && ageRaw !== "" ? parseInt(ageRaw, 10) : null,
           initial_credit: credit
         })
       });
@@ -3327,7 +3320,6 @@ async function submitProxyRegister(btn) {
         document.getElementById("reg-name").value = "";
         document.getElementById("reg-phone").value = "";
         document.getElementById("reg-birth-date").value = "";
-        document.getElementById("reg-age").value = "";
         document.getElementById("reg-credit").value = "0";
         await loadAdminUsers();
         await loadAdminCards();
@@ -3357,7 +3349,6 @@ function openEditUserModal(userId) {
   document.getElementById("edit-user-phone").value = user.phone || "";
   document.getElementById("edit-user-type").value = user.user_type === "SENIOR" ? "SENIOR" : "GENERAL";
   document.getElementById("edit-user-birth-date").value = user.birth_date || "";
-  document.getElementById("edit-user-age").value = !user.birth_date && user.age != null ? user.age : "";
   document.getElementById("edit-user-password").value = "";
   renderEditModalStatusButton(user);
 
@@ -3377,7 +3368,6 @@ async function submitUserInfoEdit(btn) {
   const phone = document.getElementById("edit-user-phone").value.trim();
   const userType = document.getElementById("edit-user-type").value;
   const birthDate = document.getElementById("edit-user-birth-date").value; // "" -> 지움
-  const ageRaw = document.getElementById("edit-user-age").value; // "" -> 지움(생년월일이 있으면 무시)
   const newPassword = document.getElementById("edit-user-password").value.trim();
 
   if (!name) {
@@ -3395,7 +3385,6 @@ async function submitUserInfoEdit(btn) {
           phone: phone,
           user_type: userType,
           birth_date: birthDate || null,
-          age: !birthDate && ageRaw !== "" ? parseInt(ageRaw, 10) : null,
           new_password: newPassword || null
         })
       });

@@ -1,5 +1,5 @@
 from typing import Optional, List, Annotated
-from pydantic import BaseModel, Field, PlainSerializer, computed_field
+from pydantic import BaseModel, Field, PlainSerializer
 from datetime import datetime, date, timezone
 
 # DB의 시각 컬럼은 전부 datetime.utcnow() 기준 naive UTC라, 그대로 JSON으로 내보내면
@@ -24,7 +24,6 @@ class UserBase(BaseModel):
     role: str = "USER" # USER, ADMIN, MERCHANT
     user_type: str = "GENERAL" # GENERAL, SENIOR
     birth_date: Optional[date] = None
-    birth_year: Optional[int] = None
     church_position: Optional[str] = None
     church_group: Optional[str] = None
     bank_name: Optional[str] = None
@@ -35,8 +34,7 @@ class UserProxyCreate(BaseModel):
     name: str
     phone: str
     user_type: str = "GENERAL" # GENERAL, SENIOR
-    birth_date: Optional[date] = None
-    age: Optional[int] = Field(default=None, ge=0, le=130)  # 생년월일을 모를 때 - 출생연도로 바꿔 저장
+    birth_date: Optional[date] = None  # 있으면 회원 유형은 만 나이로 자동(services/member_age.py)
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     initial_credit: int = Field(default=0, ge=0)
@@ -58,8 +56,6 @@ class UserAdminUpdateInfo(BaseModel):
     phone: Optional[str] = None
     user_type: Optional[str] = None
     birth_date: Optional[date] = None
-    # age는 보냈을 때만 반영한다(null을 보내면 지움) - admin_update_user의 model_fields_set 참고.
-    age: Optional[int] = Field(default=None, ge=0, le=130)
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     new_password: Optional[str] = None
@@ -75,12 +71,6 @@ class UserResponse(UserBase):
     password_set: bool = False  # 앱 비밀번호를 직접 정했는지(#activation) - False면 앱 미활성
     photo_updated_at: Optional[UTCDatetime] = None  # NULL이면 프로필 사진 없음
     created_at: UTCDatetime
-
-    @computed_field
-    @property
-    def age(self) -> Optional[int]:
-        from app.services.member_age import age_of
-        return age_of(self.birth_date, self.birth_year)
 
     class Config:
         from_attributes = True

@@ -13,11 +13,9 @@ class User(Base):
     phone = Column(String(20), unique=True, nullable=True, index=True) # 로그인 ID (하이픈 없는 숫자로 정규화해서 저장)
     role = Column(String(20), default="USER") # USER, ADMIN, MERCHANT
     user_type = Column(String(20), default="GENERAL") # GENERAL, SENIOR
-    birth_date = Column(Date, nullable=True) # 선택 입력 - 시니어 할인 등 참고용, 로그인/매칭에는 미사용
-    # 생년월일을 모르고 나이만 아는 회원(교적 앱에서 가져온 명단 등)용. 나이를 그대로 저장하면
-    # 해가 바뀔 때마다 틀어지므로 "올해 - 나이"로 출생연도를 저장하고 나이는 응답 때 계산한다
-    # (schemas.UserResponse.age). birth_date가 있으면 그쪽이 우선.
-    birth_year = Column(Integer, nullable=True)
+    # 생년월일 - 있으면 회원 유형(시니어/일반)을 만 나이로 자동 판정한다(services/member_age.py).
+    # 예전엔 나이만 아는 회원용 birth_year(출생연도)도 있었는데, 교인 명단에 생년월일이 생겨서 뺐다.
+    birth_date = Column(Date, nullable=True)
     church_position = Column(String(20), nullable=True) # 직분(집사/권사/장로 ...) - 참고용
     church_group = Column(String(100), nullable=True) # 소속(공동체/교구/순) - 참고용
     bank_name = Column(String(50), nullable=True) # 관리자 참고용 메모 - 입금 매칭에는 미사용(매칭은 입금자명 기준)

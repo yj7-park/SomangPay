@@ -262,7 +262,8 @@ def _migrate_and_seed():
 
         # 교적 명단 일괄 등록(#inactive) - 나이만 아는 회원용 출생연도, 직분/소속, 프로필 사진 유무.
         # 사진 바이너리는 user_photos 테이블(아래 create_all이 만든다).
-        _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_year INTEGER;", "users.birth_year")
+        # 나이(출생연도)는 쓰지 않는다 - 생년월일 기준으로 바꿨다(2026-10-25, services/member_age.py).
+        _run_migration_step(db, "ALTER TABLE users DROP COLUMN IF EXISTS birth_year;", "users.birth_year drop")
         _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS church_position VARCHAR(20);", "users.church_position")
         _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS church_group VARCHAR(100);", "users.church_group")
         _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_updated_at TIMESTAMP;", "users.photo_updated_at")

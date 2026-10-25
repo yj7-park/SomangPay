@@ -1,33 +1,55 @@
-"""교적 명단 일괄 등록(#inactive) - 지저스온 교회요람에서 가져온 명단을 비활성(INACTIVE) 회원으로 넣는다.
+"""교인 명단으로 회원 전체 교체(2026-10-25) - 교회 교적 프로그램에서 받은 "교인 리스트" 엑셀 기준.
 
     python -m app.tools.import_members <dir>            # 미리보기(DB 변경 없음)
     python -m app.tools.import_members <dir> --apply    # 실제 반영
 
-<dir>에는 members.jsonl(줄마다 {name, role, group, age, phone, photo})과 photo가 가리키는
-사진 파일(photos/*.png)이 있어야 한다. 명단에는 실제 교인 개인정보가 들어 있으므로 저장소에
-커밋하지 않고 컨테이너 /tmp 등에 잠깐 복사해 쓰고 지운다.
+<dir>에는 members.jsonl(줄마다 {no, name, phone, birth_date, position, group, photo})과 photo가
+가리키는 사진 파일(photos/*)이 있어야 한다. 엑셀(사진은 시트에 박힌 이미지)에서 이 형태로 뽑는 건
+로컬에서 하고, 명단에는 실제 교인 개인정보가 들어 있으므로 저장소에 커밋하지 않고 컨테이너
+/tmp 등에 잠깐 복사해 쓰고 지운다. 운영에서 --apply 전에는 반드시 pg_dump로 백업.
+
+이 도구는 **교체**다 - 관리자(role=ADMIN) 계정과 메뉴/키오스크/가맹점/문자 발송 기기 설정만 남기고,
+회원과 회원에 딸린 것(카드·사진·충전/결제/입금 이력·푸시 구독·문자 대기열·인증번호)을 전부 지운 뒤
+명단으로 다시 만든다.
 
 규칙
-- 새 회원은 status=INACTIVE, password_set=False(가입 전), 초기 비밀번호 1234 해시, QR 카드 발급
-  (admin_register_user와 같은 모양). 70세 이상은 SENIOR.
-- 같은 전화번호의 회원이 이미 있으면 새로 만들지 않고 비어 있는 참고 정보(나이/직분/소속/사진)만
-  채운다 - 상태/구분/이름은 건드리지 않는다(이미 쓰고 있는 회원을 비활성으로 돌리지 않게).
-- 같은 이름의 다른 회원이 있으면(이름은 입금자명 매칭 키라 유일해야 함) 건너뛰고 목록으로 알린다.
-- 명단 안에서 전화번호가 겹치면(가족이 한 번호를 쓰는 경우) 먼저 나온 사람만 번호를 갖고
-  뒤 사람은 번호 없이 등록한다. 번호 없는 회원의 username은 "noph-<이름>".
-- 다시 돌려도 안전하다(이미 들어간 사람은 "기존 회원"으로 처리됨).
+- 전원 비활성(status=INACTIVE) + 앱 미가입(password_set=False, 비밀번호 없음), 잔액 0, QR 카드 새로 발급.
+- 회원 유형은 생년월일 기준 만 70세 이상 SENIOR(services/member_age.py), 생년월일 없으면 GENERAL.
+- 이름은 입금자명 매칭 키라 유일해야 한다 - 동명이인은 명단 순서상 먼저 나온 사람이 원래 이름,
+  다음부터 B, C...를 붙인다(관리자 등록 규칙 "홍길동B"와 같음).
+- 같은 휴대폰 번호를 여러 명이 쓰면(가족 공용) 가장 나이 많은 사람만 번호를 갖고 나머지는 번호 없이
+  등록한다(사용자 결정). 번호 없는 회원의 username(내부 ID)은 "member-<명단 No>".
+- 직분(교회직분)/소속(교구)은 참고 정보로 church_position/church_group에 넣는다.
 """
 import datetime
 import json
 import os
 import sys
 import uuid
+from collections import defaultdict
 
-from app import models, security
+from sqlalchemy import text
+
+from app import models
 from app.database import SessionLocal
 from app.phone_utils import normalize_phone
-from app.services.deposit_matcher import park_inactive_deposits
-from app.services.member_age import birth_year_from_age, user_type_for_age
+from app.services import member_age
+
+CONTENT_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif"}
+
+WIPE_SQL = [
+    "DELETE FROM payment_transaction_items",
+    "DELETE FROM payment_transactions",
+    "DELETE FROM deposit_histories",
+    "DELETE FROM bank_transactions",
+    "DELETE FROM user_activation_codes",
+    "DELETE FROM sms_outbox",
+    "DELETE FROM push_subscriptions WHERE user_id IN (SELECT id FROM users WHERE role <> 'ADMIN')",
+    "DELETE FROM user_photos WHERE user_id IN (SELECT id FROM users WHERE role <> 'ADMIN')",
+    "DELETE FROM nfc_cards WHERE user_id IN (SELECT id FROM users WHERE role <> 'ADMIN')",
+    "UPDATE merchants SET user_id = NULL WHERE user_id IN (SELECT id FROM users WHERE role <> 'ADMIN')",
+    "DELETE FROM users WHERE role <> 'ADMIN'",
+]
 
 
 def load(dir_path):
@@ -40,24 +62,57 @@ def load(dir_path):
     return rows
 
 
-def read_photo(dir_path, rel):
-    if not rel:
-        return None
-    p = os.path.join(dir_path, rel)
-    if not os.path.exists(p):
-        return None
-    with open(p, "rb") as f:
-        return f.read()
+def prepare(rows, admin_names):
+    people = []
+    for r in rows:
+        name = (r.get("name") or "").strip()
+        if not name:
+            continue
+        birth = None
+        if r.get("birth_date"):
+            try:
+                birth = datetime.date.fromisoformat(str(r["birth_date"])[:10])
+            except ValueError:
+                birth = None
+        phone = normalize_phone(str(r.get("phone") or "")) or None
+        if phone and not (len(phone) == 11 and phone.startswith("01")):
+            phone = None
+        people.append({
+            "no": str(r.get("no") or ""), "name": name, "phone": phone, "birth": birth,
+            "position": (r.get("position") or "").strip() or None,
+            "group": (r.get("group") or "").strip() or None,
+            "photo": r.get("photo") or None,
+        })
 
+    # 공용 번호 - 생년월일이 가장 이른 사람만(생년월일 없으면 맨 뒤, 같으면 명단 순서).
+    by_phone = defaultdict(list)
+    for p in people:
+        if p["phone"]:
+            by_phone[p["phone"]].append(p)
+    shared = []
+    for phone, group in by_phone.items():
+        if len(group) > 1:
+            group.sort(key=lambda p: (p["birth"] is None, p["birth"] or datetime.date.max))
+            for p in group[1:]:
+                p["phone"] = None
+            shared.append(f"{group[0]['name']} 외 {len(group) - 1}명")
 
-def set_photo(db, user, data, now):
-    photo = db.get(models.UserPhoto, user.id)
-    if photo is None:
-        db.add(models.UserPhoto(user_id=user.id, content_type="image/png", image=data, updated_at=now))
-    else:
-        photo.image = data
-        photo.updated_at = now
-    user.photo_updated_at = now
+    # 동명이인 - 먼저 나온 사람이 원래 이름. 관리자 계정 이름과도 겹치지 않게.
+    used = set(p["name"] for p in people) | set(admin_names)
+    seen = defaultdict(int)
+    renamed = []
+    for p in people:
+        seen[p["name"]] += 1
+        if seen[p["name"]] == 1 and p["name"] not in admin_names:
+            continue
+        for letter in "BCDEFGHIJKLMNOPQRSTUVWXYZ":
+            cand = f"{p['name']}{letter}"
+            if cand not in used:
+                used.add(cand)
+                renamed.append(f"{p['name']} -> {cand}")
+                p["name"] = cand
+                break
+    return people, shared, renamed
 
 
 def main(argv):
@@ -69,59 +124,38 @@ def main(argv):
     rows = load(dir_path)
 
     db = SessionLocal()
-    now = datetime.datetime.utcnow()
-    default_pw = security.hash_password("1234")
-    created, updated, skipped, phone_dropped = [], [], [], []
-    seen_phones = set()
     try:
-        for r in rows:
-            name = (r.get("name") or "").strip()
-            if not name:
-                continue
-            phone = normalize_phone(r.get("phone") or "") or None
-            age = r.get("age")
-            photo = read_photo(dir_path, r.get("photo"))
+        admin_names = [n for (n,) in db.query(models.User.name).filter(models.User.role == "ADMIN").all()]
+        people, shared, renamed = prepare(rows, admin_names)
+        today = member_age.today_kst()
+        seniors = sum(1 for p in people if member_age.user_type_for(p["birth"], today) == "SENIOR")
+        photos = sum(1 for p in people if p["photo"] and os.path.exists(os.path.join(dir_path, p["photo"])))
+        before = db.execute(text("SELECT count(*) FROM users WHERE role <> 'ADMIN'")).scalar()
+        print(f"명단 {len(rows)}줄 -> 회원 {len(people)}명 (기존 회원 {before}명은 이력과 함께 삭제)")
+        print(f"  휴대폰 있음 {sum(1 for p in people if p['phone'])}, 사진 {photos}, 시니어(만 70세+) {seniors},"
+              f" 생년월일 없음 {sum(1 for p in people if not p['birth'])}")
+        print(f"  공용 번호 {len(shared)}개 - 가장 나이 많은 사람만 번호 유지")
+        for line in renamed:
+            print("  동명이인:", line)
+        if not apply:
+            print("미리보기만 했습니다 - 반영하려면 --apply")
+            return 0
 
-            by_phone = db.query(models.User).filter(models.User.phone == phone).first() if phone else None
-            by_name = db.query(models.User).filter(models.User.name == name).first()
-            existing = None
-            if by_phone is not None and by_phone.name == name:
-                existing = by_phone
-            elif by_name is not None and by_name.phone is None:
-                existing = by_name  # 예전 실행에서 번호 없이 들어간 사람
-            elif by_name is not None:
-                skipped.append(f"{name}: 같은 이름의 다른 회원이 이미 있음(동명이인이면 구분 이름으로 따로 등록)")
-                continue
-            if existing is not None:
-                if existing.birth_year is None and existing.birth_date is None and age is not None:
-                    existing.birth_year = birth_year_from_age(age)
-                existing.church_position = existing.church_position or r.get("role") or None
-                existing.church_group = existing.church_group or r.get("group") or None
-                if photo and existing.photo_updated_at is None:
-                    set_photo(db, existing, photo, now)
-                updated.append(name)
-                if phone:
-                    seen_phones.add(phone)
-                continue
-
-            if phone and (phone in seen_phones or by_phone is not None):
-                other = by_phone.name if by_phone is not None else "명단의 다른 사람"
-                phone_dropped.append(f"{name}: 번호 {phone}를 {other}과(와) 같이 써서 번호 없이 등록")
-                phone = None
-            if phone:
-                seen_phones.add(phone)
-
+        for sql in WIPE_SQL:
+            db.execute(text(sql))
+        now = datetime.datetime.utcnow()
+        for p in people:
             user = models.User(
-                username=phone or f"noph-{name}",
-                name=name,
-                phone=phone,
+                username=p["phone"] or f"member-{p['no'] or uuid.uuid4().hex[:8]}",
+                name=p["name"],
+                phone=p["phone"],
                 role="USER",
-                user_type=user_type_for_age(age),
-                birth_year=birth_year_from_age(age),
-                church_position=r.get("role") or None,
-                church_group=r.get("group") or None,
+                user_type=member_age.user_type_for(p["birth"], today) or "GENERAL",
+                birth_date=p["birth"],
+                church_position=p["position"],
+                church_group=p["group"],
                 credit_balance=0,
-                password_hash=default_pw,
+                password_hash=None,
                 password_set=False,
                 status="INACTIVE",
             )
@@ -129,33 +163,22 @@ def main(argv):
             db.flush()
             db.add(models.NFCCard(
                 card_uid=str(uuid.uuid4()),
-                card_name=f"{name}의 교인증 QR 코드",
+                card_name=f"{user.name}의 교인증 QR 코드",
                 card_type="QR_CODE",
                 user_id=user.id,
             ))
-            if photo:
-                set_photo(db, user, photo, now)
-            created.append(name)
-
-        seniors = sum(1 for r in rows if (r.get("age") or 0) >= 70)
-        print(f"명단 {len(rows)}명 -> 새로 등록 {len(created)}, 기존 회원 정보 보강 {len(updated)}, 건너뜀 {len(skipped)}")
-        print(f"(명단 기준 70세 이상 {seniors}명)")
-        for line in skipped:
-            print("  건너뜀:", line)
-        for line in phone_dropped:
-            print("  번호 없음:", line)
-        if updated:
-            more = f" 외 {len(updated) - 10}명" if len(updated) > 10 else ""
-            print("  기존 회원:", ", ".join(updated[:10]) + more)
-        db.flush()
-        parked = park_inactive_deposits(db)
-        print(f"비활성 회원과 매칭되는 미처리 입금 {parked}건 -> 비활성 분류")
-        if apply:
-            db.commit()
-            print("반영 완료")
-        else:
-            db.rollback()
-            print("미리보기만 했습니다 - 반영하려면 --apply")
+            if p["photo"]:
+                path = os.path.join(dir_path, p["photo"])
+                if os.path.exists(path):
+                    with open(path, "rb") as f:
+                        data = f.read()
+                    ext = os.path.splitext(path)[1].lower()
+                    db.add(models.UserPhoto(user_id=user.id, content_type=CONTENT_TYPES.get(ext, "image/jpeg"),
+                                            image=data, updated_at=now))
+                    user.photo_updated_at = now
+        db.commit()
+        after = db.execute(text("SELECT count(*) FROM users WHERE role <> 'ADMIN'")).scalar()
+        print(f"반영 완료 - 회원 {after}명")
     except Exception:
         db.rollback()
         raise

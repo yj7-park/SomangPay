@@ -22,7 +22,7 @@ from app.services.deposit_matcher import match_new_deposit, park_inactive_deposi
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
-from app.services.member_age import birth_year_from_age
+from app.services import member_age
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
 
 app = FastAPI(
@@ -338,6 +338,10 @@ async def deny_deposit(token: str, db: Session = Depends(get_db)):
 def _run_deposit_reminders() -> int:
     db = SessionLocal()
     try:
+        # 같은 주기에 시니어 재판정도 한다 - 생일이 지나 만 70세가 된 회원을 SENIOR로(member_age.py).
+        changed = member_age.recompute_all(db)
+        if changed:
+            print(f"senior recompute: {changed} members changed")
         return deposit_reminder.send_due_reminders(db)
     finally:
         db.close()
@@ -563,12 +567,12 @@ async def admin_register_user(
         phone=phone,
         user_type=req.user_type,
         birth_date=req.birth_date,
-        birth_year=None if req.birth_date else birth_year_from_age(req.age),
         bank_name=req.bank_name,
         account_number=req.account_number,
         credit_balance=req.initial_credit,
         password_hash=security.hash_password("1234"),
     )
+    member_age.apply(new_user)  # 생년월일이 있으면 만 70세 이상 시니어 / 아니면 일반으로 자동
     db.add(new_user)
     try:
         db.commit()
@@ -630,8 +634,7 @@ async def admin_update_user(
     # 선택 항목이라 비워서 지우는 것 자체가 유효한 수정이라, None을 "생략됨"으로 취급하면
     # 한 번 입력한 생년월일을 다시 지울 방법이 없어진다.
     user.birth_date = req.birth_date
-    if "age" in req.model_fields_set:
-        user.birth_year = birth_year_from_age(req.age)
+    member_age.apply(user)  # 생년월일이 있으면 회원 유형 선택보다 만 나이 판정이 우선
     if req.bank_name is not None:
         user.bank_name = req.bank_name
     if req.account_number is not None:
