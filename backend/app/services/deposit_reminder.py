@@ -52,10 +52,14 @@ def resolve_deny_token(db: Session, token: str) -> Tuple[Optional[models.BankTra
 
 
 def build_message(user: models.User, txn: models.BankTransaction) -> str:
+    # 링크는 넣지 않는다(2026-10-25) - "링크 + 로그인/결제" 문자가 스미싱 형식과 같아서 사이트가
+    # Google 세이프 브라우징에 "위험한 사이트"로 걸렸다(무료 duckdns 주소라 더 불리). 본인 입금이
+    # 아니면 교회 사무실로 연락받아 관리자가 충전함에서 처리한다. deny_token/"본인 아님" API와
+    # 회원 앱 /user?deny= 모달은 이미 나간 문자의 링크를 위해 남겨 둔다.
     return (
         f"[소망페이] {user.name}님, {txn.amount:,}원 입금이 확인됐는데 아직 충전 전이에요.\n"
-        f"충전 완료하기: {PUBLIC_BASE_URL}/user\n"
-        f"본인이 입금한 게 아니라면: {PUBLIC_BASE_URL}/user?deny={deny_token(txn)}"
+        f"소망페이 앱에서 충전을 완료해 주세요.\n"
+        f"본인이 입금한 게 아니라면 교회 사무실로 알려 주세요."
     )
 
 

@@ -70,6 +70,14 @@
 - PWA(디버그 PWA 포함)는 서비스워커(`sw.js`, network-first)가 옛 셸을 붙들고 있을
   수 있다. 기기에서 **설정 → 앱 정보 → ⟳ 새로고침**(`triggerAppVersionRefresh()`)
   또는 PWA 완전 종료 후 재실행으로 강제로 새로 받는다.
+- **버튼 눌림 피드백**(2026-10-25): 시스템 탭 하이라이트(옛 청록 번쩍임)는 style.css 전역
+  버튼 규칙에서 `transparent`로 끄고, 실제 피드백은 instagram-theme.css "눌림(:active) 피드백"
+  블록(축소 0.97 + inset box-shadow 덮개)이 세 앱 공통으로 맡는다. 축소는 `transform`이 아니라
+  개별 속성 **`scale`**로 준다 - `transform: translateY(-50%)`로 위치 잡은 버튼을 덮어써 튀지
+  않게. 덮개는 기본이 글자색(currentColor) 14%라 흰 글자 채운 버튼은 오히려 밝아져 비활성처럼
+  보이므로, 채운 버튼 클래스(`.btn-primary` 등)는 별도 규칙으로 검정 덮개. 새 채운 버튼 클래스를
+  만들면 그 `:is(...)` 목록에 추가할 것. 버튼 개별 규칙에서 `:active`에 `transform: scale`을
+  또 주면 이중 축소된다.
 
 ### 5. kiosk 모바일(<=767px) 메뉴 목록 스크롤 레이아웃
 
@@ -285,9 +293,11 @@
 - **미완료 충전 안내(#deposit-reminder)**: 회원에게 매칭된 PENDING 입금이 24시간 넘게 확정 안 되면
   문자 1회(`bank_transactions.reminder_sent_at`, 7일 넘은 건은 제외). 기동 시 뜨는 루프가 10분마다
   `services/deposit_reminder.send_due_reminders` - 워커 4개가 같이 돌아도 조건부 UPDATE로 한 번만.
-  문자 링크: 충전 `PUBLIC_BASE_URL/user`(설치된 PWA가 있으면 그 앱으로 열림), 본인 아님
-  `/user?deny=<입금id>-<회원id>-<서명>` → 회원 앱 모달 → `POST /api/deposits/deny/<토큰>`이
-  입금을 ERROR(매칭 해제, 메모 "회원이 본인 입금 아님으로 알림")로 돌리고 관리자에게 알림.
+  **문자에 링크를 넣지 않는다**(2026-10-25) - 링크 + 로그인/결제 문자는 스미싱 형식이라 운영 주소가
+  Google 세이프 브라우징 "위험한 사이트"로 걸렸다. 본인 입금이 아니면 교회 사무실로 연락받는다.
+  예전 문자에 들어간 본인 아님 링크(`/user?deny=<입금id>-<회원id>-<서명>` → 회원 앱 모달 →
+  `POST /api/deposits/deny/<토큰>` → 입금을 ERROR로 돌리고 관리자 알림)는 계속 동작하게 남겨 뒀다.
+  세이프 브라우징 재검토는 Google Search Console 소유 확인(google*.html 파일) 후 요청한다.
   `PUBLIC_BASE_URL`은 docker-compose 기본값이 운영 도메인, dev 서버 `.env`엔 dev 도메인을 넣어 뒀다.
   **활성(`status=ACTIVE`)이면서 가입한(`password_set`) 회원에게만** 보낸다(#inactive).
 
