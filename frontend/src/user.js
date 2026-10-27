@@ -692,13 +692,36 @@ async function loadUserQrCard() {
     const qr = qrcode(0, "M");
     qr.addData(data.card_uid);
     qr.make();
-    _userQrDataUrl = qr.createDataURL(6, 4);
+    _userQrDataUrl = drawUserQr(qr);
   } catch (err) {
     console.error("QR 카드 조회 오류:", err);
     _userQrDataUrl = null;
   } finally {
     renderUserQrView();
   }
+}
+
+// 키오스크 전면 카메라가 잘 읽게 그린다(2026-10-27): 순백(#fff) 바탕은 휴대폰 화면 밝기에서
+// 하얗게 번져 칸 경계가 뭉개지므로 연회색 바탕 + 진한 무늬. 흰 여백(quiet zone) 4칸은 표준
+// 그대로 둔다(없으면 모서리 표시를 못 찾음). 색 반전(검은 바탕 흰 무늬)은 다른 리더가 못 읽어서 안 함.
+function drawUserQr(qr) {
+  const count = qr.getModuleCount();
+  const cell = 8;
+  const margin = 4;
+  const size = (count + margin * 2) * cell;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#e9e9ec";
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#111";
+  for (let r = 0; r < count; r++) {
+    for (let c = 0; c < count; c++) {
+      if (qr.isDark(r, c)) ctx.fillRect((c + margin) * cell, (r + margin) * cell, cell, cell);
+    }
+  }
+  return canvas.toDataURL("image/png");
 }
 
 // QR 결제 탭의 내용을 현재 _userQrDataUrl 상태에 맞게 그린다 - 로그인 직후 카드 조회가

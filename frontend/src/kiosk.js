@@ -303,8 +303,12 @@ async function startCameraScanner(silent = false, facingMode) {
   }
 
   try {
+    // 해상도를 명시하지 않으면 640x480 안팎으로 열려서, 고정 초점 전면 카메라(갤럭시 탭 A11+ 등)가
+    // 초점이 맞는 20~30cm 거리에서는 QR 칸이 너무 작게 찍혀 한 번에 안 읽혔다(2026-10-27). 1280x720을
+    // "ideal"로 요청한다 - 지원 안 하는 기기는 가능한 값으로 알아서 내려간다. 1080p는 저가 태블릿에서
+    // jsQR 한 번에 수백 ms가 걸려 오히려 느려져서 720p로 둔다.
     videoStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: fm }
+      video: { facingMode: fm, width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = videoStream;
     video.setAttribute("playsinline", true);
@@ -329,7 +333,7 @@ async function startCameraScanner(silent = false, facingMode) {
     isCameraScanning = true;
     kioskFacingMode = fm;
     updateQrScanStatusUI();
-    appendDebugLog("📷 [QR 스캐너] 백그라운드 QR 스캐너 구동 완료.");
+    appendDebugLog(`📷 [QR 스캐너] 백그라운드 QR 스캐너 구동 완료. (${video.videoWidth}x${video.videoHeight})`);
 
     requestAnimationFrame(scanQRCodeLoop);
   } catch (err) {
