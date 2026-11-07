@@ -218,6 +218,20 @@
   `--admin-pending-bg #c2410c`(사용자 요청). `buildDepositEvents(filter)`는
   인자를 안 주면 충전함 필터를 따른다.
 
+## 키오스크 카드 리더 / QR 스캐너 켜짐 유지 (2026-11-07)
+
+- 실사용 리더는 NFC-X(벤더 HID, VID 0x0483/PID 0x4343, `reader/VendorHidUidReader`). **증상**: 리더를
+  꽂은 채 앱을 껐다 켜면 배지는 "NFC 스캔 활성화"인데 카드가 안 읽히고, 뺐다 꽂아야 됐다. 추정 원인은
+  앱 종료(onPause) 때 폴링 스레드가 전송 도중 연결을 닫아 호스트-리더 엔드포인트 데이터 토글이 어긋난 것
+  (리더가 요청을 중복 패킷으로 보고 버림). 대응: 세션을 열 때 `connection.setInterface()`로 양쪽 토글을
+  초기화(`CardReaderManager.resetInterfaceState`, 재열거 없음 → USB 권한 유지), 세션을 닫을 때 폴링
+  스레드를 최대 700ms 기다려 전송 중간에 끊지 않음(`joinQuietly`). USB 권한 응답 대기 중엔
+  `getCurrentModeName()`이 NONE을 돌려줘 배지가 거짓으로 켜져 보이지 않게 했다. 실기기 확인 전이라 그래도
+  재현되면 다음 후보는 리더 펌웨어 자체가 멈춘 경우(전원 재인가 외엔 방법 없음 - `resetDevice()`는 숨은 API +
+  재열거로 권한이 날아감).
+- QR 스캐너(카메라)는 상단 QR 배지로 켜고 끄며, 그 상태를 기기 localStorage(`somang_kiosk_qr_enabled`)에
+  기억해 시작할 때 `restoreKioskQrScanner()`가 다시 켠다(실패해도 알림 없이 로그만).
+
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 
 - 백엔드는 `uvicorn --workers 4`로 뜨는데(`backend/Dockerfile`), `ws_manager.ConnectionManager`

@@ -39,6 +39,7 @@ public class CardReaderManager {
     // 강제로 닫고 재시작하는 워치독 주기/임계값
     private static final long VENDOR_HID_WATCHDOG_INTERVAL_MS = 2_000L;
     private static final long VENDOR_HID_STUCK_THRESHOLD_MS = 4_000L;
+    private static final long STOP_JOIN_TIMEOUT_MS = 700L;
 
     private enum ActiveMode { NONE, USB_CCID, USB_VENDOR_HID_NFC, USB_HID_KEYBOARD, BUILTIN_NFC }
 
@@ -104,6 +105,9 @@ public class CardReaderManager {
     // 호출되면 유실될 수 있어(window.onCardReaderModeChanged 미정의 시 조용히 무시됨),
     // 이 getter로 pull 방식 조회를 병행한다.
     public String getCurrentModeName() {
+        // USB 권한 응답을 기다리는 동안엔 currentMode만 먼저 USB_*로 바뀌어 있고 세션은 아직 없다 -
+        // 그대로 알려주면 키오스크 배지가 "NFC 스캔 활성화"인데 실제로는 안 읽히는 상태가 된다.
+        if (pendingPermissionDevice != null) return ActiveMode.NONE.name();
         return currentMode.name();
     }
 
@@ -261,6 +265,7 @@ public class CardReaderManager {
             evaluateAndActivate();
             return;
         }
+        resetInterfaceState(connection, ccidInterface);
 
         UsbEndpoint endpointIn = null;
         UsbEndpoint endpointOut = null;
@@ -316,6 +321,34 @@ public class CardReaderManager {
         notifyModeChange("USB_CCID");
     }
 
+    // "리더를 꽂은 채로 앱을 껐다 켜면 배지는 활성화인데 카드가 안 읽히고, 뺐다 꽂아야 됨"(2026-11-07)
+    // 대응. 앱이 꺼질 때(onPause) 폴링 스레드가 OUT/IN 전송 도중에 연결이 닫히면 호스트와 리더의
+    // 엔드포인트 데이터 토글(DATA0/1)이 어긋날 수 있는데, 그러면 다시 열었을 때 리더가 우리 요청을
+    // "중복 패킷"으로 보고 조용히 버려 응답이 영영 안 온다(뽑았다 꽂으면 양쪽이 초기화돼서 됨).
+    // SET_INTERFACE를 보내면 리눅스 커널이 양쪽 엔드포인트 토글을 DATA0으로 되돌린다(대체 설정이
+    // 하나뿐인 장치가 이 요청을 STALL하면 커널이 각 엔드포인트에 CLEAR_HALT를 대신 보내 같은 효과).
+    // 장치를 재열거(reset)시키지 않으므로 USB 권한이 날아가지도 않는다.
+    private void resetInterfaceState(UsbDeviceConnection connection, UsbInterface iface) {
+        try {
+            boolean ok = connection.setInterface(iface);
+            Log.d(TAG, "setInterface(" + iface.getId() + ") for endpoint toggle reset: " + ok);
+        } catch (Exception e) {
+            Log.w(TAG, "setInterface failed: " + e.getMessage());
+        }
+    }
+
+    // 폴링 스레드가 지금 하던 전송(요청+응답 한 쌍)을 마칠 때까지 잠깐 기다린다 - 전송 도중에 연결을
+    // 닫으면 위의 토글 어긋남이 생긴다. 드라이버가 전송 타임아웃을 안 지키는 기기가 있어(워치독 참고)
+    // 무한정 기다리지 않고 짧게만 기다린다(onPause가 메인 스레드라서).
+    private static void joinQuietly(Thread t) {
+        if (t == null || t == Thread.currentThread()) return;
+        try {
+            t.join(STOP_JOIN_TIMEOUT_MS);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private UsbInterface findCcidInterface(UsbDevice device) {
         for (int i = 0; i < device.getInterfaceCount(); i++) {
             UsbInterface iface = device.getInterface(i);
@@ -331,6 +364,7 @@ public class CardReaderManager {
         }
         if (ccidThread != null) {
             ccidThread.interrupt();
+            joinQuietly(ccidThread);
             ccidThread = null;
         }
         if (activeCcidConnection != null) {
@@ -376,6 +410,7 @@ public class CardReaderManager {
             evaluateAndActivate();
             return;
         }
+        resetInterfaceState(connection, hidInterface);
 
         UsbEndpoint endpointIn = null;
         UsbEndpoint endpointOut = null;
@@ -448,6 +483,7 @@ public class CardReaderManager {
         }
         if (vendorHidThread != null) {
             vendorHidThread.interrupt();
+            joinQuietly(vendorHidThread);
             vendorHidThread = null;
         }
         if (activeVendorHidConnection != null) {

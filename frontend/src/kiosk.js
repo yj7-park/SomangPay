@@ -131,6 +131,7 @@ function toggleKioskTestMode(enabled) {
     if (!isCameraScanning) startCameraScanner();
   } else if (isCameraScanning) {
     stopCameraScanner();
+    restoreKioskQrScanner(); // 실제 QR 스캐너를 켜 두던 기기면 시뮬레이션을 닫고 진짜 카메라로 복귀
   }
 }
 
@@ -198,6 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadProducts();
   resetCart(); // 기본 결제 상품으로 장바구니 자동 세팅 및 메뉴 UI 갱신
   initWebNFC(); // 권한 상태 확인 후 자동 NFC 활성화 시도
+  restoreKioskQrScanner(); // 이 기기에서 켜 두었던 QR 스캐너 복원
   initKioskPinToggle();
   initKioskTheme();
 
@@ -1841,14 +1843,34 @@ function toggleKioskNfcReader() {
 
 // qr-status-indicator 탭 핸들러 - 켜져 있으면 끄고, 꺼져 있으면 켠다. QR을 켜고 끄는 유일한
 // 방법이라 결제/모달 흐름이 끝나도 자동으로 다시 켜지지 않는다 - 다음에도 쓰려면 다시 탭한다.
+// 켜고 끈 상태는 이 기기에 기억해 두고, 앱을 다시 켜면 그대로 복원한다(restoreKioskQrScanner,
+// 2026-11-07 사용자 요청 "한번 활성화한 디바이스는 켤 때 자동으로").
+const KIOSK_QR_ENABLED_KEY = "somang_kiosk_qr_enabled";
+
+function saveKioskQrEnabled(on) {
+  try { localStorage.setItem(KIOSK_QR_ENABLED_KEY, on ? "1" : "0"); } catch (e) { /* 저장 불가 기기 - 자동 복원만 안 됨 */ }
+}
+
 function toggleKioskQrScanner() {
   if (isCameraScanning) {
     stopCameraScanner();
+    saveKioskQrEnabled(false);
     appendDebugLog("[QR 스캐너] 탭으로 카메라를 껐습니다.", "INFO");
   } else {
     appendDebugLog("[QR 스캐너] 탭으로 카메라 권한 요청 시작...", "INFO");
+    saveKioskQrEnabled(true);
     startCameraScanner();
   }
+}
+
+// 이 기기에서 마지막으로 QR 스캐너를 켜 둔 채였으면 시작할 때 다시 켠다. 실패해도(카메라 권한
+// 아직 없음 등) 알림창 없이 디버그 로그만 남긴다 - 그때는 배지를 탭해 직접 켜면 된다.
+function restoreKioskQrScanner() {
+  let saved = null;
+  try { saved = localStorage.getItem(KIOSK_QR_ENABLED_KEY); } catch (e) { saved = null; }
+  if (saved !== "1" || isCameraScanning) return;
+  appendDebugLog("[QR 스캐너] 이 기기에서 켜 두었던 QR 스캐너를 자동으로 다시 켭니다.", "INFO");
+  startCameraScanner(true);
 }
 
 // Android Native App Hardware ReaderMode Direct Receiver
