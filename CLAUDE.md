@@ -231,6 +231,8 @@
   재열거로 권한이 날아감).
 - QR 스캐너(카메라)는 상단 QR 배지로 켜고 끄며, 그 상태를 기기 localStorage(`somang_kiosk_qr_enabled`)에
   기억해 시작할 때 `restoreKioskQrScanner()`가 다시 켠다(실패해도 알림 없이 로그만).
+  설정(PIN 창)에 들어가면 결제 오작동 방지로 카메라를 끄지만, PIN 취소/설정 닫기 때
+  `resumeQrAfterSettings()`가 같은 기억값으로 다시 켠다(PIN 성공 → 설정 화면 전환 때는 안 켬).
 
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 

@@ -1278,7 +1278,9 @@ function initKioskPinKeypad() {
 }
 
 function openKioskAdminPinModal() {
-  // 설정 화면으로 들어가는 동안엔 QR이 켜져 있으면 꺼둔다 (다시 쓰려면 닫은 뒤 QR 배지를 다시 탭)
+  // 설정 화면에 있는 동안엔 QR이 켜져 있으면 꺼둔다(설정 중에 QR이 비쳐 결제가 나가지 않게). 켜짐
+  // 상태 기억(somang_kiosk_qr_enabled)은 그대로 두고, PIN 취소/설정 닫기 때 restoreKioskQrScanner()가
+  // 다시 켠다(2026-11-07 - 예전엔 꺼진 채로 남아 배지를 다시 탭해야 했다).
   if (isCameraScanning) stopCameraScanner();
 
   // 설정 화면은 매번 PIN을 다시 입력해야 한다 - 이전엔 sessionStorage에 인증 여부를
@@ -1292,10 +1294,17 @@ function openKioskAdminPinModal() {
 
 function closeKioskPinModal() {
   kioskHideModal("kiosk-pin-modal");
-  // 테스트 모드가 켜진 채로 설정에 들어왔다 나가는 거면(openKioskAdminPinModal()이 진입 시
-  // 꺼뒀던 것) 시뮬레이션 화면을 다시 보여준다 - QR 자체를 수동으로 켠 상태였다면 그건 그대로
-  // 꺼진 채 둔다(테스트 모드가 아닐 때는 예전처럼 다시 켜지지 않는 게 맞다).
-  if (kioskTestMode && !isCameraScanning) startCameraScanner();
+  resumeQrAfterSettings();
+}
+
+// 설정(PIN 창/설정 화면)을 나올 때 - 테스트 모드면 시뮬레이션 화면을, 아니면 이 기기에서 켜 두었던
+// 실제 QR 스캐너를 다시 켠다(openKioskAdminPinModal()이 진입 시 꺼둔 것).
+function resumeQrAfterSettings() {
+  if (kioskTestMode) {
+    if (!isCameraScanning) startCameraScanner();
+  } else {
+    restoreKioskQrScanner();
+  }
 }
 
 async function verifyKioskAdminPin() {
@@ -1314,7 +1323,8 @@ async function verifyKioskAdminPin() {
     if (res.ok && data.token) {
       kioskAdminToken = data.token;
       sessionStorage.setItem("kiosk_admin_token", kioskAdminToken);
-      closeKioskPinModal();
+      // closeKioskPinModal()을 쓰면 설정 화면으로 넘어가는 순간 QR이 다시 켜진다 - 창만 닫는다.
+      kioskHideModal("kiosk-pin-modal");
       openKioskAdminModal();
       appendDebugLog("[ADMIN] 단말기 관리자 모드 진입 성공", "SUCCESS");
     } else if (res.status === 429) {
@@ -1380,8 +1390,7 @@ function openKioskAdminModal() {
 
 function closeKioskAdminModal() {
   kioskHideModal("kiosk-admin-modal");
-  // closeKioskPinModal()과 동일한 이유 - 테스트 모드면 시뮬레이션 화면을 다시 보여준다.
-  if (kioskTestMode && !isCameraScanning) startCameraScanner();
+  resumeQrAfterSettings();
 }
 
 function switchKioskAdminTab(tabName) {
