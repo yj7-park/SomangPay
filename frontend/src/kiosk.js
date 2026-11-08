@@ -1302,9 +1302,9 @@ async function openKioskAdminPinModal() {
   document.getElementById("kiosk-card-auth-section").style.display = card ? "" : "none";
   document.getElementById("kiosk-pin-auth-section").style.display = card ? "none" : "";
   document.getElementById("kiosk-pin-submit-btn").style.display = card ? "none" : "";
-  document.getElementById("kiosk-auth-desc").innerText = card
-    ? "키오스크 설정은 관리자만 들어갈 수 있어요."
-    : "키오스크 설정을 변경하려면 PIN을 입력하세요.";
+  const desc = document.getElementById("kiosk-auth-desc");
+  desc.innerText = "키오스크 설정을 변경하려면 PIN을 입력하세요.";
+  desc.style.display = card ? "none" : "";
   const status = document.getElementById("kiosk-card-auth-status");
   if (status) status.innerText = "";
 

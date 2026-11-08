@@ -1072,7 +1072,7 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
                 "auth_type": "CARD_QR",
                 "token": token
             }
-        raise HTTPException(status_code=401, detail="관리자 권한이 있는 회원의 QR 코드나 카드가 아니에요.")
+        raise HTTPException(status_code=401, detail="관리자 카드가 아니에요.")
 
     raise HTTPException(status_code=401, detail="인증 실패: 관리자 PIN이 올바르지 않거나 권한이 없는 식별자입니다.")
 

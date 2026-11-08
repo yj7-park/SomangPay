@@ -2235,24 +2235,21 @@ async function loadAdminAuthSettings() {
 }
 
 function renderAdminAuthSettings(data) {
-  const notes = [];
+  let fallback = false;
   for (const surface of ["admin_app", "kiosk"]) {
     const m = data.modes[surface];
     ["pin", "account"].forEach(method => {
       document.getElementById(`a-auth-${surface}-${method}`)?.classList.toggle("is-on", m.configured === method);
     });
-    if (m.configured === "account" && m.effective === "pin") {
-      notes.push(surface === "admin_app"
-        ? "관리자 앱: 회원 앱 비밀번호를 정한 관리자 권한 회원이 없어서 지금은 PIN으로 들어갑니다."
-        : "키오스크 설정: 관리자 권한 회원이 없어서 지금은 PIN으로 들어갑니다.");
-    }
+    if (m.configured === "account" && m.effective === "pin") fallback = true;
   }
+  // 짧게(2026-11-08 사용자 피드백 "문구가 과해") - 관리자 목록 한 줄 + 필요할 때만 PIN 대체 안내 한 줄.
   const admins = data.admins || [];
-  notes.push(admins.length
-    ? `관리자 권한 회원 ${admins.length}명: ${admins.map(a => a.name + (a.password_set ? "" : "(앱 가입 전)")).join(", ")}`
-    : "관리자 권한 회원이 없어요. 회원 상세에서 \"관리자 권한\"을 켜 주세요.");
+  const lines = [admins.length ? `관리자: ${admins.map(a => a.name).join(", ")}` : "관리자 권한 회원이 없어요. 회원 상세에서 켜 주세요."];
+  if (fallback && admins.length) lines.push("앱 가입한 관리자가 없어 지금은 PIN으로 들어가요.");
+  else if (fallback) lines.push("그동안은 PIN으로 들어가요.");
   const noteEl = document.getElementById("a-auth-note");
-  if (noteEl) noteEl.innerText = notes.join("\n");
+  if (noteEl) noteEl.innerText = lines.join("\n");
 }
 
 async function setAdminAuthMode(surface, mode) {

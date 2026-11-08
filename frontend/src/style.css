@@ -1831,6 +1831,19 @@ body[data-theme="dark"] .pending-action-banner {
   background: var(--accent-cyan);
   color: #001318;
 }
+/* 관리자 앱 설정 탭의 세그먼트(화면 테마/관리자 인증) - 전역 button min-height(42px)를 그대로 받으면
+   알약이 위아래로 부풀어 두 줄이 서로 겹쳐 보였다(2026-11-08 사용자 지적). 키오스크 설정은 터치 크기를
+   위해 그대로 둔다. */
+.page-admin .seg-control button {
+  min-height: 0 !important;
+  padding: 0.3rem 0.85rem;
+  line-height: 1.2;
+}
+.admin-auth-card .settings-row + .settings-row,
+.admin-auth-card .settings-row + .sms-settings-note,
+.admin-auth-card .sms-settings-note + .settings-row {
+  margin-top: 0.75rem;
+}
 
 /* iOS식 토글 스위치 - 이모지 버튼(🔕/🔔) 대신(#redesign). */
 .switch-toggle {
