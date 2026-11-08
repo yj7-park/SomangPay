@@ -15,7 +15,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261108_1200">
+  <link rel="stylesheet" href="src/style.css?v=20261108_1800">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20261025_1500">
   <script src="jsQR.min.js"></script>
   <script>
@@ -288,6 +288,31 @@
           <div id="sms-outbox-list"></div>
         </div>
 
+        <!-- 관리자 인증(#admin-account, admin.js loadAdminAuthSettings) - 관리자 앱 로그인과 키오스크 설정
+             진입을 각각 PIN / 계정(관리자 권한 회원) 중에서 고른다. 관리자 권한은 회원 상세에서 준다. -->
+        <div class="settings-group-label">관리자 인증</div>
+        <div class="glass-container" style="padding: 1.5rem; margin-bottom: 1.2rem;">
+          <div class="settings-row">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">관리자 앱 로그인</span>
+            <div class="seg-control" style="margin-left: auto;">
+              <button id="a-auth-admin_app-pin" type="button" onclick="setAdminAuthMode('admin_app', 'pin')">PIN</button>
+              <button id="a-auth-admin_app-account" type="button" onclick="setAdminAuthMode('admin_app', 'account')">계정</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">키오스크 설정 진입</span>
+            <div class="seg-control" style="margin-left: auto;">
+              <button id="a-auth-kiosk-pin" type="button" onclick="setAdminAuthMode('kiosk', 'pin')">PIN</button>
+              <button id="a-auth-kiosk-account" type="button" onclick="setAdminAuthMode('kiosk', 'account')">QR·NFC</button>
+            </div>
+          </div>
+          <p id="a-auth-note" class="sms-settings-note"></p>
+          <div class="settings-row">
+            <span id="a-auth-me" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+            <button type="button" class="btn-action" style="width: auto; margin-left: auto; padding: 0.4rem 0.9rem; min-height: 34px; background: var(--surface-1); color: var(--text-main);" onclick="logoutAdmin()">로그아웃</button>
+          </div>
+        </div>
+
         <div class="settings-group-label">고급</div>
         <div class="glass-container" style="padding: 1.5rem;">
           <h3 id="dev-mode-toggle-header" style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: pointer;" onclick="toggleDevModeSection()">
@@ -460,6 +485,13 @@
           <div class="user-list-row"><span>생년월일</span><span class="user-list-value" id="detail-member-birth-date">-</span></div>
           <div class="user-list-row"><span>직분 · 소속</span><span class="user-list-value" id="detail-member-church">-</span></div>
           <div class="user-list-row"><span>회원 앱</span><span class="user-list-value" id="detail-member-app-status">-</span></div>
+          <div class="user-list-row" id="detail-member-admin-row">
+            <span>관리자 권한</span>
+            <span style="display: inline-flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+              <span id="detail-member-admin-label" class="switch-status">없음</span>
+              <button id="detail-member-admin-toggle" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="관리자 권한" onclick="toggleDetailUserAdmin()"><span class="switch-knob"></span></button>
+            </span>
+          </div>
           <button type="button" class="user-list-row user-list-button" onclick="openSmsComposeModal(currentDetailUserId)"><span>문자 보내기</span><span class="user-list-value user-list-chev">›</span></button>
         </div>
 
@@ -814,8 +846,10 @@
   <div id="admin-pin-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary);">
       <div class="pin-lock-icon" data-icon="lock"></div>
-      <h2 style="font-size: 1.6rem; color: var(--text-main); margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">관리자 PIN 번호를 입력하세요.</p>
+      <!-- 제목/안내/입력 영역은 서버 설정(/api/auth-config admin_app)에 따라 PIN 키패드 또는 계정 로그인
+           (관리자 권한 회원의 휴대폰 번호 + 회원 앱 비밀번호)으로 바뀐다(showAdminLoginModal, admin.js). -->
+      <h2 id="admin-login-title" style="font-size: 1.6rem; color: var(--text-main); margin-bottom: 0.5rem;">관리자 PIN 인증</h2>
+      <p id="admin-login-desc" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">관리자 PIN 번호를 입력하세요.</p>
 
       <!-- 앱 안에서만 보임(showAdminPinDetectNoticeIfNative, admin.js) - 로그인이 실시간 입금
            자동감지 활성화의 전제조건이라는 걸 처음 설치했을 때부터 명확히 안내한다. -->
@@ -824,6 +858,18 @@
         한 번 로그인하면 이후 앱을 껐다 켜도 계속 자동감지가 동작합니다. 로그인 후 설정 탭에서 "알림 접근 권한"도 함께 켜주세요.
       </div>
 
+      <div id="admin-account-login-section" style="display: none;">
+        <div class="form-group">
+          <input type="tel" id="admin-login-phone" class="form-control" placeholder="휴대폰 번호" maxlength="13" inputmode="numeric" autocomplete="username" oninput="formatPhoneInput(this); clearAdminPinError()">
+        </div>
+        <div class="form-group">
+          <input type="password" id="admin-login-password" class="form-control" placeholder="비밀번호 (회원 앱과 같아요)" autocomplete="current-password" onkeyup="if(event.key==='Enter') submitAdminAccountLogin();" oninput="clearAdminPinError()">
+        </div>
+        <div id="admin-account-error" class="ig-login-error" role="alert" style="display: none;"></div>
+        <button type="button" class="btn-action btn-primary pin-lock-actions admin-pin-submit" style="margin-top: 1rem;" onclick="submitAdminAccountLogin(this)">로그인</button>
+      </div>
+
+      <div id="admin-pin-login-section">
       <div class="form-group">
         <!-- inputmode="none"(#redesign, 사용자 피드백: "가상 키보드가 나와버리잖아") - 아래
              전용 숫자 키패드로만 입력받는다. 물리 키보드 입력/onkeyup Enter 제출은
@@ -854,6 +900,7 @@
       </div>
 
       <button class="btn-action btn-primary pin-lock-actions admin-pin-submit" style="margin-top: 1rem;" onclick="submitAdminPin()">인증하기</button>
+      </div>
     </div>
   </div>
 
@@ -885,6 +932,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261108_1200"></script>
+  <script src="src/admin.js?v=20261108_1800"></script>
 </body>
 </html>

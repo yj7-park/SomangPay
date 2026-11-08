@@ -267,6 +267,33 @@ def _migrate_and_seed():
         _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS church_position VARCHAR(20);", "users.church_position")
         _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS church_group VARCHAR(100);", "users.church_group")
         _run_migration_step(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_updated_at TIMESTAMP;", "users.photo_updated_at")
+        # 푸시 구독 용도(회원 앱/관리자 앱) - 처음 추가할 때 관리자 계정(role=ADMIN)의 구독은 admin으로.
+        _run_migration_step(db, """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='push_subscriptions' AND column_name='audience'
+                ) THEN
+                    ALTER TABLE push_subscriptions ADD COLUMN audience VARCHAR(10) NOT NULL DEFAULT 'user';
+                    UPDATE push_subscriptions SET audience = 'admin'
+                        WHERE user_id IN (SELECT id FROM users WHERE role = 'ADMIN');
+                END IF;
+            END $$;
+        """, "push_subscriptions.audience")
+
+        # 관리자 권한(services/admin_auth.py) - 컬럼이 이미 있으면 ALTER 자체를 안 해서 users 잠금을 안 잡는다.
+        _run_migration_step(db, """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='users' AND column_name='is_admin'
+                ) THEN
+                    ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+                END IF;
+            END $$;
+        """, "users.is_admin")
         if not is_sqlite:
             try:
                 _add_password_set_column(db)

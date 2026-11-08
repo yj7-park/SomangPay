@@ -76,6 +76,7 @@ class UserResponse(UserBase):
     credit_balance: int
     status: str
     password_set: bool = False  # 앱 비밀번호를 직접 정했는지(#activation) - False면 앱 미활성
+    is_admin: bool = False  # 관리자 권한(services/admin_auth.py)
     photo_updated_at: Optional[UTCDatetime] = None  # NULL이면 프로필 사진 없음
     created_at: UTCDatetime
 
@@ -463,3 +464,18 @@ class DepositDenyInfo(BaseModel):
     amount: int
     transaction_at: UTCDatetime
     state: str  # pending(아직 처리 전) / denied(본인 아님으로 처리됨) / done(이미 충전 등 다른 처리)
+
+
+# 관리자 인증 방식(services/admin_auth.py)
+class AdminAccountLoginRequest(BaseModel):
+    phone: str
+    password: str
+
+
+class AdminAuthSettingsUpdate(BaseModel):
+    admin_app: Optional[str] = None  # "pin" | "account"
+    kiosk: Optional[str] = None
+
+
+class AdminPrivilegeUpdate(BaseModel):
+    is_admin: bool

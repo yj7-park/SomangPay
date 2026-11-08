@@ -234,6 +234,31 @@
   설정(PIN 창)에 들어가면 결제 오작동 방지로 카메라를 끄지만, PIN 취소/설정 닫기 때
   `resumeQrAfterSettings()`가 같은 기억값으로 다시 켠다(PIN 성공 → 설정 화면 전환 때는 안 켬).
 
+## 관리자 권한 / 인증 방식 (2026-11-08, #admin-account)
+
+- 관리자 권한은 **일반 회원 계정에 얹는다**(`users.is_admin`, 회원 상세 "관리자 권한" 스위치,
+  `PUT /api/admin/users/{id}/admin-privilege`). role은 USER 그대로라 회원 목록/결제/입금 매칭에 평소처럼 나온다.
+  `role == "ADMIN"`인 시드 계정("admin")은 PIN 세션용으로만 남는다.
+- 인증 방식은 화면별로 고른다(설정 탭 "관리자 인증", `app_settings` 키 `admin_auth_mode.admin_app|kiosk`,
+  `services/admin_auth.py`): 관리자 앱 = PIN / 계정(관리자 권한 회원의 휴대폰 + **회원 앱과 같은 비밀번호**,
+  `POST /api/admin/login`), 키오스크 설정 = PIN / QR·NFC(관리자 권한 회원의 QR 코드나 NFC 카드,
+  `POST /api/admin/verify-auth {card_uid, surface:"kiosk"}`). **기본값은 둘 다 계정 방식**이지만 들어갈 수 있는
+  관리자 회원이 없으면(관리자 앱은 앱 비밀번호를 정한 회원 기준) 잠기지 않게 **PIN으로 동작**한다(`effective_mode`,
+  공개 조회 `GET /api/auth-config`가 이 실제 값을 준다). 그래서 첫 관리자 회원이 생기는 순간 방식이 바뀐다.
+- 관리자 토큰은 purpose 토큰 `admin_<pin|account>_<admin_app|kiosk>`. `require_admin_auth`/`ws_admin`이 매 요청
+  `admin_auth.resolve_token`으로 **그 화면의 지금 방식과 맞는지 + 계정이면 아직 활성·관리자인지** 다시 본다 →
+  방식을 바꾸거나 권한을 회수하면 기존 세션이 바로 끊긴다(문자 발송/입금 감지 태블릿도 다시 로그인 필요).
+  이 기능 전 형식(`:` 구분)의 옛 PIN 토큰은 관리자 앱 PIN 세션으로만 인정. 회원 앱 토큰은 관리자 API에 못 쓴다.
+- 키오스크 QR·NFC 방식: 인증 창이 떠 있는 동안 카메라를 잠깐 켜고(꺼져 있었으면), 읽힌 QR/NFC는
+  `triggerKioskPayment` 맨 위에서 결제 대신 `verifyKioskAdminCard`로 간다. 회원 앱 QR 화면을 그대로 비추면 되므로
+  관리자 QR 스크린샷이 새면 그걸로 설정에 들어올 수 있다 - 그땐 회원 상세에서 QR "재발급".
+- PIN 시도 제한(`register_pin_attempt`)은 **PIN에만** 건다. uvicorn에 `--proxy-headers`가 없어 모든 요청 IP가
+  docker 게이트웨이로 같게 보이므로 IP별 제한이 사실상 전역이다 - 계정 로그인은 번호별 키(`admin-login:<phone>`).
+- 푸시 구독은 `push_subscriptions.audience`(user/admin)로 회원 앱/관리자 앱을 나눈다 - 같은 회원이 두 앱에서
+  구독할 수 있게 됐기 때문. `send_push_to_admins`는 audience=admin + 아직 관리자인 계정만.
+- 주의(dev 테스트): 백엔드 기동 때 `_backfill_qr_uuids`가 UUID 형식이 아닌 QR card_uid를 재발급한다 - 가짜 QR
+  UID로 테스트 카드를 만들면 재시작 뒤 바뀐다.
+
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 
 - 백엔드는 `uvicorn --workers 4`로 뜨는데(`backend/Dockerfile`), `ws_manager.ConnectionManager`

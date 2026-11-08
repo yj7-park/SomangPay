@@ -22,7 +22,7 @@ from app.services.deposit_matcher import match_new_deposit, park_inactive_deposi
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
-from app.services import member_age
+from app.services import member_age, admin_auth
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks, start_ws_bus
 
 app = FastAPI(
@@ -71,23 +71,15 @@ def require_admin_auth(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ) -> "models.User":
-    """관리자 전용 라우트에 붙이는 의존성. /api/admin/verify-pin(또는 verify-auth)에서
-    발급한 서명 토큰을 'Authorization: Bearer <token>' 헤더로 검증한다."""
+    """관리자 전용 라우트에 붙이는 의존성. 관리자 로그인(PIN /api/admin/verify-pin, 계정
+    /api/admin/login, 키오스크 QR·NFC)에서 발급한 토큰을 'Authorization: Bearer <token>'으로 검증한다.
+    인증 방식이 바뀌었거나 관리자 권한을 회수한 계정이면 만료 전이라도 거절한다(services/admin_auth.py)."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="관리자 인증이 필요합니다.")
 
-    token = authorization[len("Bearer "):]
-    admin_id = security.verify_admin_token(token)
-    if not admin_id:
-        raise HTTPException(status_code=401, detail="관리자 세션이 만료되었거나 유효하지 않습니다. 다시 인증해 주세요.")
-
-    admin = db.query(models.User).filter(
-        models.User.id == admin_id,
-        models.User.role == "ADMIN",
-        models.User.status == "ACTIVE",
-    ).first()
+    admin = admin_auth.resolve_token(db, authorization[len("Bearer "):])
     if not admin:
-        raise HTTPException(status_code=401, detail="관리자 권한이 없습니다.")
+        raise HTTPException(status_code=401, detail="관리자 세션이 만료되었거나 권한이 없습니다. 다시 로그인해 주세요.")
     return admin
 
 
@@ -414,12 +406,14 @@ def subscribe_push(
         existing.user_id = user.id
         existing.p256dh = req.keys.p256dh
         existing.auth = req.keys.auth
+        existing.audience = "user"
     else:
         db.add(models.PushSubscription(
             user_id=user.id,
             endpoint=req.endpoint,
             p256dh=req.keys.p256dh,
             auth=req.keys.auth,
+            audience="user",
         ))
     db.commit()
     return {"success": True}
@@ -483,6 +477,7 @@ def subscribe_admin_push(
         existing.user_id = admin.id
         existing.p256dh = req.keys.p256dh
         existing.auth = req.keys.auth
+        existing.audience = "admin"
         # None으로 온 항목은 건드리지 않는다 - 만료된 구독을 자동으로 조용히 갱신할 때(재구독)
         # 항목별 on/off까지 같이 보내지 않아도 기존 설정이 기본값(전체 on)으로 되돌아가지 않게.
         if req.notify_deposit_error is not None:
@@ -500,6 +495,7 @@ def subscribe_admin_push(
             notify_deposit_error=req.notify_deposit_error if req.notify_deposit_error is not None else True,
             notify_deposit_credited=req.notify_deposit_credited if req.notify_deposit_credited is not None else True,
             notify_payment=req.notify_payment if req.notify_payment is not None else True,
+            audience="admin",
         ))
     db.commit()
     return {"success": True}
@@ -1028,44 +1024,141 @@ async def delete_product(product_id: int, db: Session = Depends(get_db), _admin:
 class AdminAuthVerifyRequest(schemas.BaseModel):
     pin: Optional[str] = None
     card_uid: Optional[str] = None
+    # 어느 화면의 인증인지(services/admin_auth.SURFACES) - 화면마다 PIN/계정 방식을 따로 고른다.
+    surface: str = "admin_app"
 
 @app.post("/api/admin/verify-pin")
 @app.post("/api/admin/verify-auth")
 def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session = Depends(get_db)):
     """UC-07: 관리자 보안 인증 API (PIN 코드 또는 관리자 NFC/QR 식별자 다중 매체 인증).
     성공 시 서명된 세션 토큰을 발급한다 - 이 토큰 없이는 관리자 전용 API를 호출할 수 없다
-    (require_admin_auth 참고). IP당 5분에 5회로 PIN 시도 횟수를 제한해 브루트포스를 억제한다."""
+    (require_admin_auth 참고). PIN은 IP당 5분에 5회로 시도 횟수를 제한해 브루트포스를 억제한다.
+    surface(관리자 앱/키오스크)별로 지금 설정된 방식(services/admin_auth.py)이 아니면 400."""
     client_ip = request.client.host if request.client else "unknown"
-    if not security.register_pin_attempt(client_ip):
-        raise HTTPException(status_code=429, detail="PIN 시도 횟수를 초과했습니다. 5분 후 다시 시도해 주세요.")
+    surface = req.surface if req.surface in admin_auth.SURFACES else "admin_app"
+    mode = admin_auth.effective_mode(db, surface)
 
-    if req.pin and hmac.compare_digest(req.pin, security.ADMIN_PIN):
-        security.clear_pin_attempts(client_ip)
-        admin_user = db.query(models.User).filter(
-            models.User.role == "ADMIN",
-            models.User.status == "ACTIVE",
-        ).first()
-        if not admin_user:
-            raise HTTPException(status_code=401, detail="관리자 계정이 정지되어 있어 인증할 수 없습니다.")
-        token = security.create_admin_token(admin_user.id)
-        return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN", "token": token}
+    if req.pin:
+        if mode != "pin":
+            raise HTTPException(status_code=400, detail="지금은 PIN이 아니라 관리자 계정으로 들어가도록 설정돼 있어요.")
+        # 시도 제한은 PIN에만 - QR/NFC는 추측할 수 있는 값이 아니고, 서버가 프록시 뒤라 모든 요청 IP가
+        # 같게 보여서 키오스크에 엉뚱한 QR을 몇 번 비춘 것만으로 PIN까지 막히면 안 된다.
+        if not security.register_pin_attempt(client_ip):
+            raise HTTPException(status_code=429, detail="PIN 시도 횟수를 초과했습니다. 5분 후 다시 시도해 주세요.")
+        if hmac.compare_digest(req.pin, security.ADMIN_PIN):
+            security.clear_pin_attempts(client_ip)
+            admin_user = db.query(models.User).filter(
+                models.User.role == "ADMIN",
+                models.User.status == "ACTIVE",
+            ).first()
+            if not admin_user:
+                raise HTTPException(status_code=401, detail="관리자 계정이 정지되어 있어 인증할 수 없습니다.")
+            token = admin_auth.create_token(admin_user.id, "pin", surface)
+            return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN", "token": token}
 
+    # 키오스크 설정 계정 방식 - 관리자 권한 회원의 QR 코드(회원 앱 QR 결제 화면)나 NFC 카드.
     if req.card_uid:
+        if surface != "kiosk" or mode != "account":
+            raise HTTPException(status_code=400, detail="지금은 관리자 카드로 들어가도록 설정돼 있지 않아요.")
         card = db.query(models.NFCCard).filter(func.upper(models.NFCCard.card_uid) == req.card_uid.strip().upper()).first()
-        if card:
-            user = db.query(models.User).filter(models.User.id == card.user_id).first()
-            if user and user.role == "ADMIN" and user.status == "ACTIVE":
-                security.clear_pin_attempts(client_ip)
-                token = security.create_admin_token(user.id)
-                return {
-                    "success": True,
-                    "message": f"관리자({user.name}) 식별자 인증이 완료되었습니다.",
-                    "admin_name": user.name,
-                    "auth_type": "CARD_QR",
-                    "token": token
-                }
+        user = db.get(models.User, card.user_id) if card else None
+        if user and user.is_admin and user.status == "ACTIVE":
+            security.clear_pin_attempts(client_ip)
+            token = admin_auth.create_token(user.id, "account", surface)
+            return {
+                "success": True,
+                "message": f"관리자({user.name}) 인증이 완료되었습니다.",
+                "admin_name": user.name,
+                "auth_type": "CARD_QR",
+                "token": token
+            }
+        raise HTTPException(status_code=401, detail="관리자 권한이 있는 회원의 QR 코드나 카드가 아니에요.")
 
     raise HTTPException(status_code=401, detail="인증 실패: 관리자 PIN이 올바르지 않거나 권한이 없는 식별자입니다.")
+
+
+@app.post("/api/admin/login")
+def admin_account_login(req: schemas.AdminAccountLoginRequest, db: Session = Depends(get_db)):
+    """관리자 앱 계정 로그인(services/admin_auth.py) - 관리자 권한 회원이 휴대폰 번호 + 회원 앱과 같은
+    비밀번호로 들어온다. 시도 제한은 번호별(서버가 프록시 뒤라 IP가 모두 같게 보여서 IP별로 막으면
+    한 사람이 틀린 걸로 모든 관리자가 막힌다)."""
+    if admin_auth.effective_mode(db, "admin_app") != "account":
+        raise HTTPException(status_code=400, detail="지금은 관리자 PIN으로 들어가도록 설정돼 있어요.")
+    phone = normalize_phone(req.phone)
+    if not security.register_pin_attempt(f"admin-login:{phone}"):
+        raise HTTPException(status_code=429, detail="여러 번 틀렸어요. 5분 뒤에 다시 시도해 주세요.")
+    user = db.query(models.User).filter(models.User.phone == phone).first() if phone else None
+    reason = _login_block_reason(user)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자 권한이 없는 계정이에요. 교회 사무실에 문의해 주세요.")
+    if account_activation.needs_activation(user):
+        raise HTTPException(status_code=400, detail="아직 비밀번호를 정하지 않았어요. 회원 앱에서 먼저 로그인해 비밀번호를 정해 주세요.")
+    stored_pass = user.password_hash or ""
+    if not req.password or not security.verify_password(req.password, stored_pass):
+        raise HTTPException(status_code=400, detail="비밀번호가 맞지 않아요.")
+    if security.needs_rehash(stored_pass):
+        user.password_hash = security.hash_password(req.password)
+        db.commit()
+    security.clear_pin_attempts(f"admin-login:{phone}")
+    return {"success": True, "token": admin_auth.create_token(user.id, "account", "admin_app"),
+            "admin_name": user.name, "auth_type": "ACCOUNT"}
+
+
+@app.get("/api/admin/me")
+def get_admin_me(admin: models.User = Depends(require_admin_auth)):
+    """설정 탭 "관리자 인증"에 지금 누구로 들어와 있는지 보여주기 위한 조회."""
+    return {"id": admin.id, "name": admin.name, "is_member": admin.role != "ADMIN"}
+
+
+@app.get("/api/auth-config")
+def get_auth_config(db: Session = Depends(get_db)):
+    """로그인 화면이 PIN 키패드와 계정 로그인 중 무엇을 띄울지 고르는 공개 조회(지금 실제로 적용되는 방식)."""
+    return {s: admin_auth.effective_mode(db, s) for s in admin_auth.SURFACES}
+
+
+def _admin_auth_settings_payload(db: Session):
+    admins = db.query(models.User).filter(models.User.is_admin == True).order_by(models.User.name).all()  # noqa: E712
+    return {
+        "modes": admin_auth.modes(db),
+        "admins": [{"id": u.id, "name": u.name, "phone": u.phone, "status": u.status,
+                    "password_set": u.password_set} for u in admins],
+    }
+
+
+@app.get("/api/admin/auth-settings")
+def get_admin_auth_settings(db: Session = Depends(get_db), _admin: models.User = Depends(require_admin_auth)):
+    return _admin_auth_settings_payload(db)
+
+
+@app.put("/api/admin/auth-settings")
+async def update_admin_auth_settings(req: schemas.AdminAuthSettingsUpdate, db: Session = Depends(get_db),
+                                     _admin: models.User = Depends(require_admin_auth)):
+    """방식 변경. 계정 방식으로 바꿔도 들어갈 수 있는 관리자 회원이 없으면 PIN으로 동작한다(effective)."""
+    for surface, mode in (("admin_app", req.admin_app), ("kiosk", req.kiosk)):
+        if mode is None:
+            continue
+        if mode not in admin_auth.METHODS:
+            raise HTTPException(status_code=400, detail="방식은 pin 또는 account만 가능합니다.")
+        admin_auth.set_mode(db, surface, mode)
+    db.commit()
+    await notify_admins(["settings"])
+    return _admin_auth_settings_payload(db)
+
+
+@app.put("/api/admin/users/{user_id}/admin-privilege")
+async def update_admin_privilege(user_id: int, req: schemas.AdminPrivilegeUpdate, db: Session = Depends(get_db),
+                                 _admin: models.User = Depends(require_admin_auth)):
+    """회원에게 관리자 권한을 주거나 회수한다. 회수하면 그 회원의 관리자 세션은 바로 끊긴다."""
+    user = db.get(models.User, user_id)
+    if not user or user.role == "ADMIN":
+        raise HTTPException(status_code=404, detail="회원을 찾을 수 없습니다.")
+    user.is_admin = req.is_admin
+    db.commit()
+    await notify_admins(["users", "settings"])
+    return {"success": True, "is_admin": user.is_admin,
+            "message": f"{user.name}님에게 관리자 권한을 {'주었습니다' if user.is_admin else '회수했습니다'}."}
 
 # ================= UNMANNED KIOSK PAYMENT API =================
 
@@ -1819,10 +1912,7 @@ async def _ws_keepalive_loop(websocket: WebSocket, on_tick=None, on_message=None
 
 @app.websocket("/ws/admin")
 async def ws_admin(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
-    admin_id = security.verify_admin_token(token)
-    admin = db.query(models.User).filter(
-        models.User.id == admin_id, models.User.role == "ADMIN", models.User.status == "ACTIVE",
-    ).first() if admin_id else None
+    admin = admin_auth.resolve_token(db, token)
     # 인증 조회만 하고 세션을 바로 돌려준다 - 소켓이 살아 있는 내내 "idle in transaction"으로
     # users 읽기 잠금을 쥐고 있으면, 다음 기동 워커의 마이그레이션 ALTER TABLE users가 그 뒤에서
     # 기다리고 그 뒤로 모든 users 조회가 줄줄이 막힌다(2026-10-23 운영 장애).

@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // USB HID 키보드형 카드 리더가 활성 모드일 때, 카메라 사용 중이면 태깅 무시
         // (일반 바코드/QR 스캐너는 currentReaderMode가 USB_HID_KEYBOARD로 잡히지 않으므로 영향 없음)
-        if (isCameraScanning && currentReaderMode === "USB_HID_KEYBOARD" && shouldPauseReaderForCamera()) {
+        if (isCameraScanning && currentReaderMode === "USB_HID_KEYBOARD" && shouldPauseReaderForCamera() && !isKioskCardAuthPending()) {
           appendDebugLog(`⚡ [카드 리더] 카메라 사용 중이라 태깅 무시됨: ${scannedQr}`, "WARN");
           barcodeBuffer = "";
           return;
@@ -863,6 +863,11 @@ function simulateKioskPayment(outcome) {
 }
 
 async function triggerKioskPayment(cardUid, forceConfirm = false) {
+  // 설정 진입 인증 창(QR·NFC 방식)이 떠 있으면 결제가 아니라 관리자 인증으로 보낸다(#admin-account).
+  if (isKioskCardAuthPending()) {
+    verifyKioskAdminCard(cardUid);
+    return;
+  }
   // 1. 이미 결제 요청이 처리 중이거나 결과 팝업창이 열려 있으면 추가적인 태깅/스캔 무시
   if (isKioskPaymentProcessing) {
     console.log("Payment already in progress. Ignoring duplicate tag.");
@@ -1153,9 +1158,9 @@ async function kioskAdminFetch(url, options = {}) {
   if (res.status === 401) {
     kioskAdminToken = null;
     sessionStorage.removeItem("kiosk_admin_token");
-    alert("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
+    alert("관리자 세션이 끝났어요. 다시 인증해 주세요.");
     kioskHideModal("kiosk-admin-modal");
-    kioskShowModal("kiosk-pin-modal");
+    openKioskAdminPinModal();
   }
   return res;
 }
@@ -1277,19 +1282,90 @@ function initKioskPinKeypad() {
   document.getElementById("kiosk-pin-backspace")?.addEventListener("click", () => removeKioskPinDigit("kiosk-pin-input"));
 }
 
-function openKioskAdminPinModal() {
-  // 설정 화면에 있는 동안엔 QR이 켜져 있으면 꺼둔다(설정 중에 QR이 비쳐 결제가 나가지 않게). 켜짐
-  // 상태 기억(somang_kiosk_qr_enabled)은 그대로 두고, PIN 취소/설정 닫기 때 restoreKioskQrScanner()가
-  // 다시 켠다(2026-11-07 - 예전엔 꺼진 채로 남아 배지를 다시 탭해야 했다).
-  if (isCameraScanning) stopCameraScanner();
+// 설정 진입 방식(#admin-account) - "pin"이면 PIN 키패드, "account"면 관리자 권한 회원의 QR·NFC 태그.
+// 서버(/api/auth-config kiosk)가 고르며, 관리자 권한 회원이 없으면 "pin"을 준다.
+let kioskAdminAuthMode = "pin";
 
-  // 설정 화면은 매번 PIN을 다시 입력해야 한다 - 이전엔 sessionStorage에 인증 여부를
-  // 저장해뒀다가 같은 세션이면 PIN 없이 바로 열어줬는데, 키오스크 단말기 특성상
+function isKioskCardAuthPending() {
+  const modal = document.getElementById("kiosk-pin-modal");
+  return kioskAdminAuthMode === "account" && !!modal && modal.style.display !== "none";
+}
+
+async function openKioskAdminPinModal() {
+  let mode = "pin";
+  try {
+    const res = await fetch(`${API_BASE}/auth-config`);
+    if (res.ok) mode = (await res.json()).kiosk || "pin";
+  } catch (e) { /* 서버 연결 실패 - PIN 창으로 두고, 인증 시 오류 안내 */ }
+  kioskAdminAuthMode = mode;
+  const card = mode === "account";
+  document.getElementById("kiosk-card-auth-section").style.display = card ? "" : "none";
+  document.getElementById("kiosk-pin-auth-section").style.display = card ? "none" : "";
+  document.getElementById("kiosk-pin-submit-btn").style.display = card ? "none" : "";
+  document.getElementById("kiosk-auth-desc").innerText = card
+    ? "키오스크 설정은 관리자만 들어갈 수 있어요."
+    : "키오스크 설정을 변경하려면 PIN을 입력하세요.";
+  const status = document.getElementById("kiosk-card-auth-status");
+  if (status) status.innerText = "";
+
+  if (card) {
+    // QR을 읽으려면 카메라가 켜져 있어야 한다 - 꺼져 있었으면 이 창이 떠 있는 동안만 켠다(닫을 때
+    // resumeQrAfterSettings가 이 기기의 원래 켜짐 상태로 되돌림). 이때 읽힌 QR/NFC는 결제가 아니라
+    // 인증으로 간다(triggerKioskPayment 맨 위).
+    if (!isCameraScanning) startCameraScanner(true);
+  } else if (isCameraScanning) {
+    // 설정 화면에 있는 동안엔 QR이 켜져 있으면 꺼둔다(설정 중에 QR이 비쳐 결제가 나가지 않게). 켜짐
+    // 상태 기억(somang_kiosk_qr_enabled)은 그대로 두고, PIN 취소/설정 닫기 때 resumeQrAfterSettings()가
+    // 다시 켠다(2026-11-07 - 예전엔 꺼진 채로 남아 배지를 다시 탭해야 했다).
+    stopCameraScanner();
+  }
+
+  // 설정 화면은 매번 다시 인증해야 한다 - 이전엔 sessionStorage에 인증 여부를
+  // 저장해뒀다가 같은 세션이면 바로 열어줬는데, 키오스크 단말기 특성상
   // 브라우저 세션이 며칠씩 유지되는 경우가 많아 사실상 최초 1회 인증 이후로는
   // 아무나 설정에 들어갈 수 있는 문제가 있었다.
   kioskShowModal("kiosk-pin-modal");
   const input = document.getElementById("kiosk-pin-input");
-  if (input) { input.value = ""; input.focus(); }
+  if (input) { input.value = ""; if (!card) input.focus(); }
+}
+
+let kioskCardAuthBusy = false;
+
+async function verifyKioskAdminCard(cardUid) {
+  if (kioskCardAuthBusy || !cardUid) return;
+  kioskCardAuthBusy = true;
+  const status = document.getElementById("kiosk-card-auth-status");
+  if (status) { status.style.color = "var(--text-muted)"; status.innerText = "확인 중…"; }
+  try {
+    const res = await fetch(`${API_BASE}/admin/verify-auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ card_uid: cardUid, surface: "kiosk" })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.token) {
+      appendDebugLog(`[ADMIN] ${data.admin_name || "관리자"} QR·NFC로 설정 진입`, "SUCCESS");
+      enterKioskAdminSettings(data.token);
+    } else {
+      if (status) { status.style.color = "var(--icon-danger)"; status.innerText = data.detail || "인증하지 못했어요."; }
+      appendDebugLog(`[ADMIN] 설정 진입 거절: ${data.detail || res.status}`, "WARN");
+      if (res.status === 400) openKioskAdminPinModal(); // 방식이 PIN으로 바뀐 경우
+    }
+  } catch (err) {
+    console.error("Kiosk admin card auth error:", err);
+    if (status) { status.style.color = "var(--icon-danger)"; status.innerText = "서버에 연결하지 못했어요."; }
+  } finally {
+    setTimeout(() => { kioskCardAuthBusy = false; }, 1500);
+  }
+}
+
+// 인증 성공 → 설정 화면. 설정 화면에선 QR로 결제가 나가지 않게 카메라를 끈다(닫을 때 원래대로).
+function enterKioskAdminSettings(token) {
+  kioskAdminToken = token;
+  sessionStorage.setItem("kiosk_admin_token", kioskAdminToken);
+  kioskHideModal("kiosk-pin-modal");
+  if (isCameraScanning) stopCameraScanner();
+  openKioskAdminModal();
 }
 
 function closeKioskPinModal() {
@@ -1302,6 +1378,8 @@ function closeKioskPinModal() {
 function resumeQrAfterSettings() {
   if (kioskTestMode) {
     if (!isCameraScanning) startCameraScanner();
+  } else if (isCameraScanning && !kioskQrSavedOn()) {
+    stopCameraScanner(); // QR·NFC 인증 창 때문에 잠깐 켰던 카메라
   } else {
     restoreKioskQrScanner();
   }
@@ -1316,17 +1394,17 @@ async function verifyKioskAdminPin() {
     const res = await fetch(`${API_BASE}/admin/verify-pin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin })
+      body: JSON.stringify({ pin: pin, surface: "kiosk" })
     });
     const data = await res.json().catch(() => ({}));
 
     if (res.ok && data.token) {
-      kioskAdminToken = data.token;
-      sessionStorage.setItem("kiosk_admin_token", kioskAdminToken);
       // closeKioskPinModal()을 쓰면 설정 화면으로 넘어가는 순간 QR이 다시 켜진다 - 창만 닫는다.
-      kioskHideModal("kiosk-pin-modal");
-      openKioskAdminModal();
+      enterKioskAdminSettings(data.token);
       appendDebugLog("[ADMIN] 단말기 관리자 모드 진입 성공", "SUCCESS");
+    } else if (res.status === 400 && data.detail) {
+      alert(data.detail); // 방식이 QR·NFC로 바뀐 경우
+      openKioskAdminPinModal();
     } else if (res.status === 429) {
       alert(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
@@ -1874,10 +1952,12 @@ function toggleKioskQrScanner() {
 
 // 이 기기에서 마지막으로 QR 스캐너를 켜 둔 채였으면 시작할 때 다시 켠다. 실패해도(카메라 권한
 // 아직 없음 등) 알림창 없이 디버그 로그만 남긴다 - 그때는 배지를 탭해 직접 켜면 된다.
+function kioskQrSavedOn() {
+  try { return localStorage.getItem(KIOSK_QR_ENABLED_KEY) === "1"; } catch (e) { return false; }
+}
+
 function restoreKioskQrScanner() {
-  let saved = null;
-  try { saved = localStorage.getItem(KIOSK_QR_ENABLED_KEY); } catch (e) { saved = null; }
-  if (saved !== "1" || isCameraScanning) return;
+  if (!kioskQrSavedOn() || isCameraScanning) return;
   appendDebugLog("[QR 스캐너] 이 기기에서 켜 두었던 QR 스캐너를 자동으로 다시 켭니다.", "INFO");
   startCameraScanner(true);
 }
@@ -1886,7 +1966,7 @@ function restoreKioskQrScanner() {
 window.onAndroidNfcScanned = function (rawHexUid) {
   // 카메라 사용 중이고, 리더와 카메라 동시사용이 허용되지 않은 상태라면 태깅을 무시
   // (내장 NFC는 이미 하드웨어 단에서 일시정지되지만, 외부 CCID 리더는 계속 폴링되므로 여기서 한 번 더 막는다)
-  if (isCameraScanning && shouldPauseReaderForCamera()) {
+  if (isCameraScanning && shouldPauseReaderForCamera() && !isKioskCardAuthPending()) {
     appendDebugLog(`⚡ [카드 리더] 카메라 사용 중이라 태깅 무시됨: ${rawHexUid}`, "WARN");
     return;
   }

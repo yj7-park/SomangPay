@@ -30,6 +30,10 @@ class User(Base):
     # 회원이 직접 비밀번호를 정했는지(#activation). False면 앱 로그인 전에 문자 인증번호 →
     # 비밀번호 설정을 먼저 거친다(앱 계정 "미활성"). 카드/키오스크 결제와는 무관 - status만 본다.
     password_set = Column(Boolean, default=False, nullable=False)
+    # 관리자 권한(2026-11-08) - 일반 회원 계정에 관리자 권한을 얹는다. role은 USER 그대로라 회원 목록/결제/
+    # 입금 매칭에서 평소처럼 보인다(role == "ADMIN"인 별도 관리자 계정은 PIN 인증 세션용으로만 남김).
+    # 계정 로그인 방식일 때 관리자 앱(휴대폰+회원 비밀번호)/키오스크 설정(본인 QR·NFC)으로 들어간다.
+    is_admin = Column(Boolean, default=False, nullable=False)
     # 프로필 사진을 마지막으로 바꾼 시각 - NULL이면 사진 없음. 이미지 자체는 회원 목록 조회가
     # 무거워지지 않게 user_photos에 따로 두고, 이 값은 사진 URL 캐시버스팅(?v=)에도 쓴다.
     photo_updated_at = Column(DateTime, nullable=True)
@@ -188,6 +192,9 @@ class PushSubscription(Base):
     notify_deposit_error = Column(Boolean, default=True, nullable=False)  # 미매칭 입금 발생(관리자 확인 필요)
     notify_deposit_credited = Column(Boolean, default=True, nullable=False)  # 회원 셀프클레임으로 충전 반영됨
     notify_payment = Column(Boolean, default=True, nullable=False)  # 키오스크 결제 발생
+    # "user"(회원 앱) / "admin"(관리자 앱) - 회원 계정에 관리자 권한을 얹으면서(admin_auth) 같은 user_id가
+    # 두 앱에서 구독할 수 있게 돼, 관리자 알림이 회원 앱으로 가거나 그 반대가 되지 않게 나눈다.
+    audience = Column(String(10), default="user", nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class PaymentLineItem(Base):
@@ -250,3 +257,12 @@ class UserActivationCode(Base):
     attempts = Column(Integer, default=0, nullable=False)
     verified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class AppSetting(Base):
+    """운영 설정 키-값(2026-11-08). 지금은 관리자 인증 방식(services/admin_auth.py)만 쓴다."""
+    __tablename__ = "app_settings"
+
+    key = Column(String(50), primary_key=True)
+    value = Column(String(200), nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

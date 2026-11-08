@@ -276,7 +276,15 @@
     <div class="modal-box-large pin-lock-box" style="max-width: 400px; border-color: var(--primary);">
       <div class="pin-lock-icon" data-icon="lock"></div>
       <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 0.5rem;">키오스크 관리자 인증</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">키오스크 설정을 변경하려면 PIN을 입력하세요.</p>
+      <!-- 서버 설정(/api/auth-config kiosk)에 따라 PIN 키패드 또는 관리자 권한 회원의 QR·NFC 태그(#admin-account,
+           kiosk.js openKioskAdminPinModal). 태그 방식이면 카메라를 잠깐 켜고 스캔을 결제 대신 인증으로 보낸다. -->
+      <p id="kiosk-auth-desc" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.4rem;">키오스크 설정을 변경하려면 PIN을 입력하세요.</p>
+      <div id="kiosk-card-auth-section" style="display: none; text-align: center; padding: 0.5rem 0 1rem;">
+        <div style="display: inline-flex; font-size: 2.6rem; color: var(--accent-cyan); margin-bottom: 0.6rem;"><span data-icon="card"></span></div>
+        <p style="font-size: 0.95rem; color: var(--text-main); line-height: 1.6;">관리자 권한이 있는 회원의<br><strong>QR 코드</strong>를 카메라에 비추거나<br><strong>NFC 카드</strong>를 리더에 대 주세요.</p>
+        <p id="kiosk-card-auth-status" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.8rem; min-height: 1.3em;"></p>
+      </div>
+      <div id="kiosk-pin-auth-section">
       <div class="form-group" style="margin-bottom: 0;">
         <!-- inputmode="none"(#redesign, 사용자 피드백: "가상 키보드가 나와버리잖아") - 아래
              전용 숫자 키패드로만 입력받는다. 물리 키보드 입력은 그대로 동작한다. -->
@@ -296,9 +304,10 @@
         <button type="button" class="pin-key" data-digit="0">0</button>
         <button type="button" class="pin-key pin-key-backspace" id="kiosk-pin-backspace" aria-label="한 글자 지우기" data-icon="backspace"></button>
       </div>
+      </div>
       <div class="pin-lock-actions" style="display: flex; gap: 0.8rem; justify-content: flex-end;">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main); flex: 1; min-height: 44px;" onclick="closeKioskPinModal()">취소</button>
-        <button class="btn-action btn-primary" style="flex: 1; min-height: 44px;" onclick="verifyKioskAdminPin()">인증하기</button>
+        <button class="btn-action btn-primary" id="kiosk-pin-submit-btn" style="flex: 1; min-height: 44px;" onclick="verifyKioskAdminPin()">인증하기</button>
       </div>
     </div>
   </div>
@@ -433,6 +442,6 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <script src="src/kiosk.js?v=20261107_1500"></script>
+  <script src="src/kiosk.js?v=20261108_1800"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ import json
 import os
 
 from pywebpush import webpush, WebPushException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
@@ -53,14 +54,18 @@ def _dispatch(db: Session, subs: list, title: str, body: str, url: str) -> None:
 
 def send_push_to_user(db: Session, user_id: int, title: str, body: str, url: str = "/user") -> None:
     """회원의 모든 구독 기기에 푸시를 보낸다. 카테고리 구분 없이 항상 발송."""
-    subs = db.query(models.PushSubscription).filter(models.PushSubscription.user_id == user_id).all()
+    subs = db.query(models.PushSubscription).filter(
+        models.PushSubscription.user_id == user_id,
+        models.PushSubscription.audience == "user",
+    ).all()
     _dispatch(db, subs, title, body, url)
 
 
 def send_push_to_admins(
     db: Session, title: str, body: str, url: str = "/admin", category: str = None, entity_id: int = None
 ) -> None:
-    """관리자(role=ADMIN) 전원의 구독 기기에 푸시를 보낸다. category가 주어지면 해당
+    """관리자 앱(audience=admin) 구독 기기 중 아직 관리자인 계정(PIN용 role=ADMIN 계정 또는 관리자 권한
+    회원)의 기기에 푸시를 보낸다. category가 주어지면 해당
     항목을 꺼둔 구독 기기에는 보내지 않는다(관리자 설정 화면의 항목별 on/off).
     category/entity_id는 알림 클릭 시 처리 화면으로 바로 이동하는 딥링크로도 쓰인다 -
     sw.js의 notificationclick이 이 url을 그대로 열고, admin.js가 로드 시 쿼리스트링을
@@ -68,7 +73,11 @@ def send_push_to_admins(
     ws_manager.notify_admins_alert 참고)."""
     query = db.query(models.PushSubscription).join(
         models.User, models.PushSubscription.user_id == models.User.id
-    ).filter(models.User.role == "ADMIN")
+    ).filter(
+        models.PushSubscription.audience == "admin",
+        models.User.status == "ACTIVE",
+        or_(models.User.role == "ADMIN", models.User.is_admin == True),  # noqa: E712
+    )
     if category in ADMIN_CATEGORY_COLUMNS:
         query = query.filter(ADMIN_CATEGORY_COLUMNS[category] == True)  # noqa: E712
     subs = query.all()

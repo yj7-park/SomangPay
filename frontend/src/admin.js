@@ -137,8 +137,8 @@ async function adminFetch(url, options = {}) {
     disconnectAdminWebSocket();
     localStorage.removeItem("admin_auth");
     localStorage.removeItem("admin_token");
-    showAlertModal("관리자 세션이 만료되었습니다. 다시 인증해 주세요.");
-    showModal("admin-pin-modal");
+    showAlertModal("관리자 세션이 끝났어요. 다시 로그인해 주세요.");
+    showAdminLoginModal();
   }
   return res;
 }
@@ -241,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
     syncAdminTokenToNative();
     checkNativeNotificationDeepLink();
   } else {
-    showModal("admin-pin-modal");
+    showAdminLoginModal();
   }
 });
 
@@ -748,15 +748,92 @@ function removeAdminPinDigit() {
 // PIN 오류는 입력칸 아래 한 줄(#admin-pin-error)로(#admin-b) - 회원 앱 로그인의
 // showLoginError/clearLoginError와 같은 방식.
 function showAdminPinError(message) {
-  const el = document.getElementById("admin-pin-error");
+  const accountVisible = document.getElementById("admin-account-login-section")?.style.display !== "none";
+  const el = document.getElementById(accountVisible ? "admin-account-error" : "admin-pin-error");
   if (!el) return;
   el.textContent = message;
   el.style.display = "";
 }
 
 function clearAdminPinError() {
-  const el = document.getElementById("admin-pin-error");
-  if (el) { el.style.display = "none"; el.textContent = ""; }
+  ["admin-pin-error", "admin-account-error"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.display = "none"; el.textContent = ""; }
+  });
+}
+
+// ============ 관리자 로그인 (#admin-account) ============
+// 로그인 창은 서버 설정(/api/auth-config의 admin_app)에 따라 PIN 키패드 또는 계정 로그인(관리자 권한
+// 회원의 휴대폰 번호 + 회원 앱과 같은 비밀번호)을 띄운다. 관리자 권한 회원이 아직 없으면 서버가 "pin"을
+// 돌려준다(services/admin_auth.py effective_mode).
+async function showAdminLoginModal() {
+  let mode = "pin";
+  try {
+    const res = await fetch(`${API_BASE}/auth-config`);
+    if (res.ok) mode = (await res.json()).admin_app || "pin";
+  } catch (e) { /* 서버 연결 실패 - PIN 화면으로 두고, 제출 시 오류 줄로 안내 */ }
+  const account = mode === "account";
+  document.getElementById("admin-account-login-section").style.display = account ? "" : "none";
+  document.getElementById("admin-pin-login-section").style.display = account ? "none" : "";
+  document.getElementById("admin-login-title").innerText = account ? "관리자 로그인" : "관리자 PIN 인증";
+  document.getElementById("admin-login-desc").innerText = account
+    ? "관리자 권한이 있는 회원의 휴대폰 번호와 비밀번호를 입력하세요."
+    : "관리자 PIN 번호를 입력하세요.";
+  clearAdminPinError();
+  showModal("admin-pin-modal");
+}
+
+function completeAdminLogin(token) {
+  adminToken = token;
+  localStorage.setItem("admin_auth", "true");
+  localStorage.setItem("admin_token", adminToken);
+  isAdminAuthenticated = true;
+  hideModal("admin-pin-modal");
+  initAdminDashboard();
+  syncAdminTokenToNative();
+  checkNativeNotificationDeepLink();
+}
+
+async function submitAdminAccountLogin(btn) {
+  const phone = (document.getElementById("admin-login-phone").value || "").replace(/\D/g, "");
+  const pwInput = document.getElementById("admin-login-password");
+  const password = pwInput.value;
+  if (!phone || !password) {
+    showAdminPinError("휴대폰 번호와 비밀번호를 입력하세요.");
+    return;
+  }
+  const run = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        pwInput.value = "";
+        completeAdminLogin(data.token);
+      } else {
+        const detail = typeof data.detail === "string" ? data.detail : "로그인하지 못했어요. 다시 시도해 주세요.";
+        if (res.status === 400 && /PIN으로 들어가도록/.test(detail)) await showAdminLoginModal(); // 방식이 바뀐 경우
+        showAdminPinError(detail);
+      }
+    } catch (err) {
+      console.error("Admin account login error:", err);
+      showAdminPinError("서버에 연결하지 못했어요. 잠시 후 다시 시도하세요.");
+    }
+  };
+  if (btn) await withButtonLock(btn, run); else await run();
+}
+
+function logoutAdmin() {
+  adminToken = null;
+  isAdminAuthenticated = false;
+  disconnectAdminWebSocket();
+  localStorage.removeItem("admin_auth");
+  localStorage.removeItem("admin_token");
+  syncAdminTokenToNative();
+  showAdminLoginModal();
 }
 
 async function submitAdminPin() {
@@ -771,20 +848,18 @@ async function submitAdminPin() {
     const res = await fetch(`${API_BASE}/admin/verify-pin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin })
+      body: JSON.stringify({ pin: pin, surface: "admin_app" })
     });
 
     const data = await res.json().catch(() => ({}));
 
     if (res.ok && data.token) {
-      adminToken = data.token;
-      localStorage.setItem("admin_auth", "true");
-      localStorage.setItem("admin_token", adminToken);
-      isAdminAuthenticated = true;
-      hideModal("admin-pin-modal");
-      initAdminDashboard();
-      syncAdminTokenToNative();
-      checkNativeNotificationDeepLink();
+      completeAdminLogin(data.token);
+    } else if (res.status === 400 && data.detail) {
+      // 방식이 계정 로그인으로 바뀐 경우 - 계정 로그인 창으로 바꾸고 안내한다.
+      if (pinInput) pinInput.value = "";
+      await showAdminLoginModal();
+      showAdminPinError(data.detail);
     } else if (res.status === 429) {
       showAdminPinError(data.detail || "PIN 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.");
     } else {
@@ -937,7 +1012,7 @@ function switchAdminView(viewName, inboxFilter) {
     });
     if (viewName === "search") { renderMemberFeed(); updateFixedViewLayoutMetrics(); }
     if (viewName === "kiosk") { renderKioskList(); loadKiosks(); startKioskListPolling(); }
-    if (viewName === "settings") { refreshAdminPushButtonUI(); refreshSmsSettings(); }
+    if (viewName === "settings") { refreshAdminPushButtonUI(); refreshSmsSettings(); loadAdminAuthSettings(); }
     if (viewName === "inbox") {
       if (inboxFilter) inboxDepositFilter = inboxFilter;
       activityFeedLimit = ACTIVITY_PAGE_SIZE;
@@ -1634,6 +1709,7 @@ function renderMemberFeedCard(u) {
         <span class="status-dot ${dotClass}"></span>${u.name}
         ${u.user_type === 'SENIOR' ? '<span class="badge-tag badge-senior" style="margin-left: 0.4rem;">시니어</span>' : ''}
         ${u.status === 'INACTIVE' ? '<span class="badge-tag badge-inactive" style="margin-left: 0.4rem;">비활성</span>' : ''}
+        ${u.is_admin ? '<span class="badge-tag badge-admin" style="margin-left: 0.4rem;">관리자</span>' : ''}
       </div>
       <div class="member-card-sub">${u.phone ? formatPhoneDisplay(u.phone) : '연락처 없음'}</div>
     </div>
@@ -1937,6 +2013,7 @@ function renderMemberDetail() {
     [user.church_position, user.church_group].filter(Boolean).join(" · ") || "-";
   // 앱 비밀번호를 직접 정했는지(#activation) - 안 정했으면 첫 로그인 때 문자 인증을 거친다.
   document.getElementById("detail-member-app-status").innerText = user.password_set ? "사용 중" : "아직 가입 전 (첫 로그인 때 문자 인증)";
+  renderDetailAdminSwitch(user);
 
   renderDetailCardSlots();
   renderDetailHistory();
@@ -2082,6 +2159,128 @@ function renderDetailActiveSwitch(user) {
   btn.classList.toggle("is-on", on);
   btn.setAttribute("aria-checked", on ? "true" : "false");
   document.getElementById("detail-member-active-label").innerText = on ? "활성" : "비활성";
+}
+
+// 관리자 권한 스위치(#admin-account) - 권한이 있는 회원은 계정 방식일 때 관리자 앱(휴대폰+회원 비밀번호)과
+// 키오스크 설정(본인 QR/NFC)으로 들어올 수 있다. PIN용 관리자 계정(role=ADMIN)엔 행을 숨긴다.
+function renderDetailAdminSwitch(user) {
+  const row = document.getElementById("detail-member-admin-row");
+  if (!row) return;
+  row.style.display = user.role === "ADMIN" ? "none" : "";
+  const on = !!user.is_admin;
+  const btn = document.getElementById("detail-member-admin-toggle");
+  btn.classList.toggle("is-on", on);
+  btn.setAttribute("aria-checked", on ? "true" : "false");
+  document.getElementById("detail-member-admin-label").innerText = on ? "있음" : "없음";
+}
+
+async function toggleDetailUserAdmin() {
+  const user = users.find(u => u.id === currentDetailUserId);
+  if (!user) return;
+  const grant = !user.is_admin;
+  let before = null;
+  try { before = await (await fetch(`${API_BASE}/auth-config`)).json(); } catch (e) { before = null; }
+  let msg = grant
+    ? `${user.name}님에게 관리자 권한을 줄까요?\n관리자 앱과 키오스크 설정에 들어갈 수 있게 됩니다.`
+    : `${user.name}님의 관리자 권한을 회수할까요?\n이 회원으로 로그인한 관리자 화면은 바로 로그아웃됩니다.`;
+  // 첫 관리자 회원이면 PIN으로 동작하던 화면이 계정 방식으로 바뀌어 PIN 세션이 모두 끊긴다 - 미리 알린다.
+  if (grant && before && (before.admin_app === "pin" || before.kiosk === "pin")) {
+    msg += "\n\n※ 계정 방식으로 설정된 화면은 관리자 권한 회원이 생기는 순간부터 PIN 대신 계정으로만 들어갈 수 있어요. "
+      + "관리자 앱은 이 회원이 회원 앱 비밀번호를 정해 두었을 때부터 바뀌고, 그때 PIN으로 로그인해 둔 기기(문자 발송 태블릿 포함)는 다시 로그인해야 해요.";
+  }
+  if (!(await showConfirmModal(msg))) return;
+  const btn = document.getElementById("detail-member-admin-toggle");
+  btn.disabled = true;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/users/${user.id}/admin-privilege`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_admin: grant })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      showToast(data.message || "변경했습니다.");
+      await loadAdminUsers();
+      renderMemberDetail();
+      loadAdminAuthSettings();
+    } else if (res.status !== 401) {
+      await showAlertModal(`처리 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("toggleDetailUserAdmin error:", err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============ 설정 > 관리자 인증 (#admin-account) ============
+const ADMIN_AUTH_SURFACE_LABEL = { admin_app: "관리자 앱", kiosk: "키오스크 설정" };
+
+async function loadAdminAuthSettings() {
+  if (!isAdminAuthenticated) return;
+  try {
+    const [res, meRes] = await Promise.all([
+      adminFetch(`${API_BASE}/admin/auth-settings`),
+      adminFetch(`${API_BASE}/admin/me`),
+    ]);
+    if (res.ok) renderAdminAuthSettings(await res.json());
+    if (meRes.ok) {
+      const me = await meRes.json();
+      const el = document.getElementById("a-auth-me");
+      if (el) el.innerText = me.is_member ? `${me.name}님으로 로그인 중` : "관리자 PIN으로 로그인 중";
+    }
+  } catch (err) {
+    console.error("loadAdminAuthSettings error:", err);
+  }
+}
+
+function renderAdminAuthSettings(data) {
+  const notes = [];
+  for (const surface of ["admin_app", "kiosk"]) {
+    const m = data.modes[surface];
+    ["pin", "account"].forEach(method => {
+      document.getElementById(`a-auth-${surface}-${method}`)?.classList.toggle("is-on", m.configured === method);
+    });
+    if (m.configured === "account" && m.effective === "pin") {
+      notes.push(surface === "admin_app"
+        ? "관리자 앱: 회원 앱 비밀번호를 정한 관리자 권한 회원이 없어서 지금은 PIN으로 들어갑니다."
+        : "키오스크 설정: 관리자 권한 회원이 없어서 지금은 PIN으로 들어갑니다.");
+    }
+  }
+  const admins = data.admins || [];
+  notes.push(admins.length
+    ? `관리자 권한 회원 ${admins.length}명: ${admins.map(a => a.name + (a.password_set ? "" : "(앱 가입 전)")).join(", ")}`
+    : "관리자 권한 회원이 없어요. 회원 상세에서 \"관리자 권한\"을 켜 주세요.");
+  const noteEl = document.getElementById("a-auth-note");
+  if (noteEl) noteEl.innerText = notes.join("\n");
+}
+
+async function setAdminAuthMode(surface, mode) {
+  const label = ADMIN_AUTH_SURFACE_LABEL[surface];
+  const how = mode === "pin"
+    ? "공용 관리자 PIN"
+    : (surface === "admin_app" ? "관리자 권한 회원의 휴대폰 번호와 비밀번호" : "관리자 권한 회원의 QR 코드나 NFC 카드");
+  let msg = `${label} 진입 방식을 "${how}"(으)로 바꿀까요?`;
+  if (surface === "admin_app") msg += "\n\n바뀌면 지금 다른 방식으로 로그인해 둔 관리자 앱(문자 발송 태블릿 포함)은 모두 다시 로그인해야 해요.";
+  if (!(await showConfirmModal(msg))) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/auth-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [surface]: mode })
+    });
+    if (res.ok) {
+      renderAdminAuthSettings(await res.json());
+      showToast(`${label} 진입 방식을 바꿨습니다.`);
+      // 이 기기 세션이 새 방식과 안 맞으면 다음 요청에서 401 → 로그인 창(adminFetch).
+      loadAdminAuthSettings();
+    } else if (res.status !== 401) {
+      const data = await res.json().catch(() => ({}));
+      await showAlertModal(`변경 실패: ${data.detail || '오류 발생'}`);
+    }
+  } catch (err) {
+    console.error("setAdminAuthMode error:", err);
+  }
 }
 
 async function toggleDetailUserActive() {
