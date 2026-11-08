@@ -23,7 +23,7 @@ from app.services.history import get_history_page, get_kiosk_payment_history_pag
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
 from app.services import member_age
-from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks
+from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks, start_ws_bus
 
 app = FastAPI(
     title="SomangPay API Server",
@@ -122,6 +122,12 @@ def require_user_auth(
 @app.on_event("startup")
 async def raise_threadpool_capacity():
     to_thread.current_default_thread_limiter().total_tokens = 200
+
+
+# 워커 간 WS 신호 전달(ws_manager.start_ws_bus) - 워커마다 Postgres LISTEN 스레드 하나.
+@app.on_event("startup")
+async def start_ws_event_bus():
+    start_ws_bus()
 
 
 # 초기 시드 데이터 구축

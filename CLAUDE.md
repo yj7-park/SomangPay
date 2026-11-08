@@ -237,10 +237,16 @@
 ## 실시간(WebSocket) / 키오스크 온라인 판정
 
 - 백엔드는 `uvicorn --workers 4`로 뜨는데(`backend/Dockerfile`), `ws_manager.ConnectionManager`
-  는 **프로세스 로컬 인메모리**다(Redis 같은 브로커 없음). 그래서 어떤 워커에 붙은 WS
-  소켓은 다른 워커에서 안 보이고, `notify_admins` / `send_to_kiosk` / `broadcast_kiosks`
-  는 **같은 워커에 붙은 클라이언트에게만** 닿는다. WS 기반 상태를 "지금 켜져 있나?"
-  판정에 직접 쓰면 안 된다(워커 4개면 4번에 1번만 맞음).
+  는 **프로세스 로컬 인메모리**라 어떤 워커에 붙은 WS 소켓은 그 워커만 안다. 그래서 `notify_admins` /
+  `notify_admins_alert` / `notify_user` / `notify_kiosk` / `notify_all_kiosks`는 직접 보내지 않고
+  **Postgres LISTEN/NOTIFY 버스**(채널 `somangpay_ws`, `ws_manager._publish` → `pg_notify`)로 올리고,
+  워커마다 하나씩 도는 리스너 스레드(`start_ws_bus`, startup)가 받아 자기 소켓에 전달한다(2026-11-08 -
+  그 전엔 메뉴 추가/삭제 신호가 키오스크 4대 중 1대 꼴로만 닿았다, dev에서 소켓 12개 중 1개 수신 재현 →
+  수정 후 12/12). 리스너 연결은 autocommit이라 잠금을 안 쥔다(`pg_stat_activity`에 `idle` + `LISTEN
+  somangpay_ws` 4줄이 정상). sqlite이거나 이 워커 리스너가 아직 안 붙었으면 자기 워커에 직접 보낸다.
+  payload 7,500바이트 초과도 로컬 전달만. 새 WS 신호도 반드시 이 `notify_*` 함수들을 거칠 것
+  (`manager.broadcast_*`를 직접 부르면 다시 워커 로컬이 된다).
+- WS 기반 상태를 "지금 켜져 있나?" 판정에 직접 쓰면 안 된다(소켓은 여전히 워커 로컬).
 - **키오스크 온라인 여부**는 그래서 `KioskDevice.last_seen_at`(naive UTC) **신선도**로
   본다(`main.py`의 `_kiosk_is_online_at`, `KIOSK_ONLINE_TTL_SECONDS = WS_PING_INTERVAL*3
   = 60초`). `_ws_keepalive_loop`의 `on_tick`이 **포그라운드일 때만** 20초마다
@@ -256,9 +262,6 @@
 - 매출 집계는 `payment_transactions(kiosk_device_id, status, created_at)` +
   `payment_transaction_items(payment_transaction_id)` 인덱스에 의존한다(`database.py`
   마이그레이션). 없으면 목록이 5~10초씩 걸린다.
-- **아직 안 고친 것**: 라이브 메뉴 갱신(`send_to_kiosk`/`broadcast_kiosks`)은 여전히
-  워커 로컬이라 다중 워커에서 일부 키오스크에 신호가 안 갈 수 있다. 근본 해결은
-  매니저에 Redis pub/sub.
 - **WS 핸들러는 DB 세션을 소켓 수명 동안 쥐고 있으면 안 된다(2026-10-23 운영 장애)**: `ws_admin`/
   `ws_user`가 `Depends(get_db)`로 회원을 조회한 뒤 세션을 그대로 들고 있어서 "idle in transaction"으로
   `users` 읽기 잠금이 소켓 내내 남았다. 배포 때 먼저 뜬 워커에 관리자 태블릿이 재접속한 상태에서 늦게
