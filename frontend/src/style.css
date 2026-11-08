@@ -3336,6 +3336,11 @@ body[data-theme="light"] .section-title {
   min-height: auto !important;
   position: relative;
 }
+/* 메뉴 카드를 누르면 수정 창(openMenuEditModal) - 휴지통 버튼 자리만큼 이름 오른쪽을 비운다. */
+.menu-manage-grid .menu-card-editable {
+  cursor: pointer;
+  padding-right: 2.6rem !important;
+}
 .menu-manage-grid .menu-card .menu-delete-btn {
   position: absolute;
   top: 0.5rem;

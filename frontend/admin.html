@@ -15,7 +15,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261025_1500">
+  <link rel="stylesheet" href="src/style.css?v=20261108_1200">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20261025_1500">
   <script src="jsQR.min.js"></script>
   <script>
@@ -685,7 +685,7 @@
   <div id="admin-menu-manage-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 640px;">
       <h2 style="font-size: 1.3rem; color: var(--accent-cyan); margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="edit"></span> 메뉴 관리</h2>
-      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.8rem;">메뉴는 전체 키오스크 공용 목록입니다. 여기서 추가/삭제한 메뉴는 모든 키오스크에 반영됩니다.</p>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.8rem;">메뉴는 전체 키오스크 공용 목록입니다. 메뉴를 누르면 이름과 가격을 고칠 수 있고, 여기서 추가/수정/삭제한 메뉴는 모든 키오스크에 반영됩니다.</p>
 
       <div class="modal-body">
         <div id="admin-menu-manage-grid" class="menu-manage-grid"></div>
@@ -697,10 +697,11 @@
     </div>
   </div>
 
-  <!-- Menu Add Modal (메뉴 관리 모달의 "+" 카드를 누르면 뜨는 입력 모달) -->
+  <!-- Menu Add/Edit Modal (메뉴 관리 모달의 "+" 카드 = 추가, 메뉴 카드 = 수정. 같은 창을 openMenuAddModal /
+       openMenuEditModal이 제목/버튼 문구만 바꿔 쓴다) -->
   <div id="admin-menu-add-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box-large" style="max-width: 380px;">
-      <h2 style="font-size: 1.3rem; color: var(--accent-emerald); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><span data-icon="plus"></span> 메뉴 추가</h2>
+      <h2 style="font-size: 1.3rem; color: var(--accent-emerald); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;"><span id="admin-menu-add-icon" data-icon="plus"></span> <span id="admin-menu-add-title">메뉴 추가</span></h2>
 
       <div class="modal-body">
         <div class="form-group">
@@ -719,7 +720,7 @@
 
       <div class="modal-footer">
         <button class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="closeMenuAddModal()">취소</button>
-        <button class="btn-action btn-primary" onclick="saveMenuAdd(this)">추가</button>
+        <button class="btn-action btn-primary" id="admin-menu-add-submit" onclick="saveMenuAdd(this)">추가</button>
       </div>
     </div>
   </div>
@@ -884,6 +885,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261025_1500"></script>
+  <script src="src/admin.js?v=20261108_1200"></script>
 </body>
 </html>

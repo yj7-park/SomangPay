@@ -988,8 +988,16 @@ async def update_product(product_id: int, req: schemas.ProductUpdate, db: Sessio
     product = db.query(models.Product).filter(models.Product.id == product_id, models.Product.is_active == True).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    # 메뉴 id는 그대로 두고 값만 바꾼다 - 키오스크 배정(assigned_products)/기본 결제 메뉴
+    # (default_product_id)가 유지되고, 지난 결제는 payment_transaction_items의 이름/단가 스냅샷이라 안 바뀐다.
     if req.name is not None:
-        product.name = req.name
+        name = req.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="메뉴 이름을 입력하세요.")
+        product.name = name
+    for price in (req.price_general, req.price_senior):
+        if price is not None and price < 0:
+            raise HTTPException(status_code=400, detail="가격은 0원 이상이어야 합니다.")
     if req.price_general is not None:
         product.price_general = req.price_general
     if req.price_senior is not None:

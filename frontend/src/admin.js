@@ -3890,10 +3890,12 @@ async function confirmDeleteKiosk(id) {
   }
 }
 
-// ============ 메뉴 관리 모달 (전역 메뉴 카탈로그 추가/삭제) ============
+// ============ 메뉴 관리 모달 (전역 메뉴 카탈로그 추가/수정/삭제) ============
 // 메뉴 선택 배정 그리드(.kiosk-menu-assign-grid)와 같은 카드형 UI를 재사용하되, 여기서는
-// 카드를 눌러도 배정이 토글되지 않고 카드 우측 상단 휴지통 버튼으로만 삭제하며, 마지막
-// 칸에는 "+" 카드를 둬서 누르면 별도의 작은 입력 모달(admin-menu-add-modal)이 뜬다.
+// 카드를 눌러도 배정이 토글되지 않고 수정 창이 뜨며(2026-11-08), 카드 우측 상단 휴지통 버튼으로
+// 삭제, 마지막 칸 "+" 카드로 추가한다. 추가/수정은 같은 입력 모달(admin-menu-add-modal)을 쓴다.
+// 수정은 PUT /api/products/{id}로 메뉴 id를 그대로 두므로 키오스크별 배정·기본 결제 메뉴가 유지되고,
+// 지난 결제 내역은 결제 시점 이름/단가 스냅샷(payment_transaction_items)이라 바뀌지 않는다.
 function openMenuManageModal() {
   renderMenuManageGrid();
   showModal("admin-menu-manage-modal");
@@ -3908,8 +3910,8 @@ function renderMenuManageGrid() {
   if (!grid) return;
 
   grid.innerHTML = products.map(p => `
-    <div class="menu-card">
-      <button type="button" class="menu-delete-btn" onclick="deleteMenuItem(${p.id})" title="메뉴 삭제">
+    <div class="menu-card menu-card-editable" onclick="openMenuEditModal(${p.id})" title="메뉴 수정">
+      <button type="button" class="menu-delete-btn" onclick="event.stopPropagation(); deleteMenuItem(${p.id})" title="메뉴 삭제">
         <span data-icon="trash"></span>
       </button>
       <div>
@@ -3944,10 +3946,33 @@ async function deleteMenuItem(productId) {
   }
 }
 
+// null이면 추가, 메뉴 id면 그 메뉴 수정 - saveMenuAdd가 이 값으로 POST/PUT을 고른다.
+let editingMenuId = null;
+
+function setMenuFormMode(product) {
+  editingMenuId = product ? product.id : null;
+  document.getElementById("admin-menu-add-title").innerText = product ? "메뉴 수정" : "메뉴 추가";
+  document.getElementById("admin-menu-add-submit").innerText = product ? "저장" : "추가";
+  const iconEl = document.getElementById("admin-menu-add-icon");
+  if (iconEl) {
+    iconEl.setAttribute("data-icon", product ? "edit" : "plus");
+    iconEl.innerHTML = "";
+    hydrateIconPlaceholders(iconEl.parentElement);
+  }
+  document.getElementById("admin-menu-add-name").value = product ? product.name : "";
+  document.getElementById("admin-menu-add-price-general").value = product ? product.price_general : "";
+  document.getElementById("admin-menu-add-price-senior").value = product ? product.price_senior : "";
+}
+
 function openMenuAddModal() {
-  document.getElementById("admin-menu-add-name").value = "";
-  document.getElementById("admin-menu-add-price-general").value = "";
-  document.getElementById("admin-menu-add-price-senior").value = "";
+  setMenuFormMode(null);
+  showModal("admin-menu-add-modal");
+}
+
+function openMenuEditModal(productId) {
+  const p = products.find(x => x.id === productId);
+  if (!p) return;
+  setMenuFormMode(p);
   showModal("admin-menu-add-modal");
 }
 
@@ -3964,11 +3989,16 @@ async function saveMenuAdd(btn) {
     await showAlertModal("메뉴 이름과 일반 가격을 입력하세요.");
     return;
   }
+  if (genPrice < 0 || (!isNaN(senPrice) && senPrice < 0)) {
+    await showAlertModal("가격은 0원 이상으로 입력하세요.");
+    return;
+  }
+  const editingId = editingMenuId;
 
   await withButtonLock(btn, async () => {
     try {
-      const res = await adminFetch(`${API_BASE}/products`, {
-        method: "POST",
+      const res = await adminFetch(editingId ? `${API_BASE}/products/${editingId}` : `${API_BASE}/products`, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
@@ -3977,13 +4007,13 @@ async function saveMenuAdd(btn) {
         })
       });
       if (res.ok) {
-        showToast(`"${name}" 메뉴를 추가했습니다.`);
+        showToast(editingId ? `"${name}" 메뉴를 수정했습니다.` : `"${name}" 메뉴를 추가했습니다.`);
         closeMenuAddModal();
         await loadAdminProducts();
         renderMenuManageGrid();
       } else {
         const data = await res.json().catch(() => ({}));
-        await showAlertModal(`추가 실패: ${data.detail || '오류 발생'}`);
+        await showAlertModal(`${editingId ? "수정" : "추가"} 실패: ${data.detail || '오류 발생'}`);
       }
     } catch (err) {
       console.error("saveMenuAdd error:", err);
