@@ -59,7 +59,6 @@ let kioskNdefReader = null; // 중복 NDEFReader 생성 방지용 글로벌 레�
 let kioskNfcAbortController = null; // Web NFC scan() 중단(카메라 사용 시 일시정지)을 위한 컨트롤러
 let isKioskPaymentProcessing = false; // 결제 중복 요청 방지 락
 let kioskNfcScanCooldown = false; // NFC 연속 태깅 방지 쿨다운
-let lastQrDecodeTime = 0; // QR 실시간 연산 쓰로틀링을 위한 최종 디코딩 시각 타임스탬프
 
 // version-check.js(auto 모드)가 "지금 새 코드로 새로고침해도 되는지" 판단할 때 쓰는 함수.
 // 결제 처리 중이거나 장바구니에 담긴 게 있으면 손님이 이용 중인 것이므로 안전하지 않은 것으로 본다
@@ -337,7 +336,7 @@ async function startCameraScanner(silent = false, facingMode) {
     updateQrScanStatusUI();
     appendDebugLog(`📷 [QR 스캐너] 백그라운드 QR 스캐너 구동 완료. (${video.videoWidth}x${video.videoHeight})`);
 
-    requestAnimationFrame(scanQRCodeLoop);
+    scanQRCodeLoop(++qrLoopToken);
   } catch (err) {
     console.warn("Camera init error:", err);
     appendDebugLog(`📷 [웹캠 에러] 카메라 구동 실패: ${err.name} - ${err.message}`, "ERROR");
@@ -383,68 +382,119 @@ function stopCameraScanner() {
   }, 500);
 }
 
-function scanQRCodeLoop() {
-  if (!isCameraScanning) return;
+// QR 인식 엔진(2026-11-16, "QR이 잘 안 찍힌다"): 안드로이드 크롬/웹뷰에 내장된 BarcodeDetector(구글 인식 엔진)를
+// 먼저 쓰고, 없거나 QR을 지원 안 하면 jsQR로 내려간다. 예전엔 jsQR로 1280x720 전체를 초당 4번만 훑었다.
+// - 내장 엔진: video를 그대로 넘기고 끝나는 대로 다음 프레임(최소 80ms 간격).
+// - jsQR: 120ms마다, 가운데 정사각형(세로의 75%)과 전체 프레임을 번갈아 본다 - 가운데만 보면 훨씬 빠르다.
+// 카메라 원본 프레임은 좌우반전돼 있지 않으므로(미러는 미리보기 CSS뿐) 해석할 때 뒤집지 않는다.
+let qrNativeDetector = null; // null = 아직 확인 전, false = 못 씀
+let qrDecodeBusy = false;
+let qrJsqrFullFrameTurn = false;
+let qrLoopToken = 0; // 카메라를 껐다 바로 켜도 옛 루프가 같이 돌지 않게
+const QR_NATIVE_MIN_INTERVAL_MS = 80;
+const QR_JSQR_INTERVAL_MS = 120;
 
-  const video = document.getElementById("qr-video");
-  const canvas = document.getElementById("qr-canvas");
-
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.height = video.videoHeight;
-    canvas.width = video.videoWidth;
-    const ctx = canvas.getContext("2d");
-
-    // 전면 카메라일 때만 좌우반전 보정 (후면은 정방향) - 화면 그리기는 매 프레임(60fps) 부드럽게 처리
-    if (kioskFacingMode === "user") {
-      ctx.save();
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-      ctx.restore();
-    } else {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    }
-
-    // 📡 CPU 부하 차단 쓰로틀링: 250ms(초당 4회) 주기로만 무거운 픽셀 분석 및 QR 디코딩 실행
-    const now = Date.now();
-    if (now - lastQrDecodeTime >= 250) {
-      lastQrDecodeTime = now;
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-      if (typeof jsQR !== "undefined") {
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "attemptBoth"
-        });
-
-        if (code && code.data && !qrScanCooldown) {
-          const detectedQr = code.data.trim();
-          qrScanCooldown = true;
-
-          // 📡 실시간 디버그 콘솔 로그 및 시각 효과 전송
-          appendDebugLog(`📷 [웹캠 QR 실시간 감지 완료!] QR 코드 데이터: ${detectedQr}`, "SUCCESS");
-          console.log(`[QR Auto Detect] Data: ${detectedQr}`);
-
-          // 진동 + 삑 소리 피드백 (NFC 태깅과 동일하게 즉시 재생)
-          triggerKioskDetectionFeedback();
-
-          // Autofill inside admin card modal if open
-          const cardUidInput = document.getElementById("kiosk-scanned-card-uid");
-          const cardTab = document.getElementById("admin-tab-card");
-          if (cardTab && cardTab.style.display !== "none" && cardUidInput) {
-            cardUidInput.value = detectedQr;
-            appendDebugLog(`💳 [현장 대리 발급] 카메라 QR 데이터를 발급 입력창에 자동 입력함: ${detectedQr}`, "SUCCESS");
-          } else {
-            triggerKioskPayment(detectedQr);
-          }
-
-          setTimeout(() => { qrScanCooldown = false; }, 3000);
-        }
+async function getQrNativeDetector() {
+  if (qrNativeDetector !== null) return qrNativeDetector;
+  qrNativeDetector = false;
+  try {
+    if ("BarcodeDetector" in window) {
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (formats && formats.includes("qr_code")) {
+        qrNativeDetector = new window.BarcodeDetector({ formats: ["qr_code"] });
       }
+    }
+  } catch (e) {
+    console.warn("BarcodeDetector unavailable:", e);
+  }
+  appendDebugLog(qrNativeDetector
+    ? "📷 [QR 스캐너] 인식 엔진: 기기 내장(BarcodeDetector)"
+    : "📷 [QR 스캐너] 인식 엔진: jsQR (기기 내장 인식기 없음)", "INFO");
+  return qrNativeDetector;
+}
+
+function handleDetectedQr(raw) {
+  const detectedQr = (raw || "").trim();
+  if (!detectedQr || qrScanCooldown) return;
+  qrScanCooldown = true;
+
+  appendDebugLog(`📷 [웹캠 QR 실시간 감지 완료!] QR 코드 데이터: ${detectedQr}`, "SUCCESS");
+  console.log(`[QR Auto Detect] Data: ${detectedQr}`);
+
+  // 진동 + 삑 소리 피드백 (NFC 태깅과 동일하게 즉시 재생)
+  triggerKioskDetectionFeedback();
+
+  // Autofill inside admin card modal if open
+  const cardUidInput = document.getElementById("kiosk-scanned-card-uid");
+  const cardTab = document.getElementById("admin-tab-card");
+  if (cardTab && cardTab.style.display !== "none" && cardUidInput) {
+    cardUidInput.value = detectedQr;
+    appendDebugLog(`💳 [현장 대리 발급] 카메라 QR 데이터를 발급 입력창에 자동 입력함: ${detectedQr}`, "SUCCESS");
+  } else {
+    triggerKioskPayment(detectedQr);
+  }
+
+  setTimeout(() => { qrScanCooldown = false; }, 3000);
+}
+
+function decodeQrWithJsqr(video) {
+  if (typeof jsQR === "undefined") return null;
+  const canvas = document.getElementById("qr-canvas");
+  const vw = video.videoWidth, vh = video.videoHeight;
+  // 가운데 정사각형과 전체 프레임을 번갈아 - 가운데는 해상도를 그대로 둔 채 면적만 줄여 빠르다.
+  qrJsqrFullFrameTurn = !qrJsqrFullFrameTurn;
+  let sx = 0, sy = 0, sw = vw, sh = vh;
+  if (!qrJsqrFullFrameTurn) {
+    const side = Math.round(Math.min(vw, vh) * 0.75);
+    sx = Math.round((vw - side) / 2);
+    sy = Math.round((vh - side) / 2);
+    sw = sh = side;
+  }
+  if (canvas.width !== sw) canvas.width = sw;
+  if (canvas.height !== sh) canvas.height = sh;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+  const imageData = ctx.getImageData(0, 0, sw, sh);
+  const code = jsQR(imageData.data, sw, sh, { inversionAttempts: "attemptBoth" });
+  return code && code.data ? code.data : null;
+}
+
+async function scanQRCodeLoop(token) {
+  if (!isCameraScanning || token !== qrLoopToken) return;
+  const video = document.getElementById("qr-video");
+  const started = Date.now();
+  let interval = QR_JSQR_INTERVAL_MS;
+
+  if (!qrDecodeBusy && video && video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+    qrDecodeBusy = true;
+    try {
+      const detector = await getQrNativeDetector();
+      let data = null;
+      if (detector) {
+        interval = QR_NATIVE_MIN_INTERVAL_MS;
+        try {
+          const codes = await detector.detect(video);
+          const hit = codes && codes.find((c) => c.rawValue);
+          data = hit ? hit.rawValue : null;
+        } catch (e) {
+          // 내장 엔진이 실제로는 안 도는 기기 - 이후로는 jsQR로
+          appendDebugLog(`📷 [QR 스캐너] 기기 내장 인식 실패(${e.name}) - jsQR로 전환`, "WARN");
+          qrNativeDetector = false;
+        }
+      } else {
+        data = decodeQrWithJsqr(video);
+      }
+      if (data && isCameraScanning) handleDetectedQr(data);
+    } catch (e) {
+      console.warn("QR decode error:", e);
+    } finally {
+      qrDecodeBusy = false;
     }
   }
 
   if (isCameraScanning) {
-    requestAnimationFrame(scanQRCodeLoop);
+    const wait = Math.max(0, interval - (Date.now() - started));
+    setTimeout(() => scanQRCodeLoop(token), wait);
   }
 }
 
