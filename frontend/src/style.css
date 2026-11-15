@@ -3098,18 +3098,19 @@ body[data-theme="light"] .section-title {
 }
 
 /* QR 조준 안내(2026-11-16, kiosk.html #kiosk-qr-aim) - 키오스크 케이스의 전면 카메라가 가로 화면 가운데 아래라서
-   그 바로 위에 붙인다. 표시 여부는 kiosk.js updateQrAim()이 .is-on으로 정한다(태블릿 가로 + 스캐너 켜짐 + 메뉴 담김). */
+   그 바로 위에 붙인다. ▼는 상자 가운데(= 화면 가운데 = 카메라)에 오도록 한 줄을 따로 쓴다.
+   표시 여부는 kiosk.js updateQrAim()이 .is-on으로 정한다(태블릿 가로 + 스캐너 켜짐 + 메뉴 담김). */
 .kiosk-qr-aim {
   display: none;
   position: fixed;
   left: 50%;
-  bottom: 6px;
+  bottom: 4px;
   translate: -50% 0;
   z-index: 60;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 10px 4px;
+  gap: 2px;
+  padding: 8px 10px 2px;
   border-radius: 14px;
   background: rgba(17, 20, 45, 0.88);
   color: #fff;
@@ -3117,12 +3118,6 @@ body[data-theme="light"] .section-title {
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
 }
 .kiosk-qr-aim.is-on { display: flex; }
-.kiosk-qr-aim-label {
-  font-size: 0.9rem;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: color 0.15s;
-}
 .kiosk-qr-aim-video {
   width: 176px;
   height: 99px;
@@ -3132,9 +3127,20 @@ body[data-theme="light"] .section-title {
   transform: scaleX(-1); /* 거울처럼 - 휴대폰을 옮기는 방향과 화면이 같이 움직이게 */
   border: 2px solid transparent;
 }
-.kiosk-qr-aim-arrow { font-size: 0.72rem; opacity: 0.75; }
-.kiosk-qr-aim.is-close .kiosk-qr-aim-label { color: #fbbf24; }
-.kiosk-qr-aim.is-close .kiosk-qr-aim-video { border-color: #fbbf24; }
+.kiosk-qr-aim-label {
+  margin-top: 2px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+.kiosk-qr-aim-arrow {
+  width: 100%;
+  text-align: center;
+  font-size: 1.3rem;
+  line-height: 1;
+}
 .kiosk-qr-aim.is-hit .kiosk-qr-aim-label { color: #4ade80; }
 .kiosk-qr-aim.is-hit .kiosk-qr-aim-video { border-color: #4ade80; }
 
