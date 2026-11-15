@@ -1962,6 +1962,11 @@ function restoreKioskQrScanner() {
   startCameraScanner(true);
 }
 
+// USB NFC-X 리더 응답 원문(APK가 UID와 함께 넘김) - 7바이트 UID 카드를 앞 4바이트만 읽는 문제 진단용.
+window.onAndroidReaderRaw = function (hexUid, rawHex) {
+  appendDebugLog(`🔎 [리더 원문] UID ${hexUid} / 응답 ${rawHex}`, "INFO");
+};
+
 // Android Native App Hardware ReaderMode Direct Receiver
 window.onAndroidNfcScanned = function (rawHexUid) {
   // 카메라 사용 중이고, 리더와 카메라 동시사용이 허용되지 않은 상태라면 태깅을 무시

@@ -17,7 +17,9 @@ import java.util.Arrays;
 public class VendorHidUidReader implements Runnable {
 
     public interface Callback {
-        void onUidRead(String hexUid);
+        // rawHex = 그 UID를 담은 리더 응답 원문(헤더~체크섬). 7바이트 UID 카드(NTAG215 스티커)를 앞 4바이트만
+        // 읽는 문제(2026-11-15)의 응답 형식을 확인하려고 키오스크 디버그 로그에 남긴다.
+        void onUidRead(String hexUid, String rawHex);
         void onSessionFailed();
     }
 
@@ -38,6 +40,7 @@ public class VendorHidUidReader implements Runnable {
 
     private volatile boolean running = true;
     private String lastUid = null;
+    private String lastRawHex = "";
     // 이 기기(태블릿)의 USB 호스트 드라이버가 UsbDeviceConnection.bulkTransfer()의 timeout
     // 인자를 지키지 않고 usb_start_wait_urb에서 무한정 블록되는 경우가 관찰됨(커널/드라이버
     // 이슈, 알려진 Android bulkTransfer 타임아웃 미준수 버그와 동일 증상). 자바 레벨
@@ -73,7 +76,7 @@ public class VendorHidUidReader implements Runnable {
                     String hexUid = bytesToHex(uidBytes);
                     if (!hexUid.equals(lastUid)) {
                         lastUid = hexUid;
-                        callback.onUidRead(hexUid);
+                        callback.onUidRead(hexUid, lastRawHex);
                     }
                 } else {
                     // 카드가 리더 위에 없음 -> 다음 태깅 시 재인식되도록 상태 초기화
@@ -121,6 +124,8 @@ public class VendorHidUidReader implements Runnable {
         }
 
         int dataLength = response[4] & 0xFF;
+        // 헤더 5바이트 + 데이터 + 체크섬 2바이트까지(응답 원문 기록용)
+        lastRawHex = bytesToHex(Arrays.copyOf(response, Math.min(received, 5 + dataLength + 2)));
         int found = response[5] & 0xFF;
         if (found != 1) {
             return null; // 카드 없음

@@ -440,10 +440,12 @@ public class CardReaderManager {
         activeVendorHidReader = new VendorHidUidReader(connection, hidInterface, endpointIn, endpointOut,
                 new VendorHidUidReader.Callback() {
                     @Override
-                    public void onUidRead(String hexUid) {
+                    public void onUidRead(String hexUid, String rawHex) {
                         mainHandler.post(() -> {
-                            Log.d(TAG, "Vendor HID UID read: " + hexUid);
+                            Log.d(TAG, "Vendor HID UID read: " + hexUid + " raw=" + rawHex);
                             if (webView != null) {
+                                webView.evaluateJavascript("window.onAndroidReaderRaw && window.onAndroidReaderRaw('"
+                                        + hexUid + "', '" + rawHex + "');", null);
                                 webView.evaluateJavascript("window.onAndroidNfcScanned('" + hexUid + "');", null);
                             }
                         });
