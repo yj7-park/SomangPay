@@ -131,10 +131,11 @@
     }
 
     if (isSamsung) {
+      // 삼성 인터넷의 "현재 페이지 추가 → 홈 화면"은 앱 설치가 아니라 바로가기만 만든다(2026-11-16 사용자 확인).
       showGuide("삼성 인터넷에서 설치하기", [
-        "아래 막대 오른쪽의 <strong>메뉴(≡)</strong>를 눌러 주세요.",
-        "<strong>현재 페이지 추가</strong> → <strong>홈 화면</strong>을 눌러 주세요.",
-        "주소창에 <strong>설치 아이콘</strong>이 보이면 그걸 눌러도 돼요.",
+        "주소창 오른쪽에 <strong>설치 아이콘</strong>(아래 화살표)이 보이면 눌러서 <strong>설치</strong>를 눌러 주세요.",
+        "아이콘이 없으면 아래 막대 오른쪽 <strong>메뉴(≡)</strong> → <strong>현재 페이지 추가</strong> → <strong>빠른 실행</strong>을 눌러 주세요.",
+        "<strong>홈 화면</strong>은 앱이 아니라 바로가기만 만들어져요.",
       ]);
       return;
     }
@@ -142,7 +143,7 @@
     if (isAndroid) {
       showGuide("Chrome에서 설치하기", [
         "오른쪽 위 <strong>⋮</strong> 메뉴를 눌러 주세요.",
-        "<strong>앱 설치</strong> 또는 <strong>홈 화면에 추가</strong>를 누르고 <strong>설치</strong>를 눌러 주세요.",
+        "<strong>앱 설치</strong>를 누르고 <strong>설치</strong>를 눌러 주세요. (<strong>홈 화면에 추가</strong>의 '바로가기 만들기'는 앱이 아니에요)",
         "메뉴에 없으면 이미 설치된 거예요. 홈 화면이나 앱 목록에서 <strong>소망페이</strong>를 찾아 주세요.",
       ]);
       return;
