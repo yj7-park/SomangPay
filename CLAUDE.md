@@ -201,7 +201,7 @@
   리더는 화면을 못 읽는다). 태블릿 USB 포트는 NFC 리더가 쓰고 있어 OTG 허브 필요.
   **QR 조준 안내**: 키오스크 케이스(somangpay-hw `~/ws/KioskCase`)는 태블릿을 거꾸로 달아 전면 카메라가 가로 화면 가운데 아래다.
   태블릿 가로(≥900px, 터치) + 전면 카메라 스캐너 켜짐 + 장바구니에 메뉴가 있을 때 `#kiosk-qr-aim`(미리보기 + "카메라 ▼")을
-  그 위에 띄운다(`updateQrAim`). 기본 결제 메뉴가 있으면 장바구니가 늘 차 있어 사실상 상시 표시. 거리 안내("20cm", 선명도로
+  그 위에 띄운다(`updateQrAim`). 인식되면 미리보기 테두리만 초록(문구는 안 바꿈). 기본 결제 메뉴가 있으면 장바구니가 늘 차 있어 사실상 상시 표시. 거리 안내("20cm", 선명도로
   너무 가까움 추정)는 넣었다가 사용자 결정으로 뺐다 - 미리보기로 맞춘다. 회원 앱 QR 안내는 그대로 둔다(사용자 결정).
   kiosk.html 뒤쪽 마크업이 닫히지 않은 div 안으로 파싱돼서(body 직속처럼 보여도 숨은 모달 안) JS가 이 상자를 body 끝으로 옮긴다.
 - **홈 화면에 앱 설치 버튼(2026-11-15, #pwa-install, `src/pwa-install.js`)**: 피드백 1위가 "PWA 설치가 안 된다"였는데
@@ -221,6 +221,8 @@
   env 0일 때 `html.pwa-inset-fallback`을 걸어 위 32px(실측 상태바)/아래 16px(제스처 바)을 직접 준다. 3버튼 내비는 아래가 모자랄 수 있음.
 - "이미 설치돼 있어요": 설치된 앱으로 한 번 열리면 localStorage `somang_pwa_installed`(브라우저 탭과 공유) + 크롬
   `getInstalledRelatedApps`(manifest-user.json `related_applications`)로 판단, `beforeinstallprompt`가 오면 지운다.
+- QR 결제 화면 가로 모드(2026-11-16): 휴대폰을 돌리면 QR이 탭바에 가려져서, 가로 + 높이 560px 이하면 카드를 2열(QR 왼쪽 = 화면 높이 맞춤
+  `calc(100dvh - 11rem)`, 이름/안내/잔액 오른쪽)로 바꾼다(style.css `.user-qr-card` 미디어쿼리).
 - 로그인 화면(#login-b): 오류는 알림 모달이 아니라 입력칸 아래 `#login-error` 한 줄
   (`showLoginError`/`clearLoginError`), 비밀번호 "보기" 토글, 로그인 버튼은 `--user-card-bg`
   남색. `.ig-login*`는 user.html 전용이라 instagram-theme.css에 있어도 다른 화면 영향 없음.

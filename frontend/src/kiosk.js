@@ -538,10 +538,8 @@ window.addEventListener("resize", () => updateQrAim());
 
 function setQrAimState(state) {
   const box = document.getElementById("kiosk-qr-aim");
-  const label = document.getElementById("kiosk-qr-aim-label");
-  if (!box || !label) return;
-  box.classList.toggle("is-hit", state === "hit");
-  label.textContent = state === "hit" ? "✅ 인식됐어요" : "카메라";
+  if (!box) return;
+  box.classList.toggle("is-hit", state === "hit"); // 인식되면 미리보기 테두리만 초록(문구는 그대로 - 사용자 요청)
 }
 
 function flashQrAimHit() {

@@ -2260,6 +2260,32 @@ body[data-theme="dark"] .pending-action-banner {
   margin-left: 0.1em;
 }
 
+/* 휴대폰을 가로로 돌렸을 때(2026-11-16, 사용자 제보: QR 아래쪽이 탭바에 가려짐) - 높이가 낮으면 QR을 왼쪽에
+   화면 높이에 맞춘 크기로, 이름/안내/잔액을 오른쪽에 둔다. 11rem = 헤더 + 탭바 + 카드/본문 여백. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .glass-container.user-qr-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 1fr auto auto auto 1fr;
+    column-gap: 1.25rem;
+    row-gap: 0.6rem;
+    align-items: center;
+  }
+  .user-qr-img {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    width: min(20rem, calc(100vh - 11rem));
+    width: min(20rem, calc(100dvh - 11rem));
+  }
+  html.pwa-inset-fallback .user-qr-img {
+    width: min(20rem, calc(100dvh - 11rem - 48px)); /* 삼성 인터넷 PWA 상하단 대체 여백만큼 더 */
+  }
+  .user-qr-card-head { grid-column: 2; grid-row: 2; text-align: left; }
+  .user-qr-guide { grid-column: 2; grid-row: 3; text-align: left; }
+  .user-qr-balance { grid-column: 2; grid-row: 4; }
+  #user-qr-page-empty { grid-column: 1 / -1; grid-row: 1 / -1; }
+}
+
 /* 내 정보(#pages-b) - 이름 + 연락처 헤더, 그룹별 목록 행. */
 .user-me-head {
   padding: 0.2rem 0.3rem 1.2rem;
@@ -3141,8 +3167,7 @@ body[data-theme="light"] .section-title {
   font-size: 1.3rem;
   line-height: 1;
 }
-.kiosk-qr-aim.is-hit .kiosk-qr-aim-label { color: #4ade80; }
-.kiosk-qr-aim.is-hit .kiosk-qr-aim-video { border-color: #4ade80; }
+.kiosk-qr-aim.is-hit .kiosk-qr-aim-video { border-color: #4ade80; border-width: 3px; }
 
 /* 관리자 "키오스크 관리" 탭 - 제목/카드 헤더 옆 선택기(누르면 바로 아래로 목록이 펼쳐지는
    드롭다운 트리거). 키오스크 선택기와 메뉴별 매출 기간 선택기가 같은 패턴을 공유한다 -
