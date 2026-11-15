@@ -14,6 +14,17 @@
   const installUrl = location.origin + "/user";
 
   let deferredPrompt = null;
+  // 이미 설치했는지 - 크롬 getInstalledRelatedApps(manifest related_applications) 또는 이 기기에서 설치된 앱으로
+  // 한 번이라도 열렸던 기록(같은 출처라 브라우저 탭과 저장소를 같이 쓴다). 크롬이 설치 창 신호
+  // (beforeinstallprompt)를 보내면 설치 안 된 것이라 기록을 지운다.
+  const INSTALLED_KEY = "somang_pwa_installed";
+  let knownInstalled = false;
+  function storeInstalled(v) {
+    try { v ? localStorage.setItem(INSTALLED_KEY, "1") : localStorage.removeItem(INSTALLED_KEY); } catch (e) { /* 저장 불가 */ }
+  }
+  function readInstalled() {
+    try { return localStorage.getItem(INSTALLED_KEY) === "1"; } catch (e) { return false; }
+  }
 
   function isInstalledContext() {
     if (window.AndroidInterface) return true;
@@ -30,16 +41,31 @@
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault(); // 크롬 기본 미니 배너 대신 우리 버튼으로 띄운다
     deferredPrompt = e;
+    storeInstalled(false);
+    setInstalledUi(false);
   });
 
   window.addEventListener("appinstalled", () => {
     deferredPrompt = null;
+    storeInstalled(true);
     setVisible(false);
     hideGuide();
     if (typeof showAlertModal === "function") {
       showAlertModal("홈 화면에 소망페이가 설치됐어요.\n이제 홈 화면 아이콘으로 열어 주세요.", "설치 완료");
     }
   });
+
+  function setInstalledUi(installed) {
+    knownInstalled = installed;
+    const loginBtn = document.querySelector(".ig-login-install-btn");
+    if (loginBtn) {
+      loginBtn.innerHTML = installed
+        ? '<span aria-hidden="true">✅</span> 앱이 이미 설치돼 있어요'
+        : '<span aria-hidden="true">📲</span> 홈 화면에 앱 설치하기';
+    }
+    const rowBtn = document.querySelector(".user-install-row-btn");
+    if (rowBtn) rowBtn.textContent = installed ? "설치됨" : "설치하기";
+  }
 
   function hideGuide() {
     if (typeof hideModal === "function") hideModal("pwa-guide-modal");
@@ -80,7 +106,14 @@
     }
   };
 
-  window.startPwaInstall = async function () {
+  window.startPwaInstall = async function (skipInstalledCheck) {
+    if (!deferredPrompt && knownInstalled && !skipInstalledCheck) {
+      showGuide("이미 설치돼 있어요", [
+        "홈 화면이나 앱 목록에서 <strong>소망페이</strong> 아이콘을 찾아 열어 주세요.",
+        "앱을 지웠다면 아래 <strong>다시 설치하기</strong>를 눌러 주세요.",
+      ], { label: "다시 설치하기", onClick: () => { hideGuide(); window.startPwaInstall(true); } });
+      return;
+    }
     if (deferredPrompt) {
       const p = deferredPrompt;
       deferredPrompt = null; // 한 번만 쓸 수 있다
@@ -157,8 +190,40 @@
 
   window.hidePwaGuide = hideGuide;
 
+  // 삼성 인터넷으로 설치한 PWA는 상태바/내비게이션 바 밑까지 그리면서 env(safe-area-inset-*)를 0으로 준다
+  // (2026-11-16 실기기 진단: standalone, inner 411x891 @2.625 = 화면 전체, safe-area 0). 그때만 여백을 직접 준다 -
+  // 상태바 32px(실측), 아래 16px(제스처 바). 3버튼 내비게이션이면 아래가 조금 모자랄 수 있다.
+  function applySamsungInsetFallback() {
+    const standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+    if (!isSamsung || !standalone) return;
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);";
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const hasInsets = parseFloat(cs.paddingTop) > 0 || parseFloat(cs.paddingBottom) > 0;
+    probe.remove();
+    if (!hasInsets) document.documentElement.classList.add("pwa-inset-fallback");
+  }
+
+  async function detectInstalled() {
+    if (isInstalledContext()) {
+      if (!window.AndroidInterface) storeInstalled(true);
+      return;
+    }
+    let installed = readInstalled();
+    try {
+      if (navigator.getInstalledRelatedApps) {
+        const apps = await navigator.getInstalledRelatedApps();
+        if (apps && apps.length) installed = true;
+      }
+    } catch (e) { /* 미지원 */ }
+    if (installed && !deferredPrompt) setInstalledUi(true);
+  }
+
   function init() {
     setVisible(!isInstalledContext());
+    applySamsungInsetFallback();
+    detectInstalled();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

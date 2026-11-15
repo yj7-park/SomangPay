@@ -39,5 +39,15 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://somangpay.duckdns.org/manifest-user.json"
+    },
+    {
+      "platform": "webapp",
+      "url": "https://somangpay.duckdns.org/manifest-user.json?v=20260825_0002"
+    }
   ]
 }

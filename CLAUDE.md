@@ -207,7 +207,11 @@
   duckdns 서브도메인은 평판이 낮아 재발 가능 - 근본 해결은 자체 도메인 이전(보류 중).
 - **viewport-fit=cover(2026-11-16)**: 삼성 인터넷으로 설치한 PWA는 상태바/제스처 바 밑까지 그려 헤더·탭바가 잘렸다.
   user.html viewport에 `viewport-fit=cover`를 넣어 `env(safe-area-inset-*)`가 실제 값을 갖게 했다(헤더·탭바·본문 아래 여백이 이미
-  env()를 쓴다). 관리자 앱은 아직 안 넣음.
+  env()를 쓴다). 관리자 앱은 아직 안 넣음. **그래도 삼성 인터넷 PWA는 env()를 0으로 준다**(실기기 진단: standalone, 화면 전체
+  411x891@2.625, safe-area 0 - 진단은 상단 제목/로그인 로고 5번 탭, `src/vp-debug.js`) → `pwa-install.js`가 삼성 + standalone +
+  env 0일 때 `html.pwa-inset-fallback`을 걸어 위 32px(실측 상태바)/아래 16px(제스처 바)을 직접 준다. 3버튼 내비는 아래가 모자랄 수 있음.
+- "이미 설치돼 있어요": 설치된 앱으로 한 번 열리면 localStorage `somang_pwa_installed`(브라우저 탭과 공유) + 크롬
+  `getInstalledRelatedApps`(manifest-user.json `related_applications`)로 판단, `beforeinstallprompt`가 오면 지운다.
 - 로그인 화면(#login-b): 오류는 알림 모달이 아니라 입력칸 아래 `#login-error` 한 줄
   (`showLoginError`/`clearLoginError`), 비밀번호 "보기" 토글, 로그인 버튼은 `--user-card-bg`
   남색. `.ig-login*`는 user.html 전용이라 instagram-theme.css에 있어도 다른 화면 영향 없음.

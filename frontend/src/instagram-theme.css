@@ -891,6 +891,21 @@ body.page-user .seg-control button.is-on {
   background: var(--user-card-bg, #2d326e);
   color: #fff;
 }
+/* 삼성 인터넷 PWA 여백 대체값(pwa-install.js applySamsungInsetFallback) - env()가 0인데 화면 전체에 그릴 때 */
+html.pwa-inset-fallback body.page-user .app-header {
+  padding-top: calc(32px + 0.5rem);
+}
+html.pwa-inset-fallback body.page-user .admin-tabbar {
+  padding-bottom: calc(16px + 0.4rem);
+}
+html.pwa-inset-fallback body.page-user .admin-main {
+  padding-bottom: calc(5.5rem + 16px);
+}
+html.pwa-inset-fallback body.page-user .ig-login-wrapper {
+  padding-top: calc(32px + 2rem);
+  padding-bottom: calc(16px + 1.5rem);
+}
+
 /* 비밀번호 재사용 안내(2026-11-16) - 회원 앱 비밀번호 정하기/변경 */
 .pw-reuse-note {
   margin: 0.5rem 0 0;
