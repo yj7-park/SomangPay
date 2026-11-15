@@ -870,6 +870,10 @@ body[data-theme="light"] .ig-field {
   color: var(--text-main);
   cursor: pointer;
 }
+/* 문자 인증/비밀번호 정하기 단계에서는 숨김(user.js showLoginStep이 안내 문구를 숨길 때 같이) */
+#login-step-login-hint[style*="none"] + .ig-login-install-btn {
+  display: none !important;
+}
 .user-install-row-btn {
   /* 모바일 전역 .btn-action { width: 100% } 때문에 행을 꽉 채우며 라벨을 두 줄로 밀었다(2026-11-15 피드백) */
   width: auto !important;
@@ -886,6 +890,14 @@ body[data-theme="light"] .ig-field {
 body.page-user .seg-control button.is-on {
   background: var(--user-card-bg, #2d326e);
   color: #fff;
+}
+/* 비밀번호 재사용 안내(2026-11-16) - 회원 앱 비밀번호 정하기/변경 */
+.pw-reuse-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #c2410c;
+  font-weight: 600;
 }
 .pwa-guide-steps {
   margin: 0 0 1.4rem;

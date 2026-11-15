@@ -200,6 +200,14 @@
   브라우저, 아이폰(자동 설치 창 없음), 메뉴를 못 찾는 경우. 로그인 화면 아래 버튼 + 내 정보 설정 행이 `beforeinstallprompt`가
   있으면 바로 설치 창, 없으면 환경별 안내 모달(카카오톡 `kakaotalk://web/openExternal`, 다른 앱 안 브라우저 `intent://…package=
   com.android.chrome`, 아이폰 공유 → 홈 화면에 추가, 삼성 인터넷/크롬 메뉴 위치). standalone/회원 APK에서는 숨김.
+- **세이프 브라우징 "위험한 사이트" 재발(2026-11-15)**: Search Console 사유는 "사용자 로그인 시 의심되는 피싱 감지됨" - 회원이
+  다른 사이트(구글 등) 비밀번호를 회원 앱에 입력하면 크롬 비밀번호 보호가 신고하는 것으로 추정. 위험 사이트로 걸리면 크롬이
+  PWA 설치도 막는다("이 앱을 설치할 수 없습니다"). Search Console 소유 확인 파일 `frontend/google87327644ca54e16e.html`은
+  **지우지 말 것**. 재검토 요청 때 약속한 대로 비밀번호 정하기/변경 화면에 재사용 금지 안내(`.pw-reuse-note`)를 넣었다.
+  duckdns 서브도메인은 평판이 낮아 재발 가능 - 근본 해결은 자체 도메인 이전(보류 중).
+- **viewport-fit=cover(2026-11-16)**: 삼성 인터넷으로 설치한 PWA는 상태바/제스처 바 밑까지 그려 헤더·탭바가 잘렸다.
+  user.html viewport에 `viewport-fit=cover`를 넣어 `env(safe-area-inset-*)`가 실제 값을 갖게 했다(헤더·탭바·본문 아래 여백이 이미
+  env()를 쓴다). 관리자 앱은 아직 안 넣음.
 - 로그인 화면(#login-b): 오류는 알림 모달이 아니라 입력칸 아래 `#login-error` 한 줄
   (`showLoginError`/`clearLoginError`), 비밀번호 "보기" 토글, 로그인 버튼은 `--user-card-bg`
   남색. `.ig-login*`는 user.html 전용이라 instagram-theme.css에 있어도 다른 화면 영향 없음.

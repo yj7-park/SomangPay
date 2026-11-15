@@ -650,6 +650,7 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   min-width: 0;
   padding: clamp(0.75rem, 2vw, 1.5rem);
   padding-bottom: 5.5rem; /* 하단 탭바에 안 가리게 */
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); /* 탭바가 제스처 바 높이만큼 커지는 기기(viewport-fit=cover) */
 }
 
 .admin-view {

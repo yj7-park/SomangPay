@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>소망페이 - 회원 마이페이지 (User PWA)</title>
   <!-- kiosk.html과 동일한 이유로 매니페스트 URL에 쿼리 버전을 붙인다(#34 후속) - 크롬이
        "홈 화면에 추가" 배너용 매니페스트 fetch 결과를 URL 기준으로 캐싱해서 내용이 바뀌어도
@@ -15,8 +15,8 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261027_1200">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20261115_1700">
+  <link rel="stylesheet" href="src/style.css?v=20261116_1300">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20261116_1300">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -118,6 +118,8 @@
         <div class="act-step-head">
           <h2 class="act-step-title">비밀번호 정하기</h2>
           <p class="act-step-desc">다음부터 이 비밀번호로 로그인해요.<br>4자 이상으로 정해 주세요.</p>
+          <!-- 세이프 브라우징 재검토 요청 때 약속한 안내(2026-11-16) - 다른 사이트 비밀번호를 여기 쓰면 크롬이 피싱으로 신고한다. -->
+          <p class="pw-reuse-note">구글·네이버 등 다른 곳에서 쓰는 비밀번호는 쓰지 말아 주세요.</p>
         </div>
         <label class="ig-field">
           <input type="password" id="act-new-password" class="ig-input" placeholder=" " autocomplete="new-password" oninput="clearActivationError();">
@@ -336,6 +338,7 @@
           </button>
           <div id="user-pw-panel" class="user-pw-panel" style="display: none;">
             <input type="password" id="edit-user-password" class="user-pw-input" placeholder="새 비밀번호" autocomplete="new-password" oninput="document.getElementById('change-password-btn').disabled = !this.value;">
+            <p class="pw-reuse-note">구글·네이버 등 다른 곳에서 쓰는 비밀번호는 쓰지 말아 주세요.</p>
             <div class="user-pw-actions">
               <button type="button" class="user-pw-cancel" onclick="toggleUserPasswordPanel(false)">취소</button>
               <button type="button" id="change-password-btn" class="btn-action btn-primary user-pw-save" disabled onclick="changePassword()">변경하기</button>
@@ -432,7 +435,7 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/user.js?v=20261115_1700"></script>
+  <script src="src/user.js?v=20261116_1300"></script>
   <script src="src/pwa-install.js?v=20261115_1600"></script>
 </body>
 </html>
