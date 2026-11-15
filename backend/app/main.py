@@ -22,7 +22,7 @@ from app.services.deposit_matcher import match_new_deposit, park_inactive_deposi
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
-from app.services import member_age, admin_auth
+from app.services import member_age, admin_auth, card_lookup
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks, start_ws_bus
 
 app = FastAPI(
@@ -1060,7 +1060,7 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
     if req.card_uid:
         if surface != "kiosk" or mode != "account":
             raise HTTPException(status_code=400, detail="지금은 관리자 카드로 들어가도록 설정돼 있지 않아요.")
-        card = db.query(models.NFCCard).filter(func.upper(models.NFCCard.card_uid) == req.card_uid.strip().upper()).first()
+        card = card_lookup.find_card_by_uid(db, req.card_uid)
         user = db.get(models.User, card.user_id) if card else None
         if user and user.is_admin and user.status == "ACTIVE":
             security.clear_pin_attempts(client_ip)
@@ -1173,7 +1173,8 @@ def _process_nfc_payment_sync(db: Session, req: schemas.PaymentRequest):
     # 대문자화하는데 결제 스캔 쪽 경로 하나는 원본 그대로 소문자로 내려보냄) 값은 같은 카드인데
     # 문자열이 달라 "등록되지 않은 식별자"로 오판되는 문제가 있었다. QR 코드는 이 앱이 발급한
     # 값을 그대로 다시 인코딩/디코딩할 뿐이라 대소문자가 갈릴 일이 없어 안전하게 함께 적용 가능.
-    card = db.query(models.NFCCard).filter(func.upper(models.NFCCard.card_uid) == req.card_uid.strip().upper()).first()
+    # 7바이트 UID 카드를 키오스크 리더가 앞 4바이트만 보내는 경우도 여기서 맞춘다(services/card_lookup.py).
+    card = card_lookup.find_card_by_uid(db, req.card_uid)
 
     if not card:
         raise HTTPException(

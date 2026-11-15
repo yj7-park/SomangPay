@@ -229,6 +229,10 @@
   `getCurrentModeName()`이 NONE을 돌려줘 배지가 거짓으로 켜져 보이지 않게 했다. 실기기 확인 전이라 그래도
   재현되면 다음 후보는 리더 펌웨어 자체가 멈춘 경우(전원 재인가 외엔 방법 없음 - `resetDevice()`는 숨은 API +
   재열거로 권한이 날아감).
+- **7바이트 UID 카드(NTAG215 스티커 등)**: NFC-X 리더는 앞 4바이트만 보낸다(2026-11-15 운영 확인 - 관리자 앱 등록
+  `04:EB:AA:13:D4:2A:81` → 키오스크 `04:EB:AA:13`). `VendorHidUidReader.pollForUid`의 UID 길이 공식
+  (`dataLength - 15`)이 4바이트 카드 캡처로만 검증된 탓으로 추정. 앱 수정 전까지 백엔드 `services/card_lookup.find_card_by_uid`
+  (결제·키오스크 관리자 카드 인증)가 4바이트 UID로 못 찾으면 그 4바이트로 시작하는 7바이트 NFC 카드가 **하나뿐일 때** 그 카드로 본다.
 - QR 스캐너(카메라)는 상단 QR 배지로 켜고 끄며, 그 상태를 기기 localStorage(`somang_kiosk_qr_enabled`)에
   기억해 시작할 때 `restoreKioskQrScanner()`가 다시 켠다(실패해도 알림 없이 로그만).
   설정(PIN 창)에 들어가면 결제 오작동 방지로 카메라를 끄지만, PIN 취소/설정 닫기 때
