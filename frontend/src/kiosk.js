@@ -337,6 +337,7 @@ async function startCameraScanner(silent = false, facingMode) {
     appendDebugLog(`📷 [QR 스캐너] 백그라운드 QR 스캐너 구동 완료. (${video.videoWidth}x${video.videoHeight})`);
 
     scanQRCodeLoop(++qrLoopToken);
+    updateQrAim();
   } catch (err) {
     console.warn("Camera init error:", err);
     appendDebugLog(`📷 [웹캠 에러] 카메라 구동 실패: ${err.name} - ${err.message}`, "ERROR");
@@ -354,6 +355,7 @@ function stopCameraScanner() {
   }
   isCameraScanning = false;
   updateQrScanStatusUI();
+  updateQrAim();
 
   // 테스트 모드가 띄웠을 수 있는 뷰포트/시뮬레이션 오버레이를 다시 숨기고 원래 자리로 되돌림
   if (cameraBox) {
@@ -423,6 +425,7 @@ function handleDetectedQr(raw) {
 
   // 진동 + 삑 소리 피드백 (NFC 태깅과 동일하게 즉시 재생)
   triggerKioskDetectionFeedback();
+  flashQrAimHit();
 
   // Autofill inside admin card modal if open
   const cardUidInput = document.getElementById("kiosk-scanned-card-uid");
@@ -485,6 +488,7 @@ async function scanQRCodeLoop(token) {
         data = decodeQrWithJsqr(video);
       }
       if (data && isCameraScanning) handleDetectedQr(data);
+      else checkQrAimDistance(video);
     } catch (e) {
       console.warn("QR decode error:", e);
     } finally {
@@ -495,6 +499,112 @@ async function scanQRCodeLoop(token) {
   if (isCameraScanning) {
     const wait = Math.max(0, interval - (Date.now() - started));
     setTimeout(() => scanQRCodeLoop(token), wait);
+  }
+}
+
+// ---------------- QR 조준 안내(2026-11-16) ----------------
+// 키오스크 케이스(somangpay-hw KioskCase)는 태블릿을 거꾸로 달아 전면 카메라가 가로 화면 가운데 아래에 온다.
+// 태블릿 가로 화면 + 실제 전면 카메라 스캐너 켜짐 + 장바구니에 메뉴가 있을 때만 그 위에 미리보기/거리 안내를 띄운다.
+// "너무 가까워요"는 QR이 읽히기 전엔 위치를 모르니 추정이다: 작게 줄인 프레임의 선명도(라플라시안 평균)가
+// 낮고 어둡지 않으면(휴대폰 화면이 렌즈를 덮어 흐릿하게 꽉 참) 가깝다고 본다. 기준값은 실기기에서 맞출 것 -
+// 선명도가 기준의 2배 아래로 내려가면 디버그 로그 "📏 [QR 거리]"에 값이 찍힌다.
+const QR_AIM_CLOSE_SHARPNESS = 3.5;  // 이보다 흐리면 "가깝다" 후보
+const QR_AIM_MIN_BRIGHTNESS = 50;    // 이보다 어두우면(렌즈를 손으로 가림 등) 판단 안 함
+const QR_AIM_CHECK_MS = 300;
+const QR_AIM_DEFAULT_LABEL = "휴대폰 QR을 카메라에서 <strong>20cm</strong> 띄워 비춰 주세요";
+let qrAimVisible = false;
+let qrAimLastCheck = 0;
+let qrAimCloseStreak = 0;
+let qrAimLastLog = 0;
+let qrAimHitTimer = null;
+
+function isKioskTabletLandscape() {
+  return !!(window.matchMedia &&
+    window.matchMedia("(orientation: landscape) and (min-width: 900px) and (pointer: coarse)").matches);
+}
+
+function updateQrAim() {
+  const box = document.getElementById("kiosk-qr-aim");
+  if (!box) return;
+  // kiosk.html 뒤쪽 마크업이 어딘가 닫히지 않은 div 안에 들어가 있어(숨은 모달 안으로 파싱됨) body 끝으로 꺼낸다.
+  if (box.parentElement !== document.body) document.body.appendChild(box);
+  const show = isCameraScanning && !kioskTestMode && !!videoStream && kioskFacingMode === "user" &&
+    Object.keys(cart).length > 0 && isKioskTabletLandscape();
+  if (show === qrAimVisible) return;
+  qrAimVisible = show;
+  const v = document.getElementById("kiosk-qr-aim-video");
+  if (show) {
+    if (v && v.srcObject !== videoStream) {
+      v.srcObject = videoStream;
+      v.play().catch(() => {});
+    }
+  } else if (v) {
+    v.srcObject = null;
+  }
+  setQrAimState(null);
+  box.classList.toggle("is-on", show);
+}
+window.addEventListener("resize", () => updateQrAim());
+
+function setQrAimState(state) {
+  const box = document.getElementById("kiosk-qr-aim");
+  const label = document.getElementById("kiosk-qr-aim-label");
+  if (!box || !label) return;
+  box.classList.toggle("is-close", state === "close");
+  box.classList.toggle("is-hit", state === "hit");
+  label.innerHTML = state === "close" ? "너무 가까워요 - 조금 더 <strong>떨어뜨려</strong> 주세요"
+    : state === "hit" ? "✅ 인식됐어요"
+    : QR_AIM_DEFAULT_LABEL;
+}
+
+function flashQrAimHit() {
+  if (!qrAimVisible) return;
+  qrAimCloseStreak = 0;
+  setQrAimState("hit");
+  clearTimeout(qrAimHitTimer);
+  qrAimHitTimer = setTimeout(() => setQrAimState(null), 1500);
+}
+
+function checkQrAimDistance(video) {
+  if (!qrAimVisible) return;
+  const now = Date.now();
+  if (now - qrAimLastCheck < QR_AIM_CHECK_MS) return;
+  qrAimLastCheck = now;
+  const box = document.getElementById("kiosk-qr-aim");
+  if (box && box.classList.contains("is-hit")) return;
+
+  const W = 96, H = 54;
+  if (!checkQrAimDistance.canvas) {
+    checkQrAimDistance.canvas = document.createElement("canvas");
+    checkQrAimDistance.canvas.width = W;
+    checkQrAimDistance.canvas.height = H;
+  }
+  const ctx = checkQrAimDistance.canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(video, 0, 0, W, H);
+  const d = ctx.getImageData(0, 0, W, H).data;
+  const g = new Float32Array(W * H);
+  let sum = 0;
+  for (let i = 0; i < W * H; i++) {
+    g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    sum += g[i];
+  }
+  const brightness = sum / (W * H);
+  let lap = 0;
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      lap += Math.abs(4 * g[i] - g[i - 1] - g[i + 1] - g[i - W] - g[i + W]);
+    }
+  }
+  const sharpness = lap / ((W - 2) * (H - 2));
+
+  const closeNow = sharpness < QR_AIM_CLOSE_SHARPNESS && brightness >= QR_AIM_MIN_BRIGHTNESS;
+  qrAimCloseStreak = closeNow ? qrAimCloseStreak + 1 : 0;
+  setQrAimState(qrAimCloseStreak >= 2 ? "close" : null);
+
+  if (sharpness < QR_AIM_CLOSE_SHARPNESS * 2 && now - qrAimLastLog > 2000) {
+    qrAimLastLog = now;
+    appendDebugLog(`📏 [QR 거리] 선명도 ${sharpness.toFixed(1)} (기준 ${QR_AIM_CLOSE_SHARPNESS}) / 밝기 ${Math.round(brightness)}${qrAimCloseStreak >= 2 ? " → 너무 가까움 표시" : ""}`, "INFO");
   }
 }
 
@@ -868,6 +978,7 @@ function updateCheckoutSummary() {
   // "카드를 대주세요" 패널(#redesign) - 메뉴가 담기면 강조해서 다음 동작을 안내한다.
   const tapCardPanel = document.getElementById("kiosk-tap-card-panel");
   if (tapCardPanel) tapCardPanel.classList.toggle("is-active", count > 0);
+  updateQrAim();
 }
 
 // 테스트 모드 결제 시뮬레이션 - 실제 서버 API를 호출하지 않고 성공/실패 UI만 재현한다.

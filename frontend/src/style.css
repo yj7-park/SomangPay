@@ -3097,6 +3097,47 @@ body[data-theme="light"] .section-title {
   -webkit-transform: scaleX(-1);
 }
 
+/* QR 조준 안내(2026-11-16, kiosk.html #kiosk-qr-aim) - 키오스크 케이스의 전면 카메라가 가로 화면 가운데 아래라서
+   그 바로 위에 붙인다. 표시 여부는 kiosk.js updateQrAim()이 .is-on으로 정한다(태블릿 가로 + 스캐너 켜짐 + 메뉴 담김). */
+.kiosk-qr-aim {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 6px;
+  translate: -50% 0;
+  z-index: 60;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 4px;
+  border-radius: 14px;
+  background: rgba(17, 20, 45, 0.88);
+  color: #fff;
+  pointer-events: none;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+.kiosk-qr-aim.is-on { display: flex; }
+.kiosk-qr-aim-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.kiosk-qr-aim-video {
+  width: 176px;
+  height: 99px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+  transform: scaleX(-1); /* 거울처럼 - 휴대폰을 옮기는 방향과 화면이 같이 움직이게 */
+  border: 2px solid transparent;
+}
+.kiosk-qr-aim-arrow { font-size: 0.72rem; opacity: 0.75; }
+.kiosk-qr-aim.is-close .kiosk-qr-aim-label { color: #fbbf24; }
+.kiosk-qr-aim.is-close .kiosk-qr-aim-video { border-color: #fbbf24; }
+.kiosk-qr-aim.is-hit .kiosk-qr-aim-label { color: #4ade80; }
+.kiosk-qr-aim.is-hit .kiosk-qr-aim-video { border-color: #4ade80; }
+
 /* 관리자 "키오스크 관리" 탭 - 제목/카드 헤더 옆 선택기(누르면 바로 아래로 목록이 펼쳐지는
    드롭다운 트리거). 키오스크 선택기와 메뉴별 매출 기간 선택기가 같은 패턴을 공유한다 -
    트리거를 담은 행에 position: relative를 주고, 목록을 그 아래에 절대배치한다. */
