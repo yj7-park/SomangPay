@@ -16,7 +16,7 @@
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="src/style.css?v=20261027_1200">
-  <link rel="stylesheet" href="src/instagram-theme.css?v=20261027_1200">
+  <link rel="stylesheet" href="src/instagram-theme.css?v=20261115_1600">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -90,6 +90,11 @@
         휴대폰 번호를 넣고 <strong>다음</strong>을 누르세요.<br>
         처음이라면 문자로 인증번호를 보내드려요.
       </p>
+
+      <!-- 홈 화면에 앱 설치(#pwa-install, src/pwa-install.js) - 설치된 앱/회원 APK에서는 숨김. -->
+      <button type="button" class="ig-login-install-btn" data-pwa-install style="display: none;" onclick="startPwaInstall()">
+        <span aria-hidden="true">📲</span> 홈 화면에 앱 설치하기
+      </button>
 
       <form id="login-step-verify" class="ig-login-form" style="display: none;" onsubmit="event.preventDefault(); submitActivationCode();" novalidate>
         <div class="act-step-head">
@@ -354,6 +359,11 @@
             <span id="u-push-status" class="switch-status"></span>
             <button id="u-push-toggle-btn" class="switch-toggle" type="button" role="switch" aria-checked="false" aria-label="푸시 알림" onclick="togglePushNotifications()"><span class="switch-knob"></span></button>
           </div>
+          <!-- 홈 화면에 앱 설치(#pwa-install) - 설치된 앱/회원 APK에서는 pwa-install.js가 숨긴다. -->
+          <div class="user-list-row" data-pwa-install style="display: none;">
+            <span>홈 화면에 앱 설치</span>
+            <button type="button" class="btn-action btn-primary user-install-row-btn" onclick="startPwaInstall()">설치하기</button>
+          </div>
           <!-- 웹 브라우저(AndroidInterface 없음)에서는 update-widget.js가 이 행을 숨긴다(#17). -->
           <div id="user-app-version-row" class="user-list-row">
             <span>앱 버전</span>
@@ -378,6 +388,19 @@
       <h2 id="deny-title" style="font-size: 1.3rem; color: var(--text-main); margin-bottom: 0.8rem;">입금 확인</h2>
       <p id="deny-message" style="font-size: 0.95rem; color: var(--text-muted); white-space: pre-line; margin-bottom: 1.5rem;"></p>
       <div class="modal-footer" id="deny-actions"></div>
+    </div>
+  </div>
+
+  <!-- 앱 설치 방법 안내(#pwa-install) - 설치 창을 바로 띄울 수 없는 환경(앱 안 브라우저, 아이폰 등)에서 뜬다. -->
+  <div id="pwa-guide-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box-large" style="max-width: 400px;">
+      <h2 id="pwa-guide-title" style="font-size: 1.3rem; color: var(--text-main); margin-bottom: 0.8rem;">앱 설치</h2>
+      <ol id="pwa-guide-steps" class="pwa-guide-steps"></ol>
+      <div class="modal-footer pwa-guide-footer">
+        <button type="button" id="pwa-guide-extra" class="btn-action btn-primary" style="display: none;"></button>
+        <button type="button" class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="copyPwaInstallUrl(this)">주소 복사</button>
+        <button type="button" class="btn-action" style="background: var(--surface-1); color: var(--text-main);" onclick="hidePwaGuide()">닫기</button>
+      </div>
     </div>
   </div>
 
@@ -409,6 +432,7 @@
   <script src="src/qrcode-generator.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/user.js?v=20261027_1200"></script>
+  <script src="src/user.js?v=20261115_1600"></script>
+  <script src="src/pwa-install.js?v=20261115_1600"></script>
 </body>
 </html>

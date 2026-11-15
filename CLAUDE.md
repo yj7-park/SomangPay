@@ -195,6 +195,11 @@
   회원 앱 QR 카드는 남색으로 어둡게 + QR 70% 폭 + 연회색(#e9e9ec) 바탕(`user.js drawUserQr`, 순백은
   화면 밝기에 번짐). 색 반전 QR은 다른 리더가 못 읽어서 쓰지 않는다. 키오스크 디버그 로그
   "QR 스캐너 구동 완료 (WxH)"에 실제 받은 해상도가 찍힌다.
+- **홈 화면에 앱 설치 버튼(2026-11-15, #pwa-install, `src/pwa-install.js`)**: 피드백 1위가 "PWA 설치가 안 된다"였는데
+  운영 /user는 크롬 설치 조건을 통과한다(설치 오류 없음, beforeinstallprompt 발생) - 막히는 건 카카오톡·네이버 등 앱 안
+  브라우저, 아이폰(자동 설치 창 없음), 메뉴를 못 찾는 경우. 로그인 화면 아래 버튼 + 내 정보 설정 행이 `beforeinstallprompt`가
+  있으면 바로 설치 창, 없으면 환경별 안내 모달(카카오톡 `kakaotalk://web/openExternal`, 다른 앱 안 브라우저 `intent://…package=
+  com.android.chrome`, 아이폰 공유 → 홈 화면에 추가, 삼성 인터넷/크롬 메뉴 위치). standalone/회원 APK에서는 숨김.
 - 로그인 화면(#login-b): 오류는 알림 모달이 아니라 입력칸 아래 `#login-error` 한 줄
   (`showLoginError`/`clearLoginError`), 비밀번호 "보기" 토글, 로그인 버튼은 `--user-card-bg`
   남색. `.ig-login*`는 user.html 전용이라 instagram-theme.css에 있어도 다른 화면 영향 없음.

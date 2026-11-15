@@ -856,6 +856,40 @@ body[data-theme="light"] .ig-field {
   color: var(--text-main);
 }
 
+/* ---- 홈 화면에 앱 설치(#pwa-install, src/pwa-install.js) ---- */
+.ig-login-install-btn {
+  margin-top: 1.2rem;
+  width: 100%;
+  height: 3rem;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 1.5px solid var(--glass-border, rgba(128, 128, 128, 0.35));
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+}
+.user-install-row-btn {
+  margin-left: auto;
+  min-height: 0 !important;
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  background: var(--user-card-bg, #2d326e);
+  color: #fff;
+}
+.pwa-guide-steps {
+  margin: 0 0 1.4rem;
+  padding-left: 1.3rem;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.pwa-guide-steps li + li { margin-top: 0.5rem; }
+.pwa-guide-steps strong { color: var(--text-main); font-weight: 800; }
+.pwa-guide-footer { flex-wrap: wrap; gap: 0.5rem; }
+.pwa-guide-footer #pwa-guide-extra { flex-basis: 100%; }
+
 /* ---- 첫 로그인 문자 인증 / 비밀번호 정하기 단계(#activation, user.js showLoginStep) ---- */
 .act-step-head {
   margin-bottom: 0.4rem;
