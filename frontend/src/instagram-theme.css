@@ -871,10 +871,19 @@ body[data-theme="light"] .ig-field {
   cursor: pointer;
 }
 .user-install-row-btn {
+  /* 모바일 전역 .btn-action { width: 100% } 때문에 행을 꽉 채우며 라벨을 두 줄로 밀었다(2026-11-15 피드백) */
+  width: auto !important;
+  flex: 0 0 auto;
+  white-space: nowrap;
   margin-left: auto;
   min-height: 0 !important;
   padding: 0.45rem 1rem;
   font-size: 0.9rem;
+  background: var(--user-card-bg, #2d326e);
+  color: #fff;
+}
+/* 회원 앱 화면 테마 세그먼트 - 켜진 칸을 설치 버튼과 같은 남색으로(2026-11-15 사용자 요청) */
+body.page-user .seg-control button.is-on {
   background: var(--user-card-bg, #2d326e);
   color: #fff;
 }
