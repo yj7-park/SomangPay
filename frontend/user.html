@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>소망페이 - 회원 마이페이지 (User PWA)</title>
+  <title>소망페이</title>
+  <!-- 링크 공유 미리보기(카카오톡/문자 등, 2026-11-16). 이미지는 절대 주소여야 해서 지금 운영 주소로 둔다 -
+       도메인을 옮기면 og:image도 바꿀 것. 이미지 원본: og-user.png(1200x630). -->
+  <meta name="description" content="소망교회 간편 결제 - 잔액 충전, QR 결제, 이용 내역">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="소망페이">
+  <meta property="og:title" content="소망페이">
+  <meta property="og:description" content="소망교회 간편 결제 - 잔액 충전, QR 결제, 이용 내역">
+  <meta property="og:image" content="https://somangpay.duckdns.org/og-user.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
   <!-- kiosk.html과 동일한 이유로 매니페스트 URL에 쿼리 버전을 붙인다(#34 후속) - 크롬이
        "홈 화면에 추가" 배너용 매니페스트 fetch 결과를 URL 기준으로 캐싱해서 내용이 바뀌어도
        재조회하지 않는 경우가 있다. 이 매니페스트가 바뀔 때마다 버전도 올려야 한다. -->
