@@ -213,7 +213,15 @@
   다른 사이트(구글 등) 비밀번호를 회원 앱에 입력하면 크롬 비밀번호 보호가 신고하는 것으로 추정. 위험 사이트로 걸리면 크롬이
   PWA 설치도 막는다("이 앱을 설치할 수 없습니다"). Search Console 소유 확인 파일 `frontend/google87327644ca54e16e.html`은
   **지우지 말 것**. 재검토 요청 때 약속한 대로 비밀번호 정하기/변경 화면에 재사용 금지 안내(`.pw-reuse-note`)를 넣었다.
-  duckdns 서브도메인은 평판이 낮아 재발 가능 - 근본 해결은 자체 도메인 이전(보류 중).
+  duckdns 서브도메인은 평판이 낮아 재발 가능 - 근본 해결은 자체 도메인 이전. 2026-11-16 확인: 재검토 통과(duckdns 상태 "안전").
+- **교회 도메인 `pay.somangchurch.or.kr`(2026-11-16)**: 교회 DNS(church-love.com NS)에 A 168.110.113.17 등록됨. 운영 서버에
+  별도 nginx 사이트 `/etc/nginx/sites-available/somangpay-church`(duckdns 설정 복사본, server_name/인증서 경로만 다름) +
+  certbot 인증서(`--nginx`, 자동 갱신 dry-run 통과). 지금은 **두 주소가 같은 서비스를 병행**한다 - 아직 APK(`build.gradle`
+  TARGET_URL)·`PUBLIC_BASE_URL`(docker-compose)·`manifest-user.json` related_applications·`AdminAlertService`·deploy 스크립트는
+  duckdns 그대로. 이전하면 회원은 출처가 바뀌어 다시 로그인/앱 재설치/알림 재허용이 필요하고, 옛 주소는 301로 넘긴다.
+  주의: 교회 도메인 아래라 세이프 브라우징에 다시 걸리면 `somangchurch.or.kr` 전체(교회 홈페이지)가 영향받을 수 있다
+  (duckdns.org는 Public Suffix라 그 주소만 걸렸다) - 이전 전에 Search Console에 도메인 속성(DNS TXT) 등록 권장.
+  duckdns 설정을 고칠 땐 `somangpay-church`도 같이 고칠 것(location 블록이 복사본이다).
 - **viewport-fit=cover(2026-11-16)**: 삼성 인터넷으로 설치한 PWA는 상태바/제스처 바 밑까지 그려 헤더·탭바가 잘렸다.
   user.html viewport에 `viewport-fit=cover`를 넣어 `env(safe-area-inset-*)`가 실제 값을 갖게 했다(헤더·탭바·본문 아래 여백이 이미
   env()를 쓴다). 관리자 앱은 아직 안 넣음. **그래도 삼성 인터넷 PWA는 env()를 0으로 준다**(실기기 진단: standalone, 화면 전체
