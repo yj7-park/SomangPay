@@ -231,6 +231,11 @@
   `getInstalledRelatedApps`(manifest-user.json `related_applications`)로 판단, `beforeinstallprompt`가 오면 지운다.
 - QR 결제 화면 가로 모드(2026-11-16): 휴대폰을 돌리면 QR이 탭바에 가려져서, 가로 + 높이 560px 이하면 카드를 2열(QR 왼쪽 = 화면 높이 맞춤
   `calc(100dvh - 11rem)`, 이름/안내/잔액 오른쪽)로 바꾼다(style.css `.user-qr-card` 미디어쿼리).
+- **푸시 켜기 단계별 시간 제한(2026-11-19)**: 삼성 인터넷 PWA에서 "처리 중…"에 멈춤 제보 - 서비스워커 ready/권한 요청/
+  pushManager.subscribe 중 하나가 응답 안 하면 무한 대기였다. `user.js pushStepTimeout`/`getPushRegistration`(등록 없으면 다시
+  register)로 단계마다 끊고 상태 줄·알림에 어느 단계인지("서비스워커 준비 응답 없음", "푸시 서비스 응답 없음" 등) 띄운다.
+- **화면 회전**: manifest-user.json의 `"orientation": "any"`는 안드로이드에서 시스템 회전 잠금을 무시해서 뺐다(없으면 시스템 설정을
+  따름). 관리자/키오스크 manifest는 그대로. 설치된 PWA는 매니페스트 갱신이 늦게 반영될 수 있음(재설치하면 즉시).
 - 로그인 화면(#login-b): 오류는 알림 모달이 아니라 입력칸 아래 `#login-error` 한 줄
   (`showLoginError`/`clearLoginError`), 비밀번호 "보기" 토글, 로그인 버튼은 `--user-card-bg`
   남색. `.ig-login*`는 user.html 전용이라 instagram-theme.css에 있어도 다른 화면 영향 없음.

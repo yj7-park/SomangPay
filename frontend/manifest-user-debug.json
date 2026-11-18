@@ -6,7 +6,6 @@
   "scope": "/user",
   "id": "/user",
   "display": "standalone",
-  "orientation": "any",
   "background_color": "#090d16",
   "theme_color": "#000000",
   "icons": [

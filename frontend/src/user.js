@@ -785,10 +785,31 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
+// 푸시 단계마다 시간 제한(2026-11-19, 삼성 인터넷 PWA에서 알림 켜기가 "처리 중…"에 멈춤 제보). 서비스워커 준비
+// (navigator.serviceWorker.ready), 권한 요청, pushManager.subscribe 중 하나가 영영 응답하지 않으면 그 await에서
+// 멈춰 버튼이 안 풀렸다. 이제 단계별로 끊고 어느 단계였는지 문구로 알려준다(실기기 원인 확인용).
+function pushStepTimeout(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(label)), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+async function getPushRegistration() {
+  let reg = null;
+  try { reg = await pushStepTimeout(navigator.serviceWorker.getRegistration("/user"), 5000, "서비스워커 조회 응답 없음"); } catch (e) { /* 아래에서 등록 */ }
+  if (!reg) {
+    // 처음 열 때 load 이벤트 등록이 실패/누락됐을 수 있어 여기서 다시 등록한다.
+    await pushStepTimeout(navigator.serviceWorker.register("/sw.js", { scope: "/user" }), 10000, "서비스워커 등록 응답 없음");
+  }
+  return pushStepTimeout(navigator.serviceWorker.ready, 10000, "서비스워커 준비 응답 없음");
+}
+
 async function getCurrentPushSubscription() {
   if (!pushSupported()) return null;
-  const reg = await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
+  const reg = await getPushRegistration();
+  return pushStepTimeout(reg.pushManager.getSubscription(), 8000, "푸시 구독 조회 응답 없음");
 }
 
 async function refreshPushButtonUI() {
@@ -805,7 +826,7 @@ async function refreshPushButtonUI() {
   // 즉시 반환되니 비용이 없고, 뭔가로 인해 끊겨 있었다면(새로고침/버전업 등) 여기서 바로
   // 복구되어 "꺼짐"으로 보이는 채 방치되지 않는다. ensurePushSubscriptionFresh()가 이미
   // 진행 중이던 갱신과도 중복 실행 없이 합쳐진다.
-  await ensurePushSubscriptionFresh();
+  try { await ensurePushSubscriptionFresh(); } catch (e) { console.error("푸시 자가복구 오류:", e); }
 
   const btn = document.getElementById("u-push-toggle-btn");
   const status = document.getElementById("u-push-status");
@@ -817,7 +838,18 @@ async function refreshPushButtonUI() {
     if (status) status.innerText = "미지원 브라우저";
     return;
   }
-  const sub = await getCurrentPushSubscription();
+  let sub = null;
+  try {
+    sub = await getCurrentPushSubscription();
+  } catch (e) {
+    // 단계 시간 초과 등 - 버튼은 풀어 주고 무엇이 막혔는지만 남긴다(다시 누르면 재시도).
+    console.error("푸시 상태 조회 오류:", e);
+    btn.disabled = false;
+    btn.classList.remove("is-on");
+    btn.setAttribute("aria-checked", "false");
+    if (status) status.innerText = e && e.message ? e.message : "확인 실패";
+    return;
+  }
   btn.disabled = false;
   if (status) status.innerText = "";
   btn.classList.toggle("is-on", !!sub);
@@ -857,26 +889,32 @@ async function subscribeToPush() {
     return;
   }
   try {
-    const permission = await Notification.requestPermission();
+    let permission;
+    try {
+      permission = await pushStepTimeout(Notification.requestPermission(), 60000, "알림 권한 창 응답 없음");
+    } catch (e) {
+      await showAlertModal("알림 권한 창이 뜨지 않았어요.\n휴대폰 설정 → 애플리케이션 → 사용 중인 브라우저(삼성 인터넷/Chrome) → 알림을 허용한 뒤 다시 켜 주세요.");
+      return;
+    }
     if (permission !== "granted") {
       await showAlertModal("알림 권한이 허용되지 않았습니다. 다시 켜기를 눌러 권한을 허용해주세요.");
       return;
     }
-    const keyRes = await fetch(`${API_BASE}/push/vapid-public-key`);
+    const keyRes = await pushStepTimeout(fetch(`${API_BASE}/push/vapid-public-key`), 15000, "서버 응답 없음(공개키)");
     if (!keyRes.ok) throw new Error(`vapid-public-key ${keyRes.status}`);
     const { publicKey } = await keyRes.json();
     if (!publicKey) throw new Error("서버에 VAPID 공개키가 설정되어 있지 않습니다.");
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
+    const reg = await getPushRegistration();
+    const sub = await pushStepTimeout(reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+    }), 20000, "푸시 서비스 응답 없음");
     const subJson = sub.toJSON();
-    const res = await authFetch(`${API_BASE}/push/subscribe`, {
+    const res = await pushStepTimeout(authFetch(`${API_BASE}/push/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
-    });
+    }), 15000, "서버 응답 없음(구독 등록)");
     if (!res.ok) throw new Error(`push/subscribe ${res.status}`);
     localStorage.setItem(USER_PUSH_ENABLED_KEY, "true");
   } catch (err) {
@@ -888,12 +926,12 @@ async function subscribeToPush() {
 async function unsubscribeFromPush(sub) {
   localStorage.removeItem(USER_PUSH_ENABLED_KEY);
   try {
-    await authFetch(`${API_BASE}/push/subscribe`, {
+    await pushStepTimeout(authFetch(`${API_BASE}/push/subscribe`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
-    await sub.unsubscribe();
+    }), 15000, "서버 응답 없음(구독 해지)").catch((e) => console.error(e));
+    await pushStepTimeout(sub.unsubscribe(), 10000, "푸시 구독 해지 응답 없음");
   } catch (err) {
     console.error("푸시 구독 해지 오류:", err);
   }
@@ -950,7 +988,8 @@ async function _doEnsurePushSubscriptionFresh() {
   // USER_PUSH_ENABLED_KEY는 이번 변경으로 새로 생긴 플래그라 예전부터 켜둔 사용자는 저장된
   // 적이 없다 - 그런 기존 사용자도 놓치지 않도록 "지금 브라우저에 남아있는 구독"도 켜짐
   // 의도로 간주한다.
-  const existingSub = await getCurrentPushSubscription();
+  let existingSub = null;
+  try { existingSub = await getCurrentPushSubscription(); } catch (e) { console.error(e); return; }
   if (localStorage.getItem(USER_PUSH_ENABLED_KEY) !== "true" && !existingSub) return;
 
   // 스로틀은 "이미 살아있는 구독을 굳이 자주 갈아치우지 않기" 위한 것이지, 구독 자체가
@@ -965,16 +1004,16 @@ async function _doEnsurePushSubscriptionFresh() {
 
   try {
     const oldEndpoint = existingSub ? existingSub.endpoint : null;
-    if (existingSub) await existingSub.unsubscribe();
-    const keyRes = await fetch(`${API_BASE}/push/vapid-public-key`);
+    if (existingSub) await pushStepTimeout(existingSub.unsubscribe(), 10000, "푸시 구독 해지 응답 없음");
+    const keyRes = await pushStepTimeout(fetch(`${API_BASE}/push/vapid-public-key`), 15000, "서버 응답 없음(공개키)");
     if (!keyRes.ok) return;
     const { publicKey } = await keyRes.json();
     if (!publicKey) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
+    const reg = await getPushRegistration();
+    const sub = await pushStepTimeout(reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+    }), 20000, "푸시 서비스 응답 없음");
     const subJson = sub.toJSON();
     // 등록 실패를 조용히 넘기면 브라우저만 새 구독이고 서버는 비게 된다 - 실패하면 예외로 던져
     // LAST_REFRESH를 갱신하지 않아, 다음 화면 복귀 때 위의 sync 경로가 다시 등록을 시도한다.
@@ -1007,7 +1046,7 @@ async function _doEnsurePushSubscriptionFresh() {
 async function registerPeriodicPushRefresh() {
   if (!isInstalledUserAppContext() || !pushSupported()) return;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await getPushRegistration();
     if (!("periodicSync" in reg)) return;
     const status = await navigator.permissions.query({ name: "periodic-background-sync" });
     if (status.state !== "granted") return;
