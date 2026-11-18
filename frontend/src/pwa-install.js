@@ -11,6 +11,9 @@
   const isKakao = /KAKAOTALK/i.test(ua);
   const isInApp = isKakao || /NAVER\(inapp|Line\/|Instagram|FBAN|FBAV|BAND\/|DaumApps|everytimeApp|; wv\)/i.test(ua);
   const isSamsung = /SamsungBrowser/i.test(ua);
+  // 진짜 Chrome인지 - 삼성 인터넷/엣지/웨일 등도 UA에 "Chrome/"이 들어 있다.
+  const isRealChrome = isAndroid && /Chrome\/\d+/.test(ua) && !isInApp &&
+    !/SamsungBrowser|EdgA|OPR\/|YaBrowser|Whale|DuckDuckGo|Firefox|Vivaldi|MiuiBrowser|HuaweiBrowser/i.test(ua);
   const installUrl = location.origin + "/user";
 
   let deferredPrompt = null;
@@ -92,9 +95,26 @@
     if (typeof showModal === "function") showModal("pwa-guide-modal");
   }
 
+  // Chrome이 없으면 browser_fallback_url(같은 주소, ?chrome 없이)로 지금 브라우저에서 그대로 연다 - 다시 넘기는 반복 없음.
   function openInChrome() {
     const u = new URL(installUrl);
-    location.href = `intent://${u.host}${u.pathname}#Intent;scheme=https;package=com.android.chrome;end`;
+    location.href = `intent://${u.host}${u.pathname}#Intent;scheme=https;package=com.android.chrome;` +
+      `S.browser_fallback_url=${encodeURIComponent(installUrl)};end`;
+  }
+
+  // QR/링크에 ?chrome=1을 붙이면(2026-11-19) 안드로이드에서 Chrome이 아닌 곳(삼성 인터넷, 카카오톡 등 앱 안 브라우저)에서
+  // 열렸을 때 Chrome으로 다시 연다. QR 자체로는 브라우저를 고를 수 없어서(카메라가 기본 브라우저로 연다) 페이지가 넘긴다.
+  // Chrome에서 열렸으면 주소에서 표시만 지운다.
+  function handleChromeParam() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has("chrome")) return;
+    if (isAndroid && !isRealChrome && !isInstalledContext()) {
+      openInChrome();
+      return;
+    }
+    params.delete("chrome");
+    const q = params.toString();
+    try { history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash); } catch (e) { /* 무시 */ }
   }
 
   window.copyPwaInstallUrl = async function (btn) {
@@ -126,14 +146,28 @@
       return;
     }
 
-    if (isKakao) {
-      // 카카오톡 안 브라우저는 설치가 안 된다 - 기본 브라우저로 넘긴다(안드로이드/아이폰 공통 스킴).
-      location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(installUrl);
-      showGuide("브라우저에서 설치해 주세요", [
+    if (isKakao && isAndroid) {
+      // 안드로이드 카카오톡은 Chrome으로 바로 넘긴다(2026-11-19 사용자 요청) - openExternal은 "기본 브라우저"라
+      // 갤럭시에선 삼성 인터넷이 열리는데, 삼성 인터넷 PWA는 설치 경로가 헷갈리고 푸시도 말썽이었다.
+      // 카카오톡 인앱 브라우저는 intent:// 를 처리한다. Chrome이 없으면 아래 "다른 브라우저로 열기".
+      openInChrome();
+      showGuide("Chrome에서 설치해 주세요", [
         "카카오톡 안에서는 앱을 설치할 수 없어요.",
-        isIOS ? "<strong>Safari</strong>가 열리면 거기서 다시 <strong>앱 설치</strong>를 눌러 주세요."
-              : "<strong>Chrome</strong> 같은 브라우저가 열리면 거기서 다시 <strong>앱 설치</strong>를 눌러 주세요.",
-        "브라우저가 안 열리면 <strong>주소 복사</strong> 후 브라우저 주소창에 붙여 넣어 주세요.",
+        "<strong>Chrome</strong>이 열리면 거기서 다시 <strong>앱 설치</strong>를 눌러 주세요.",
+        "Chrome이 안 열리면 아래 <strong>다른 브라우저로 열기</strong>를 눌러 주세요.",
+      ], { label: "다른 브라우저로 열기", onClick: () => {
+        location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(installUrl);
+      } });
+      return;
+    }
+
+    if (isKakao) {
+      // 아이폰 카카오톡 - 기본 브라우저(Safari)로 넘긴다.
+      location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(installUrl);
+      showGuide("Safari에서 설치해 주세요", [
+        "카카오톡 안에서는 앱을 설치할 수 없어요.",
+        "<strong>Safari</strong>가 열리면 거기서 다시 <strong>앱 설치</strong>를 눌러 주세요.",
+        "브라우저가 안 열리면 <strong>주소 복사</strong> 후 Safari 주소창에 붙여 넣어 주세요.",
       ]);
       return;
     }
@@ -169,7 +203,8 @@
         "주소창 오른쪽에 <strong>설치 아이콘</strong>(아래 화살표)이 보이면 눌러서 <strong>설치</strong>를 눌러 주세요.",
         "아이콘이 없으면 아래 막대 오른쪽 <strong>메뉴(≡)</strong> → <strong>현재 페이지 추가</strong> → <strong>빠른 실행</strong>을 눌러 주세요.",
         "<strong>홈 화면</strong>은 앱이 아니라 바로가기만 만들어져요.",
-      ]);
+        "Chrome이 있으면 아래 <strong>Chrome으로 열기</strong>로 설치하는 게 더 쉬워요.",
+      ], { label: "Chrome으로 열기", onClick: openInChrome });
       return;
     }
 
@@ -221,6 +256,7 @@
   }
 
   function init() {
+    handleChromeParam();
     setVisible(!isInstalledContext());
     applySamsungInsetFallback();
     detectInstalled();

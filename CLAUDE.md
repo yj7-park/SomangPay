@@ -231,6 +231,11 @@
   `getInstalledRelatedApps`(manifest-user.json `related_applications`)로 판단, `beforeinstallprompt`가 오면 지운다.
 - QR 결제 화면 가로 모드(2026-11-16): 휴대폰을 돌리면 QR이 탭바에 가려져서, 가로 + 높이 560px 이하면 카드를 2열(QR 왼쪽 = 화면 높이 맞춤
   `calc(100dvh - 11rem)`, 이름/안내/잔액 오른쪽)로 바꾼다(style.css `.user-qr-card` 미디어쿼리).
+- **Chrome으로 열기(2026-11-19)**: 갤럭시는 기본 브라우저가 삼성 인터넷이라 설치/푸시가 헷갈려서, 안드로이드 카카오톡의 설치 버튼은
+  `intent://…package=com.android.chrome;S.browser_fallback_url=…`로 Chrome을 연다(아이폰 카카오톡은 openExternal → Safari).
+  삼성 인터넷 안내에도 "Chrome으로 열기" 버튼. 주소에 `?chrome=1`을 붙이면(설치 안내 QR용) 안드로이드에서 진짜 Chrome이 아닌 곳에서
+  열릴 때 자동으로 Chrome으로 넘기고, Chrome에선 표시만 지운다(`pwa-install.js handleChromeParam`). Chrome이 없으면 fallback으로
+  지금 브라우저에서 그대로 열린다(반복 없음).
 - **푸시 켜기 단계별 시간 제한(2026-11-19)**: 삼성 인터넷 PWA에서 "처리 중…"에 멈춤 제보 - 서비스워커 ready/권한 요청/
   pushManager.subscribe 중 하나가 응답 안 하면 무한 대기였다. `user.js pushStepTimeout`/`getPushRegistration`(등록 없으면 다시
   register)로 단계마다 끊고 상태 줄·알림에 어느 단계인지("서비스워커 준비 응답 없음", "푸시 서비스 응답 없음" 등) 띄운다.
