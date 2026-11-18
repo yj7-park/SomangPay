@@ -48,14 +48,51 @@
     setInstalledUi(false);
   });
 
+  // appinstalled는 설치 창에서 "설치"를 누른 순간 온다 - 안드로이드 Chrome은 그 뒤에 "소망페이 설치 중…" 알림을 띄우고
+  // 실제 앱(WebAPK)을 만드느라 수십 초 더 걸린다(2026-11-19 사용자 제보: 바로 "설치 완료"라고 떠서 헷갈림). 그래서
+  // "설치를 시작했어요"로 알리고, getInstalledRelatedApps가 설치된 앱을 돌려주면(실제 설치가 끝나면) 그때 완료로 바꾼다.
+  // 이 API가 없거나 끝까지 못 찾으면 시작 안내만 남는다.
+  const INSTALL_POLL_MS = 2000;
+  const INSTALL_POLL_LIMIT_MS = 3 * 60 * 1000;
+
+  function showInstallDone() {
+    if (typeof showAlertModal !== "function") return;
+    const titleEl = document.getElementById("generic-alert-title");
+    const modal = document.getElementById("generic-alert-modal");
+    const startOpen = titleEl && titleEl.innerText === "설치를 시작했어요" && modal && modal.style.display !== "none";
+    const msg = "소망페이 설치가 끝났어요.\n이제 홈 화면(또는 앱 목록)의 소망페이 아이콘으로 열어 주세요.";
+    if (startOpen) {
+      titleEl.innerText = "설치 완료";
+      document.getElementById("generic-alert-message").innerText = msg;
+    } else {
+      showAlertModal(msg, "설치 완료");
+    }
+  }
+
+  function watchInstallFinish() {
+    if (!navigator.getInstalledRelatedApps) return;
+    const started = Date.now();
+    const tick = async () => {
+      try {
+        const apps = await navigator.getInstalledRelatedApps();
+        if (apps && apps.length) { showInstallDone(); return; }
+      } catch (e) { return; }
+      if (Date.now() - started < INSTALL_POLL_LIMIT_MS) setTimeout(tick, INSTALL_POLL_MS);
+    };
+    setTimeout(tick, INSTALL_POLL_MS);
+  }
+
   window.addEventListener("appinstalled", () => {
     deferredPrompt = null;
     storeInstalled(true);
     setVisible(false);
     hideGuide();
     if (typeof showAlertModal === "function") {
-      showAlertModal("홈 화면에 소망페이가 설치됐어요.\n이제 홈 화면 아이콘으로 열어 주세요.", "설치 완료");
+      showAlertModal(isAndroid
+        ? "화면 위쪽에 '소망페이 설치 중…'이 끝나면 홈 화면(또는 앱 목록)에 소망페이 아이콘이 생겨요.\n30초~1분쯤 걸릴 수 있어요."
+        : "설치가 끝나면 소망페이 아이콘이 생겨요. 그 아이콘으로 열어 주세요.", "설치를 시작했어요");
     }
+    watchInstallFinish();
   });
 
   function setInstalledUi(installed) {
