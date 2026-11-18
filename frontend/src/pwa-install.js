@@ -149,15 +149,13 @@
     if (isKakao && isAndroid) {
       // 안드로이드 카카오톡은 Chrome으로 바로 넘긴다(2026-11-19 사용자 요청) - openExternal은 "기본 브라우저"라
       // 갤럭시에선 삼성 인터넷이 열리는데, 삼성 인터넷 PWA는 설치 경로가 헷갈리고 푸시도 말썽이었다.
-      // 카카오톡 인앱 브라우저는 intent:// 를 처리한다. Chrome이 없으면 아래 "다른 브라우저로 열기".
+      // 카카오톡 인앱 브라우저는 intent:// 를 처리한다. "다른 브라우저로 열기"(openExternal) 버튼은 뺐다 - 기본 브라우저라
+      // 갤럭시에선 삼성 인터넷이 열려 오히려 헷갈렸다(사용자 피드백). Chrome이 안 열렸을 때만 다시 시도 버튼.
       openInChrome();
       showGuide("Chrome에서 설치해 주세요", [
         "카카오톡 안에서는 앱을 설치할 수 없어요.",
         "<strong>Chrome</strong>이 열리면 거기서 다시 <strong>앱 설치</strong>를 눌러 주세요.",
-        "Chrome이 안 열리면 아래 <strong>다른 브라우저로 열기</strong>를 눌러 주세요.",
-      ], { label: "다른 브라우저로 열기", onClick: () => {
-        location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(installUrl);
-      } });
+      ], { label: "Chrome 다시 열기", onClick: openInChrome });
       return;
     }
 
