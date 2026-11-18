@@ -55,13 +55,18 @@
   const INSTALL_POLL_MS = 2000;
   const INSTALL_POLL_LIMIT_MS = 3 * 60 * 1000;
 
+  // 한 번 완료로 바뀌면 되돌리지 않는다 - 같은 페이지에서 appinstalled가 다시 오면 "설치 중"으로 돌아가 보이는 경우가 있었다
+  // (2026-11-19 사용자 제보). 설치 흐름은 페이지당 한 번만 처리한다.
+  let installFlow = "idle"; // idle | installing | done
+  const INSTALL_START_TITLE = "설치 중이에요";
+
   function showInstallDone() {
-    if (typeof showAlertModal !== "function") return;
+    if (installFlow === "done" || typeof showAlertModal !== "function") return;
+    installFlow = "done";
     const titleEl = document.getElementById("generic-alert-title");
     const modal = document.getElementById("generic-alert-modal");
-    const startOpen = titleEl && titleEl.innerText === "설치를 시작했어요" && modal && modal.style.display !== "none";
-    const msg = "소망페이 설치가 끝났어요.\n이제 홈 화면(또는 앱 목록)의 소망페이 아이콘으로 열어 주세요.";
-    if (startOpen) {
+    const msg = "홈 화면의 소망페이로 열어 주세요.";
+    if (titleEl && titleEl.innerText === INSTALL_START_TITLE && modal && modal.style.display !== "none") {
       titleEl.innerText = "설치 완료";
       document.getElementById("generic-alert-message").innerText = msg;
     } else {
@@ -73,6 +78,7 @@
     if (!navigator.getInstalledRelatedApps) return;
     const started = Date.now();
     const tick = async () => {
+      if (installFlow === "done") return;
       try {
         const apps = await navigator.getInstalledRelatedApps();
         if (apps && apps.length) { showInstallDone(); return; }
@@ -87,10 +93,10 @@
     storeInstalled(true);
     setVisible(false);
     hideGuide();
+    if (installFlow !== "idle") return;
+    installFlow = "installing";
     if (typeof showAlertModal === "function") {
-      showAlertModal(isAndroid
-        ? "화면 위쪽에 '소망페이 설치 중…'이 끝나면 홈 화면(또는 앱 목록)에 소망페이 아이콘이 생겨요.\n30초~1분쯤 걸릴 수 있어요."
-        : "설치가 끝나면 소망페이 아이콘이 생겨요. 그 아이콘으로 열어 주세요.", "설치를 시작했어요");
+      showAlertModal("잠시 후 홈 화면에 소망페이가 생겨요.", INSTALL_START_TITLE);
     }
     watchInstallFinish();
   });
