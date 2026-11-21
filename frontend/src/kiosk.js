@@ -757,7 +757,10 @@ async function loadProducts() {
       products.forEach(p => {
         const opt = document.createElement("option");
         opt.value = p.id;
-        opt.innerText = `${p.name} (일반: ${p.price_general.toLocaleString()}원 / 시니어: ${p.price_senior.toLocaleString()}원)`;
+        // 일반/시니어 가격이 같으면 금액만(2026-11-21 사용자 요청)
+        opt.innerText = p.price_general === p.price_senior
+          ? `${p.name} (${p.price_general.toLocaleString()}원)`
+          : `${p.name} (일반: ${p.price_general.toLocaleString()}원 / 시니어: ${p.price_senior.toLocaleString()}원)`;
         select.appendChild(opt);
       });
       if (currentDefaultProductId) {
@@ -855,8 +858,10 @@ function renderKioskProducts() {
       <div class="menu-card-info">
         <div class="menu-name">${p.name}</div>
         <div class="menu-price-block">
-          <div class="menu-price">일반: ${p.price_general.toLocaleString()}원</div>
-          <div class="menu-price-senior">시니어: ${p.price_senior.toLocaleString()}원</div>
+          ${p.price_general === p.price_senior
+            ? `<div class="menu-price">${p.price_general.toLocaleString()}원</div>`
+            : `<div class="menu-price">일반: ${p.price_general.toLocaleString()}원</div>
+          <div class="menu-price-senior">시니어: ${p.price_senior.toLocaleString()}원</div>`}
         </div>
       </div>
       <div class="touch-qty-box" onclick="event.stopPropagation()">

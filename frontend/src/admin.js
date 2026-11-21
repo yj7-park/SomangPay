@@ -3901,8 +3901,7 @@ function renderKioskDetail() {
             <span class="menu-toggle-badge">${icon('check')}</span>
             <div>
               <div class="menu-name">${escapeHtml(p.name)}</div>
-              <div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
-              <div class="menu-price-senior">시니어 ${p.price_senior.toLocaleString()}원</div>
+              ${menuPriceLinesHtml(p)}
             </div>
           </div>
         `).join('')}
@@ -3914,7 +3913,7 @@ function renderKioskDetail() {
            렌더링(populateKioskMenuData)과 동일한 문구 포맷으로 맞춘다. -->
       <select class="form-control kiosk-default-product-select" style="margin-bottom: 0;" onchange="autoSaveKiosk(${k.id})">
         <option value="">-- 기본 결제 없음 (메뉴 선택 필수) --</option>
-        ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${escapeHtml(p.name)} (일반: ${p.price_general.toLocaleString()}원 / 시니어: ${p.price_senior.toLocaleString()}원)</option>`).join('')}
+        ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${escapeHtml(p.name)} (${p.price_general === p.price_senior ? `${p.price_general.toLocaleString()}원` : `일반: ${p.price_general.toLocaleString()}원 / 시니어: ${p.price_senior.toLocaleString()}원`})</option>`).join('')}
       </select>
 
       <!-- 설정 진입 방식(키오스크마다, 2026-11-21) - 예전엔 설정 탭에서 모든 키오스크에 한꺼번에 적용했다. -->
@@ -4045,6 +4044,13 @@ function toggleKioskProduct(kioskId, productId) {
   autoSaveKiosk(kioskId);
 }
 
+// 메뉴 카드 가격 줄 - 일반/시니어 가격이 같으면 금액 한 줄만(2026-11-21 사용자 요청, kiosk.js와 같은 기준).
+function menuPriceLinesHtml(p) {
+  if (p.price_general === p.price_senior) return `<div class="menu-price">${p.price_general.toLocaleString()}원</div>`;
+  return `<div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
+              <div class="menu-price-senior">시니어 ${p.price_senior.toLocaleString()}원</div>`;
+}
+
 // 키오스크 설정 진입 방식 - PIN(공용 관리자 PIN) / QR·NFC(관리자 권한 회원의 QR 코드나 NFC 카드).
 async function setKioskAuthMode(kioskId, mode) {
   const k = kiosks.find(x => x.id === kioskId);
@@ -4165,8 +4171,7 @@ function renderMenuManageGrid() {
       </button>
       <div>
         <div class="menu-name">${escapeHtml(p.name)}</div>
-        <div class="menu-price">일반 ${p.price_general.toLocaleString()}원</div>
-        <div class="menu-price-senior">시니어 ${p.price_senior.toLocaleString()}원</div>
+        ${menuPriceLinesHtml(p)}
       </div>
     </div>
   `).join('') + `
