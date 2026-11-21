@@ -295,6 +295,10 @@
   `POST /api/admin/verify-auth {card_uid, surface:"kiosk"}`). **기본값은 둘 다 계정 방식**이지만 들어갈 수 있는
   관리자 회원이 없으면(관리자 앱은 앱 비밀번호를 정한 회원 기준) 잠기지 않게 **PIN으로 동작**한다(`effective_mode`,
   공개 조회 `GET /api/auth-config`가 이 실제 값을 준다). 그래서 첫 관리자 회원이 생기는 순간 방식이 바뀐다.
+- **키오스크 설정 진입 방식은 키오스크마다**(2026-11-21): `kiosk_devices.admin_auth_mode`(NULL = 기본 account), 관리자 앱
+  키오스크 상세 "설정 진입" PIN / QR·NFC에서 고른다(설정 탭엔 관리자 앱 로그인만 남음). 컬럼 추가 때 옛 전체 설정
+  (`app_settings admin_auth_mode.kiosk`)을 기존 키오스크로 복사했고 그 키는 더 안 쓴다. 키오스크는 `/api/auth-config?device_uuid=`,
+  `verify-auth {device_uuid}`로 자기 방식을 받고, 토큰 purpose에 `_d<키오스크 id>`가 붙어 그 키오스크 방식이 바뀌면 끊긴다.
 - 관리자 토큰은 purpose 토큰 `admin_<pin|account>_<admin_app|kiosk>`. `require_admin_auth`/`ws_admin`이 매 요청
   `admin_auth.resolve_token`으로 **그 화면의 지금 방식과 맞는지 + 계정이면 아직 활성·관리자인지** 다시 본다 →
   방식을 바꾸거나 권한을 회수하면 기존 세션이 바로 끊긴다(문자 발송/입금 감지 태블릿도 다시 로그인 필요).
@@ -369,6 +373,10 @@
   `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)를 요청한다(예외가 없으면 Doze가 wake lock/네트워크를
   무시). 설정 탭은 예외가 꺼져 있으면 경고 + "배터리 최적화 끄기" 버튼을 띄운다. 삼성 기기는 추가로
   설정 > 배터리 > 백그라운드 사용 제한에서 "절전 예외 앱"에 넣어 두는 게 안전하다.
+- **발송 기기 끊김 알림**(2026-11-21, `services/sms_sender_watch.py`): 발송 기기가 5분 넘게 폴링하지 않으면 관리자 전원에게
+  "문자 발송 기기 연결 끊김"(웹푸시 + 관리자 APK 알림, category `sms_sender` → 설정 탭), 다시 연결되면 "다시 연결됨"을 끊길 때마다
+  한 번씩(`sms_sender_devices.offline_alerted_at`, 워커 4개라 조건부 UPDATE). 1분 주기 루프. 기기에서 "이 기기에서 문자 발송"을 끄면
+  admin.js가 `DELETE /api/admin/sms/senders/{id}`로 목록에서 빼서 알림이 안 간다. 안 쓰는 기기는 설정 탭 "목록에서 빼기".
 - 안드로이드는 짧은 시간에 많이 보내면(기본 30분 30건 안팎, 기기별 차이) 기기에 확인 팝업을 띄우고,
   통신사도 하루 발송량/스팸 제한이 있다 - 대량 단체문자 용도가 아니다.
 - 이 서버(aarch64)엔 Android SDK가 없어 APK 빌드는 CI에서만 된다. 네이티브 코드 컴파일 확인은

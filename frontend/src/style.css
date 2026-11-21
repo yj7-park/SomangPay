@@ -1199,6 +1199,16 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
   line-height: 1.5;
   color: var(--text-muted);
 }
+.sms-sender-offline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  color: var(--admin-pending-ink, #9a3412);
+}
+.sms-sender-offline .sms-outbox-action { margin-left: auto; }
+.kiosk-auth-row { margin-top: 1rem; padding: 0; }
 .sms-sender-summary.is-warn {
   background: rgba(194, 65, 12, 0.08);
   color: var(--admin-pending-ink, #9a3412);

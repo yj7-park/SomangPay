@@ -4,7 +4,7 @@ import hmac
 import os
 import secrets
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 # 관리자 PIN - 운영 환경에서는 반드시 환경변수로 재정의해야 한다 (기본값은 데모/개발용)
 ADMIN_PIN = os.getenv("ADMIN_PIN", "1234")
@@ -114,6 +114,20 @@ def verify_purpose_token(token: str, purpose: str) -> Optional[int]:
         if int(expires_at_str) < int(time.time()):
             return None
         return int(subject_id_str)
+    except Exception:
+        return None
+
+
+def read_purpose_token(token: str) -> Optional[Tuple[str, int]]:
+    """서명과 만료가 유효한 purpose 토큰이면 (purpose, subject_id). purpose를 미리 모를 때 쓴다."""
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        purpose, subject_id_str, expires_at_str, sig = raw.split("|")
+        payload = f"{purpose}|{subject_id_str}|{expires_at_str}"
+        expected = hmac.new(ADMIN_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig) or int(expires_at_str) < int(time.time()):
+            return None
+        return purpose, int(subject_id_str)
     except Exception:
         return None
 

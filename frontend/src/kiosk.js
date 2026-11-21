@@ -1385,7 +1385,8 @@ function initKioskPinKeypad() {
 }
 
 // 설정 진입 방식(#admin-account) - "pin"이면 PIN 키패드, "account"면 관리자 권한 회원의 QR·NFC 태그.
-// 서버(/api/auth-config kiosk)가 고르며, 관리자 권한 회원이 없으면 "pin"을 준다.
+// 서버(/api/auth-config?device_uuid= kiosk)가 이 키오스크 설정값으로 고르며(관리자 앱 키오스크 상세에서
+// 키오스크마다 선택), 관리자 권한 회원이 없으면 "pin"을 준다.
 let kioskAdminAuthMode = "pin";
 
 function isKioskCardAuthPending() {
@@ -1396,7 +1397,7 @@ function isKioskCardAuthPending() {
 async function openKioskAdminPinModal() {
   let mode = "pin";
   try {
-    const res = await fetch(`${API_BASE}/auth-config`);
+    const res = await fetch(`${API_BASE}/auth-config?device_uuid=${encodeURIComponent(currentDeviceUuid || "")}`);
     if (res.ok) mode = (await res.json()).kiosk || "pin";
   } catch (e) { /* 서버 연결 실패 - PIN 창으로 두고, 인증 시 오류 안내 */ }
   kioskAdminAuthMode = mode;
@@ -1442,7 +1443,7 @@ async function verifyKioskAdminCard(cardUid) {
     const res = await fetch(`${API_BASE}/admin/verify-auth`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ card_uid: cardUid, surface: "kiosk" })
+      body: JSON.stringify({ card_uid: cardUid, surface: "kiosk", device_uuid: currentDeviceUuid })
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.token) {
@@ -1496,7 +1497,7 @@ async function verifyKioskAdminPin() {
     const res = await fetch(`${API_BASE}/admin/verify-pin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: pin, surface: "kiosk" })
+      body: JSON.stringify({ pin: pin, surface: "kiosk", device_uuid: currentDeviceUuid })
     });
     const data = await res.json().catch(() => ({}));
 

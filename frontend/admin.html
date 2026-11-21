@@ -15,7 +15,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261108_1900">
+  <link rel="stylesheet" href="src/style.css?v=20261121_2300">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20261025_1500">
   <script src="jsQR.min.js"></script>
   <script>
@@ -288,8 +288,9 @@
           <div id="sms-outbox-list"></div>
         </div>
 
-        <!-- 관리자 인증(#admin-account, admin.js loadAdminAuthSettings) - 관리자 앱 로그인과 키오스크 설정
-             진입을 각각 PIN / 계정(관리자 권한 회원) 중에서 고른다. 관리자 권한은 회원 상세에서 준다. -->
+        <!-- 관리자 인증(#admin-account, admin.js loadAdminAuthSettings) - 관리자 앱 로그인을 PIN / 계정(관리자
+             권한 회원) 중에서 고른다. 키오스크 설정 진입은 키오스크마다 키오스크 상세에서 고른다(2026-11-21).
+             관리자 권한은 회원 상세에서 준다. -->
         <div class="settings-group-label">관리자 인증</div>
         <div class="glass-container admin-auth-card" style="padding: 1.5rem; margin-bottom: 1.2rem;">
           <div class="settings-row">
@@ -297,13 +298,6 @@
             <div class="seg-control" style="margin-left: auto;">
               <button id="a-auth-admin_app-pin" type="button" onclick="setAdminAuthMode('admin_app', 'pin')">PIN</button>
               <button id="a-auth-admin_app-account" type="button" onclick="setAdminAuthMode('admin_app', 'account')">계정</button>
-            </div>
-          </div>
-          <div class="settings-row">
-            <span style="font-size: 0.8rem; color: var(--text-muted);">키오스크 설정 진입</span>
-            <div class="seg-control" style="margin-left: auto;">
-              <button id="a-auth-kiosk-pin" type="button" onclick="setAdminAuthMode('kiosk', 'pin')">PIN</button>
-              <button id="a-auth-kiosk-account" type="button" onclick="setAdminAuthMode('kiosk', 'account')">QR·NFC</button>
             </div>
           </div>
           <p id="a-auth-note" class="sms-settings-note"></p>
@@ -932,6 +926,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261108_1900"></script>
+  <script src="src/admin.js?v=20261121_2300"></script>
 </body>
 </html>

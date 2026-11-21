@@ -157,6 +157,9 @@ class KioskDevice(Base):
     # manager.kiosk_sockets로는 워커마다 답이 달라지기 때문. 오프라인일 때 "n분 전 접속"
     # 표시에도 같은 값을 쓴다.
     last_seen_at = Column(DateTime, nullable=True)
+    # 이 키오스크의 설정 진입 방식(services/admin_auth.py) - "pin" / "account"(관리자 회원 QR·NFC).
+    # NULL이면 기본값(account, 들어갈 관리자 회원이 없으면 PIN). 관리자 앱 키오스크 상세에서 고른다.
+    admin_auth_mode = Column(String(20), nullable=True)
 
     merchant = relationship("Merchant", back_populates="kiosk_devices")
 
@@ -243,6 +246,8 @@ class SmsSenderDevice(Base):
     device_id = Column(String(100), primary_key=True)
     device_name = Column(String(100), nullable=True)
     last_seen_at = Column(DateTime, nullable=True)
+    # 끊김을 관리자에게 알린 시각(services/sms_sender_watch.py) - 다시 연결되면 비운다.
+    offline_alerted_at = Column(DateTime, nullable=True)
 
 class UserActivationCode(Base):
     """앱 계정 활성화용 문자 인증번호(#activation). 비밀번호를 아직 안 정한 회원이 로그인을 시도하면

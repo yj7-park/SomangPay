@@ -151,6 +151,9 @@ class AdminKioskResponse(BaseModel):
     # 응답 조립 시점에 계산해서 채운다.
     is_online: bool = False
     last_seen_at: Optional[UTCDatetime] = None
+    # 설정 진입 방식 - 고른 값("pin"/"account")과 실제 적용값(관리자 회원이 없으면 pin)
+    admin_auth_mode: str = "account"
+    admin_auth_effective: str = "account"
     sales: KioskSalesSummary
 
 class AdminKioskStatus(BaseModel):
@@ -182,6 +185,7 @@ class KioskUpdateRequest(BaseModel):
     assigned_products: Optional[List[int]] = None
     default_product_id: Optional[int] = None
     default_quantity: Optional[int] = None
+    admin_auth_mode: Optional[str] = None  # "pin" | "account"
 
 class NFCCardUpsert(BaseModel):
     """카드 등록/교체 공용 스키마. 이미 해당 회원의 같은 타입 카드가 있으면 교체된다."""

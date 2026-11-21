@@ -294,6 +294,26 @@ def _migrate_and_seed():
                 END IF;
             END $$;
         """, "users.is_admin")
+        # 키오스크 설정 진입 방식을 키오스크마다(2026-11-21) - 처음 추가할 때 지금까지의 시스템 전체 설정
+        # (app_settings 'admin_auth_mode.kiosk')을 기존 키오스크에 그대로 옮겨 동작이 안 바뀌게 한다.
+        _run_migration_step(db, """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='kiosk_devices' AND column_name='admin_auth_mode'
+                ) THEN
+                    ALTER TABLE kiosk_devices ADD COLUMN admin_auth_mode VARCHAR(20);
+                    IF to_regclass('app_settings') IS NOT NULL THEN
+                        UPDATE kiosk_devices SET admin_auth_mode = s.value
+                        FROM app_settings s
+                        WHERE s.key = 'admin_auth_mode.kiosk' AND s.value IN ('pin', 'account');
+                    END IF;
+                END IF;
+            END $$;
+        """, "kiosk_devices.admin_auth_mode (+ copy global kiosk setting)")
+        # 문자 발송 기기 끊김 알림(services/sms_sender_watch.py) - 한 번 끊길 때 한 번만 알리려는 표시.
+        _run_migration_step(db, "ALTER TABLE sms_sender_devices ADD COLUMN IF NOT EXISTS offline_alerted_at TIMESTAMP;", "sms_sender_devices.offline_alerted_at")
         if not is_sqlite:
             try:
                 _add_password_set_column(db)

@@ -702,6 +702,8 @@ async function routeNotificationDeepLink(category, entityId) {
   } else if (category === "payment" && entityId != null) {
     await loadAdminUsers();
     openMemberDetail(entityId);
+  } else if (category === "sms_sender") {
+    switchAdminView("settings");
   }
 }
 
@@ -2214,7 +2216,7 @@ async function toggleDetailUserAdmin() {
 }
 
 // ============ 설정 > 관리자 인증 (#admin-account) ============
-const ADMIN_AUTH_SURFACE_LABEL = { admin_app: "관리자 앱", kiosk: "키오스크 설정" };
+const ADMIN_AUTH_SURFACE_LABEL = { admin_app: "관리자 앱" };
 
 async function loadAdminAuthSettings() {
   if (!isAdminAuthenticated) return;
@@ -2236,7 +2238,8 @@ async function loadAdminAuthSettings() {
 
 function renderAdminAuthSettings(data) {
   let fallback = false;
-  for (const surface of ["admin_app", "kiosk"]) {
+  // 키오스크 설정 진입 방식은 키오스크마다 고른다(키오스크 상세, 2026-11-21).
+  for (const surface of ["admin_app"]) {
     const m = data.modes[surface];
     ["pin", "account"].forEach(method => {
       document.getElementById(`a-auth-${surface}-${method}`)?.classList.toggle("is-on", m.configured === method);
@@ -2254,9 +2257,7 @@ function renderAdminAuthSettings(data) {
 
 async function setAdminAuthMode(surface, mode) {
   const label = ADMIN_AUTH_SURFACE_LABEL[surface];
-  const how = mode === "pin"
-    ? "공용 관리자 PIN"
-    : (surface === "admin_app" ? "관리자 권한 회원의 휴대폰 번호와 비밀번호" : "관리자 권한 회원의 QR 코드나 NFC 카드");
+  const how = mode === "pin" ? "공용 관리자 PIN" : "관리자 권한 회원의 휴대폰 번호와 비밀번호";
   let msg = `${label} 진입 방식을 "${how}"(으)로 바꿀까요?`;
   if (surface === "admin_app") msg += "\n\n바뀌면 지금 다른 방식으로 로그인해 둔 관리자 앱(문자 발송 태블릿 포함)은 모두 다시 로그인해야 해요.";
   if (!(await showConfirmModal(msg))) return;
@@ -2972,6 +2973,21 @@ function toggleSmsSenderOnThisDevice() {
   const next = !(st.enabled && st.permission);
   window.AndroidInterface.setSmsSenderEnabled(next);
   refreshSmsSenderDeviceUi();
+  // 일부러 끈 기기는 발송 기기 목록에서 빼서 "연결 끊김" 알림이 안 가게 한다(sms_sender_watch).
+  if (!next && st.deviceId) removeSmsSender(st.deviceId, true);
+}
+
+async function removeSmsSender(deviceId, quiet) {
+  if (!quiet) {
+    const d = _smsSenders.find(x => x.device_id === deviceId);
+    if (!(await showConfirmModal(`"${(d && d.device_name) || "관리자 앱"}"을(를) 발송 기기 목록에서 뺄까요?\n그 기기에서 다시 켜면 다시 생겨요.`))) return;
+  }
+  try {
+    await adminFetch(`${API_BASE}/admin/sms/senders/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+  } catch (e) {
+    console.error("removeSmsSender error:", e);
+  }
+  loadSmsSenders();
 }
 
 // 네이티브 권한 팝업 결과/스위치 변경 후 MainActivity가 부른다.
@@ -2995,10 +3011,14 @@ function renderSmsSenderSummary() {
   const el = document.getElementById("sms-sender-summary");
   if (!el) return;
   const online = _smsSenders.filter(d => d.online);
+  const offline = _smsSenders.filter(d => !d.online);
   el.classList.toggle("is-warn", online.length === 0);
-  el.textContent = online.length > 0
-    ? `발송 기기: ${online.map(d => d.device_name || "관리자 앱").join(", ")} · 연결됨`
+  const head = online.length > 0
+    ? `발송 기기: ${escapeHtml(online.map(d => d.device_name || "관리자 앱").join(", "))} · 연결됨`
     : "지금 문자를 보낼 기기가 없어요. 관리자 앱 설치 폰에서 \"이 기기에서 문자 발송\"을 켜 주세요. 그 전까지 보낸 문자는 대기열에 쌓였다가 기기가 켜지면 나갑니다(24시간 지나면 만료).";
+  // 끊긴 기기(꺼짐/절전/앱 종료) - 끊기면 관리자에게 알림이 간다. 더 안 쓰는 기기는 빼면 알림도 멈춘다.
+  const lines = offline.map(d => `<div class="sms-sender-offline">${escapeHtml(d.device_name || "관리자 앱")} · 연결 끊김${d.last_seen_at ? ` (마지막 ${formatDateTimeKST(d.last_seen_at)})` : ""} <button type="button" class="sms-outbox-action" onclick="removeSmsSender('${escapeHtml(d.device_id)}')">목록에서 빼기</button></div>`);
+  el.innerHTML = head + lines.join("");
 }
 
 async function loadSmsOutbox() {
@@ -3896,6 +3916,16 @@ function renderKioskDetail() {
         <option value="">-- 기본 결제 없음 (메뉴 선택 필수) --</option>
         ${products.map(p => `<option value="${p.id}" ${k.default_product_id === p.id ? 'selected' : ''}>${escapeHtml(p.name)} (일반: ${p.price_general.toLocaleString()}원 / 시니어: ${p.price_senior.toLocaleString()}원)</option>`).join('')}
       </select>
+
+      <!-- 설정 진입 방식(키오스크마다, 2026-11-21) - 예전엔 설정 탭에서 모든 키오스크에 한꺼번에 적용했다. -->
+      <div class="settings-row kiosk-auth-row">
+        <label class="form-label" style="margin-bottom: 0;">설정 진입</label>
+        <div class="seg-control" style="margin-left: auto;">
+          <button type="button" class="${k.admin_auth_mode === 'pin' ? 'is-on' : ''}" onclick="setKioskAuthMode(${k.id}, 'pin')">PIN</button>
+          <button type="button" class="${k.admin_auth_mode !== 'pin' ? 'is-on' : ''}" onclick="setKioskAuthMode(${k.id}, 'account')">QR·NFC</button>
+        </div>
+      </div>
+      ${k.admin_auth_mode === 'account' && k.admin_auth_effective === 'pin' ? `<p class="sms-settings-note" style="margin: 0.3rem 0 0;">관리자 권한 회원이 없어 지금은 PIN으로 들어가요.</p>` : ''}
     </div>
 
     <div class="glass-container" style="padding: 1.5rem; overflow: visible; margin-bottom: 1.2rem;">
@@ -4013,6 +4043,29 @@ function toggleKioskProduct(kioskId, productId) {
   if (card) card.classList.toggle("assigned", k.assigned_products.includes(productId));
 
   autoSaveKiosk(kioskId);
+}
+
+// 키오스크 설정 진입 방식 - PIN(공용 관리자 PIN) / QR·NFC(관리자 권한 회원의 QR 코드나 NFC 카드).
+async function setKioskAuthMode(kioskId, mode) {
+  const k = kiosks.find(x => x.id === kioskId);
+  if (!k || k.admin_auth_mode === mode) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/kiosks/${kioskId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ admin_auth_mode: mode })
+    });
+    if (res.ok) {
+      k.admin_auth_mode = mode;
+      await loadKiosks();
+      flashKioskSaveStatus(true);
+    } else {
+      flashKioskSaveStatus(false);
+    }
+  } catch (err) {
+    console.error("setKioskAuthMode error:", err);
+    flashKioskSaveStatus(false);
+  }
 }
 
 // 저장 버튼 없이 이름 입력창에서 포커스가 빠지거나 / 메뉴를 토글하거나 / 기본 결제 메뉴를

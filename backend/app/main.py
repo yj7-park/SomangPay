@@ -22,7 +22,7 @@ from app.services.deposit_matcher import match_new_deposit, park_inactive_deposi
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
-from app.services import member_age, admin_auth, card_lookup
+from app.services import member_age, admin_auth, card_lookup, sms_sender_watch
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks, start_ws_bus
 
 app = FastAPI(
@@ -382,6 +382,35 @@ async def start_deposit_reminder_loop():
             except Exception as e:
                 print(f"deposit reminder loop error: {e}")
             await asyncio.sleep(deposit_reminder.CHECK_INTERVAL_SECONDS)
+    asyncio.create_task(_loop())
+
+def _run_sms_sender_watch() -> list:
+    db = SessionLocal()
+    try:
+        events = sms_sender_watch.check(db)
+        for title, body in events:
+            send_push_to_admins(db, title, body, category="sms_sender")
+        return events
+    finally:
+        db.close()
+
+
+# 문자 발송 기기 끊김/복구 알림 루프(services/sms_sender_watch.py) - 워커마다 돌지만 조건부 UPDATE로
+# 한 워커만 알린다.
+@app.on_event("startup")
+async def start_sms_sender_watch_loop():
+    async def _loop():
+        await asyncio.sleep(90)
+        while True:
+            try:
+                events = await run_in_threadpool(_run_sms_sender_watch)
+                for title, body in events:
+                    await notify_admins_alert(title, body, category="sms_sender")
+                if events:
+                    await notify_admins(["sms"])
+            except Exception as e:
+                print(f"sms sender watch error: {e}")
+            await asyncio.sleep(sms_sender_watch.CHECK_INTERVAL_SECONDS)
     asyncio.create_task(_loop())
 
 # ================= Web Push 구독 =================
@@ -1026,6 +1055,8 @@ class AdminAuthVerifyRequest(schemas.BaseModel):
     card_uid: Optional[str] = None
     # 어느 화면의 인증인지(services/admin_auth.SURFACES) - 화면마다 PIN/계정 방식을 따로 고른다.
     surface: str = "admin_app"
+    # 키오스크 인증일 때 어느 키오스크인지 - 설정 진입 방식이 키오스크마다 다르다(2026-11-21).
+    device_uuid: Optional[str] = None
 
 @app.post("/api/admin/verify-pin")
 @app.post("/api/admin/verify-auth")
@@ -1036,7 +1067,8 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
     surface(관리자 앱/키오스크)별로 지금 설정된 방식(services/admin_auth.py)이 아니면 400."""
     client_ip = request.client.host if request.client else "unknown"
     surface = req.surface if req.surface in admin_auth.SURFACES else "admin_app"
-    mode = admin_auth.effective_mode(db, surface)
+    kiosk = admin_auth.find_kiosk(db, req.device_uuid) if surface == "kiosk" else None
+    mode = admin_auth.kiosk_effective_mode(db, kiosk) if surface == "kiosk" else admin_auth.effective_mode(db, surface)
 
     if req.pin:
         if mode != "pin":
@@ -1053,7 +1085,7 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
             ).first()
             if not admin_user:
                 raise HTTPException(status_code=401, detail="관리자 계정이 정지되어 있어 인증할 수 없습니다.")
-            token = admin_auth.create_token(admin_user.id, "pin", surface)
+            token = admin_auth.create_token(admin_user.id, "pin", surface, kiosk)
             return {"success": True, "message": "관리자 PIN 인증이 승인되었습니다.", "auth_type": "PIN", "token": token}
 
     # 키오스크 설정 계정 방식 - 관리자 권한 회원의 QR 코드(회원 앱 QR 결제 화면)나 NFC 카드.
@@ -1064,7 +1096,7 @@ def verify_admin_auth(req: AdminAuthVerifyRequest, request: Request, db: Session
         user = db.get(models.User, card.user_id) if card else None
         if user and user.is_admin and user.status == "ACTIVE":
             security.clear_pin_attempts(client_ip)
-            token = admin_auth.create_token(user.id, "account", surface)
+            token = admin_auth.create_token(user.id, "account", surface, kiosk)
             return {
                 "success": True,
                 "message": f"관리자({user.name}) 인증이 완료되었습니다.",
@@ -1113,9 +1145,13 @@ def get_admin_me(admin: models.User = Depends(require_admin_auth)):
 
 
 @app.get("/api/auth-config")
-def get_auth_config(db: Session = Depends(get_db)):
-    """로그인 화면이 PIN 키패드와 계정 로그인 중 무엇을 띄울지 고르는 공개 조회(지금 실제로 적용되는 방식)."""
-    return {s: admin_auth.effective_mode(db, s) for s in admin_auth.SURFACES}
+def get_auth_config(device_uuid: Optional[str] = None, db: Session = Depends(get_db)):
+    """로그인 화면이 PIN 키패드와 계정 로그인 중 무엇을 띄울지 고르는 공개 조회(지금 실제로 적용되는 방식).
+    kiosk 값은 device_uuid로 넘긴 키오스크 기준(키오스크마다 다름, 없으면 기본값)."""
+    return {
+        "admin_app": admin_auth.effective_mode(db, "admin_app"),
+        "kiosk": admin_auth.kiosk_effective_mode(db, admin_auth.find_kiosk(db, device_uuid)),
+    }
 
 
 def _admin_auth_settings_payload(db: Session):
@@ -1136,7 +1172,8 @@ def get_admin_auth_settings(db: Session = Depends(get_db), _admin: models.User =
 async def update_admin_auth_settings(req: schemas.AdminAuthSettingsUpdate, db: Session = Depends(get_db),
                                      _admin: models.User = Depends(require_admin_auth)):
     """방식 변경. 계정 방식으로 바꿔도 들어갈 수 있는 관리자 회원이 없으면 PIN으로 동작한다(effective)."""
-    for surface, mode in (("admin_app", req.admin_app), ("kiosk", req.kiosk)):
+    # 키오스크 방식은 키오스크마다 고른다(PUT /api/admin/kiosks/{id}) - req.kiosk는 무시.
+    for surface, mode in (("admin_app", req.admin_app),):
         if mode is None:
             continue
         if mode not in admin_auth.METHODS:
@@ -1762,6 +1799,23 @@ def admin_list_sms_senders(
     ]
 
 
+@app.delete("/api/admin/sms/senders/{device_id}")
+async def admin_delete_sms_sender(
+    device_id: str,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """발송 기기를 목록에서 뺀다 - 그 기기에서 "이 기기에서 문자 발송"을 끄면 admin.js가 부르고, 더는 안 쓰는
+    기기를 관리자가 직접 지울 때도 쓴다. 끊김 알림(sms_sender_watch) 대상에서도 빠진다. 다시 켜면 첫 폴링에서
+    다시 생긴다."""
+    dev = db.get(models.SmsSenderDevice, device_id)
+    if dev:
+        db.delete(dev)
+        db.commit()
+    await notify_admins(["sms"])
+    return {"success": True}
+
+
 @app.post("/api/admin/sms/{sms_id}/cancel", response_model=schemas.SmsOutboxResponse)
 async def admin_cancel_sms(
     sms_id: int,
@@ -2250,6 +2304,8 @@ def admin_list_kiosks(db: Session = Depends(get_db), _admin: models.User = Depen
             updated_at=device.updated_at,
             is_online=_kiosk_is_online(device),
             last_seen_at=device.last_seen_at,
+            admin_auth_mode=admin_auth.kiosk_configured_mode(device),
+            admin_auth_effective=admin_auth.kiosk_effective_mode(db, device),
             sales=schemas.KioskSalesSummary(
                 today=_kiosk_sales_for(db, device.id, period_starts["today"]),
                 this_week=_kiosk_sales_for(db, device.id, period_starts["this_week"]),
@@ -2316,6 +2372,10 @@ async def admin_update_kiosk(
         device.default_product_id = req.default_product_id
     if req.default_quantity is not None:
         device.default_quantity = req.default_quantity
+    if req.admin_auth_mode is not None:
+        if req.admin_auth_mode not in admin_auth.METHODS:
+            raise HTTPException(status_code=400, detail="방식은 pin 또는 account만 가능합니다.")
+        device.admin_auth_mode = req.admin_auth_mode
 
     db.commit()
     db.refresh(device)
