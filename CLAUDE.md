@@ -335,6 +335,11 @@
   `_expire_kiosk_last_seen`으로 `last_seen_at`을 TTL 밖으로 밀어 **즉시 오프라인**으로
   표기되게 한다. 포그라운드 복귀 시 `{hidden:false}` + 재연결로 되살아난다.
   `ws-client.js`는 이걸 위해 `send()`와 `onOpen` 콜백을 노출한다.
+- **키오스크 끊김/복구 알림**(2026-11-22, `services/kiosk_watch.py`, 문자 발송 기기 감시와 같은 1분 루프): 등록된 키오스크가
+  5분 넘게 오프라인이면 "키오스크 연결 끊김", 그 뒤 붙으면 "다시 연결됨"(웹푸시 + 관리자 APK, category `kiosk` → 키오스크 탭).
+  핑퐁 방지: 5분 유예, 복구는 끊김을 실제로 보낸 경우에만, 키오스크별 마지막 알림 뒤 30분은 새 끊김을 미뤘다가(그 사이 붙으면 조용히
+  지움) 쿨다운 뒤에도 끊겨 있으면 보냄, 처음 표시할 때 이미 1시간 넘게 조용했던 기기는 알리지 않음(skipped). 상태 컬럼
+  `offline_marked_at`/`offline_alert`/`status_alerted_at`, 전이는 조건부 UPDATE. 화면을 끄거나 백그라운드로 보내도 5분 뒤 끊김으로 잡힌다.
 - 무거운 `GET /api/admin/kiosks`(단말기당 매출 집계 쿼리 4개)와 분리해서, 온라인 점만
   갱신하는 경량 `GET /api/admin/kiosks/status`가 있다. `admin.js`의 30초 폴링과 "stats"
   실시간 갱신은 키오스크 탭을 실제로 보고 있을 때가 아니면 이 경량 쪽만 쓴다.

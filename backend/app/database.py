@@ -314,6 +314,12 @@ def _migrate_and_seed():
         """, "kiosk_devices.admin_auth_mode (+ copy global kiosk setting)")
         # 문자 발송 기기 끊김 알림(services/sms_sender_watch.py) - 한 번 끊길 때 한 번만 알리려는 표시.
         _run_migration_step(db, "ALTER TABLE sms_sender_devices ADD COLUMN IF NOT EXISTS offline_alerted_at TIMESTAMP;", "sms_sender_devices.offline_alerted_at")
+        # 키오스크 연결 끊김/복구 알림(services/kiosk_watch.py)
+        _run_migration_step(db, """
+            ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS offline_marked_at TIMESTAMP;
+            ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS offline_alert VARCHAR(10);
+            ALTER TABLE kiosk_devices ADD COLUMN IF NOT EXISTS status_alerted_at TIMESTAMP;
+        """, "kiosk_devices offline alert columns")
         if not is_sqlite:
             try:
                 _add_password_set_column(db)

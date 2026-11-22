@@ -160,6 +160,10 @@ class KioskDevice(Base):
     # 이 키오스크의 설정 진입 방식(services/admin_auth.py) - "pin" / "account"(관리자 회원 QR·NFC).
     # NULL이면 기본값(account, 들어갈 관리자 회원이 없으면 PIN). 관리자 앱 키오스크 상세에서 고른다.
     admin_auth_mode = Column(String(20), nullable=True)
+    # 연결 끊김/복구 알림 상태(services/kiosk_watch.py)
+    offline_marked_at = Column(DateTime, nullable=True)
+    offline_alert = Column(String(10), nullable=True)  # pending | sent | skipped
+    status_alerted_at = Column(DateTime, nullable=True)
 
     merchant = relationship("Merchant", back_populates="kiosk_devices")
 

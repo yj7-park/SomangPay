@@ -22,7 +22,7 @@ from app.services.deposit_matcher import match_new_deposit, park_inactive_deposi
 from app.services.history import get_history_page, get_kiosk_payment_history_page
 from app.services.push import send_push_to_user, send_push_to_admins
 from app.services import sms_outbox, account_activation, deposit_reminder
-from app.services import member_age, admin_auth, card_lookup, sms_sender_watch
+from app.services import member_age, admin_auth, card_lookup, sms_sender_watch, kiosk_watch
 from app.ws_manager import manager, notify_admins, notify_admins_alert, notify_user, notify_kiosk, notify_all_kiosks, start_ws_bus
 
 app = FastAPI(
@@ -395,7 +395,18 @@ def _run_sms_sender_watch() -> list:
         db.close()
 
 
-# 문자 발송 기기 끊김/복구 알림 루프(services/sms_sender_watch.py) - 워커마다 돌지만 조건부 UPDATE로
+def _run_kiosk_watch() -> list:
+    db = SessionLocal()
+    try:
+        events = kiosk_watch.check(db, _kiosk_is_online_at)
+        for title, body, kiosk_id in events:
+            send_push_to_admins(db, title, body, category="kiosk", entity_id=kiosk_id)
+        return events
+    finally:
+        db.close()
+
+
+# 문자 발송 기기 + 키오스크 끊김/복구 알림 루프(services/sms_sender_watch.py, kiosk_watch.py) - 워커마다 돌지만 조건부 UPDATE로
 # 한 워커만 알린다.
 @app.on_event("startup")
 async def start_sms_sender_watch_loop():
@@ -410,6 +421,12 @@ async def start_sms_sender_watch_loop():
                     await notify_admins(["sms"])
             except Exception as e:
                 print(f"sms sender watch error: {e}")
+            try:
+                kevents = await run_in_threadpool(_run_kiosk_watch)
+                for title, body, kiosk_id in kevents:
+                    await notify_admins_alert(title, body, category="kiosk", entity_id=kiosk_id)
+            except Exception as e:
+                print(f"kiosk watch error: {e}")
             await asyncio.sleep(sms_sender_watch.CHECK_INTERVAL_SECONDS)
     asyncio.create_task(_loop())
 

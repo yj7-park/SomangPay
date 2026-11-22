@@ -704,6 +704,8 @@ async function routeNotificationDeepLink(category, entityId) {
     openMemberDetail(entityId);
   } else if (category === "sms_sender") {
     switchAdminView("settings");
+  } else if (category === "kiosk") {
+    switchAdminView("kiosk");
   }
 }
 
