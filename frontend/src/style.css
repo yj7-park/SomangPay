@@ -1111,6 +1111,16 @@ button:disabled, .btn:disabled, .btn-action:disabled, .btn-primary:disabled {
 .admin-recent-row + .admin-recent-row {
   border-top: 1px solid var(--border-glass);
 }
+/* 최근 충전 카드 아래 최근 결제 카드 - 위 카드들과 같은 간격 */
+.admin-recent + .admin-recent {
+  margin-top: 1rem;
+}
+/* 최근 결제 아래 줄(시간 · 메뉴 목록)은 길면 한 줄 말줄임 */
+.admin-recent-row .activity-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .admin-recent-empty {
   padding: 0.8rem 0;
   text-align: center;

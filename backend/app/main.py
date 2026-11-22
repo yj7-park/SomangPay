@@ -2335,6 +2335,15 @@ def admin_list_kiosk_statuses(db: Session = Depends(get_db), _admin: models.User
         for row in rows
     ]
 
+@app.get("/api/admin/payments/recent", response_model=schemas.KioskPaymentHistoryPage)
+def admin_recent_payments(
+    limit: int = 3,
+    db: Session = Depends(get_db),
+    _admin: models.User = Depends(require_admin_auth),
+):
+    """관리자 홈 "최근 결제" - 모든 키오스크의 성공 결제 최신순(키오스크 상세 이력과 같은 소스)."""
+    return get_kiosk_payment_history_page(db, None, None, max(1, min(limit, 20)))
+
 @app.get("/api/admin/kiosks/{device_id}/history", response_model=schemas.KioskPaymentHistoryPage)
 def admin_get_kiosk_history(
     device_id: int,

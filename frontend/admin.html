@@ -15,7 +15,7 @@
   <script src="/app-env.js"></script>
   <script src="/src/env-badge.js"></script>
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="src/style.css?v=20261121_2300">
+  <link rel="stylesheet" href="src/style.css?v=20261122_1200">
   <link rel="stylesheet" href="src/instagram-theme.css?v=20261025_1500">
   <script src="jsQR.min.js"></script>
   <script>
@@ -118,14 +118,23 @@
           <span class="aps-value" id="stat-month-payment">0원</span>
         </div>
 
-        <!-- 최근 입금(#admin-b) - 회원 앱 홈 "최근 이용"처럼 충전함 최신 3건. 행 모양/클릭
+        <!-- 최근 충전(#admin-b, 옛 "최근 입금") - 회원 앱 홈 "최근 이용"처럼 충전함 최신 3건. 행 모양/클릭
              동작(입금 상세 모달)은 충전함과 같은 renderActivityLine. -->
         <div class="glass-container user-recent admin-recent">
           <div class="user-recent-head">
-            <span>최근 입금</span>
+            <span>최근 충전</span>
             <button type="button" class="user-recent-more" onclick="switchAdminView('inbox')">전체보기 ›</button>
           </div>
           <div id="admin-recent-list"></div>
+        </div>
+
+        <!-- 최근 결제(2026-11-22) - 모든 키오스크의 성공 결제 최신 3건(GET /api/admin/payments/recent).
+             행을 누르면 그 회원 상세. 전체 결제 목록 화면은 없어 전체보기 버튼은 없다. -->
+        <div class="glass-container user-recent admin-recent">
+          <div class="user-recent-head">
+            <span>최근 결제</span>
+          </div>
+          <div id="admin-recent-payment-list"></div>
         </div>
       </div>
 
@@ -926,6 +935,6 @@
   <script src="src/version-check.js" data-mode="prompt" data-check="/admin.html,/src/admin.js"></script>
   <script src="src/history-render.js?v=20260831_2306"></script>
   <script src="src/ws-client.js?v=20260904_0500"></script>
-  <script src="src/admin.js?v=20261121_2340"></script>
+  <script src="src/admin.js?v=20261122_1200"></script>
 </body>
 </html>

@@ -105,17 +105,17 @@ def _payment_items(db: Session, user_id: int, before: Optional[datetime.datetime
 
 
 def get_kiosk_payment_history_page(
-    db: Session, kiosk_device_id: int, before: Optional[datetime.datetime], limit: int = 20
+    db: Session, kiosk_device_id: Optional[int], before: Optional[datetime.datetime], limit: int = 20
 ) -> schemas.KioskPaymentHistoryPage:
     """단말기 화면의 '최근 결제 내역' 패널(kiosk.js)과 관리자 키오스크 상세 화면이 함께 쓰는
     커서 페이지네이션. get_history_page와 마찬가지로 조회 범위에 임의의 기간 제한을 두지 않고
     스크롤할 때만 다음 페이지를 불러온다(지연 로드) - 결제 성공 건만 대상으로 한다(화면에
     실패 시도를 노출하지 않는 기존 동작 유지). PaymentTransaction 자체는 지우지 않고 영구
-    보존하므로 매출 집계(_kiosk_sales_for)에는 영향이 없다."""
-    q = db.query(models.PaymentTransaction).filter(
-        models.PaymentTransaction.kiosk_device_id == kiosk_device_id,
-        models.PaymentTransaction.status == "SUCCESS",
-    )
+    보존하므로 매출 집계(_kiosk_sales_for)에는 영향이 없다.
+    kiosk_device_id가 None이면 모든 키오스크 - 관리자 홈 "최근 결제"(2026-11-22)."""
+    q = db.query(models.PaymentTransaction).filter(models.PaymentTransaction.status == "SUCCESS")
+    if kiosk_device_id is not None:
+        q = q.filter(models.PaymentTransaction.kiosk_device_id == kiosk_device_id)
     if before is not None:
         q = q.filter(models.PaymentTransaction.created_at < before)
     rows = q.order_by(models.PaymentTransaction.created_at.desc()).limit(limit).all()
@@ -124,6 +124,7 @@ def get_kiosk_payment_history_page(
     for p in rows:
         user = db.query(models.User).filter(models.User.id == p.user_id).first()
         items.append(schemas.KioskPaymentHistoryItem(
+            user_id=user.id if user else None,
             user_name=user.name if user else "탈퇴한 회원",
             user_type="시니어" if (user and user.user_type == "SENIOR") else "일반",
             amount=p.amount,

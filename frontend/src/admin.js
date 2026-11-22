@@ -1630,12 +1630,48 @@ async function loadAdminCards() {
 }
 
 async function loadStatsSummary() {
+  loadHomeRecentPayments(); // 결제가 생기면 stats 신호가 오므로 홈 "최근 결제"도 같이 갱신
   try {
     const res = await adminFetch(`${API_BASE}/admin/stats/summary`);
     if (!res.ok) return;
     renderDashboard(await res.json());
   } catch (err) {
     console.error("Failed to load stats summary:", err);
+  }
+}
+
+// 홈 "최근 결제"(2026-11-22) - 모든 키오스크 성공 결제 최신 3건. 충전 행과 같은 마크업,
+// 아래 줄은 시간 · 메뉴, 금액은 -로. 누르면 그 회원 상세.
+async function loadHomeRecentPayments() {
+  const box = document.getElementById("admin-recent-payment-list");
+  if (!box) return;
+  try {
+    const res = await adminFetch(`${API_BASE}/admin/payments/recent?limit=3`);
+    if (!res.ok) return;
+    const { items } = await res.json();
+    if (!items.length) {
+      box.innerHTML = `<p class="admin-recent-empty">아직 결제 내역이 없어요.</p>`;
+      return;
+    }
+    box.innerHTML = "";
+    items.forEach(item => {
+      const row = document.createElement("div");
+      row.className = "activity-row admin-recent-row";
+      if (item.user_id != null) row.onclick = () => openMemberDetail(item.user_id);
+      const sub = formatDateTimeKST(item.event_time) + (item.product_details ? ` · ${escapeHtml(item.product_details)}` : "");
+      row.innerHTML = `
+        <span class="activity-icon">${icon("card")}</span>
+        <div class="activity-info">
+          <div class="activity-title-row"><span class="activity-title">${escapeHtml(item.user_name)}</span></div>
+          <div class="activity-sub">${sub}</div>
+        </div>
+        <div class="activity-amount-col">
+          <div class="activity-amount">-${Number(item.amount).toLocaleString()}원</div>
+        </div>`;
+      box.appendChild(row);
+    });
+  } catch (err) {
+    console.error("Failed to load recent payments:", err);
   }
 }
 
@@ -1905,14 +1941,14 @@ function renderActivityCard(ev) {
   return div;
 }
 
-// 홈 "최근 입금"(#admin-b) - 충전함과 같은 행 마크업으로 시간순 최신 3건만. 처리 대기 정렬은
+// 홈 "최근 충전"(#admin-b, 옛 "최근 입금") - 충전함과 같은 행 마크업으로 시간순 최신 3건만. 처리 대기 정렬은
 // 안 한다(대기/오류는 바로 위 배너가 이미 따로 알려준다).
 function renderHomeRecentDeposits() {
   const box = document.getElementById("admin-recent-list");
   if (!box) return;
   const events = buildDepositEvents("ALL").slice(0, 3);
   if (events.length === 0) {
-    box.innerHTML = `<p class="admin-recent-empty">아직 입금 내역이 없어요.</p>`;
+    box.innerHTML = `<p class="admin-recent-empty">아직 충전 내역이 없어요.</p>`;
     return;
   }
   box.innerHTML = "";

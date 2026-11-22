@@ -169,6 +169,7 @@ class AdminKioskStatus(BaseModel):
 # (회원 본인 이용내역)는 이미 "누구"인지 알고 있는 화면용이라 user_name/user_type이 없어서
 # 재사용할 수 없다 - 여기서는 어느 회원이 결제했는지가 핵심 정보라 별도 스키마로 둔다.
 class KioskPaymentHistoryItem(BaseModel):
+    user_id: Optional[int] = None
     user_name: str
     user_type: str  # "시니어" | "일반"
     amount: int
