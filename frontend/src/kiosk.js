@@ -11,6 +11,7 @@ const KIOSK_ICON_SVGS = {
   alert: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
   lock: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
   unlock: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.75-1.5"/></svg>',
+  power: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>',
   settings: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
   receipt: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>',
   undo: '<svg class="icon-line" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
@@ -1166,6 +1167,8 @@ function simulateKioskPayment(outcome) {
 }
 
 async function triggerKioskPayment(cardUid, forceConfirm = false) {
+  // 화면 끄기 상태에서 카드/QR이 들어오면 먼저 화면을 켠다 - 결과를 못 보는 채로 결제되지 않게.
+  wakeKioskScreen();
   // 설정 진입 인증 창(QR·NFC 방식)이 떠 있으면 결제가 아니라 관리자 인증으로 보낸다(#admin-account).
   if (isKioskCardAuthPending()) {
     verifyKioskAdminCard(cardUid);
@@ -1573,6 +1576,51 @@ function toggleKioskScreenPinning() {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshKioskPinButtonUi();
 });
+
+// 앱 시작 때 자동으로 화면 고정에 들어가면(MainActivity.onWindowFocusChanged → startLockTask) 사용자가
+// 시스템 "앱 고정됨" 안내를 확인한 뒤에야 실제로 고정되는데, 그 시점을 웹에 알려주는 경로가 없어
+// 고정된 뒤에도 열린 자물쇠로 남았다(2026-11-24). 상태 조회는 동기 브릿지 호출 하나라 가볍기 때문에
+// 화면이 보이는 동안 2초마다 다시 그린다(새 APK는 포커스 변화 때 네이티브가 직접 호출도 해 준다).
+setInterval(() => {
+  if (!document.hidden) refreshKioskPinButtonUi();
+}, 2000);
+
+// ---------------- 화면 끄기 버튼 (설정 버튼 오른쪽) ----------------
+// 기기 관리자 권한 없이는 앱이 화면을 실제로 끌 수 없어서, 화면을 검게 덮고 화면 밝기를 최저로 내린다
+// (AndroidInterface.setScreenDimmed - 새 APK부터, 구버전/브라우저는 검은 화면만). 화면을 터치하거나
+// 카드/QR이 인식되면 바로 켠다 - 꺼진 화면에서 결제가 조용히 처리되지 않게 결제 진입(triggerKioskPayment)
+// 맨 위에서 먼저 깨운다.
+let kioskScreenOff = false;
+
+function setKioskNativeScreenDimmed(dim) {
+  if (window.AndroidInterface && typeof window.AndroidInterface.setScreenDimmed === "function") {
+    try { window.AndroidInterface.setScreenDimmed(dim); } catch (e) { /* 밝기 조절 실패 - 검은 화면만 유지 */ }
+  }
+}
+
+function turnOffKioskScreen() {
+  const overlay = document.getElementById("kiosk-screen-off-overlay");
+  if (!overlay || kioskScreenOff) return;
+  kioskScreenOff = true;
+  overlay.style.display = "flex";
+  setKioskNativeScreenDimmed(true);
+  appendDebugLog("[화면] 화면 끄기 - 터치하거나 카드/QR을 인식하면 켜집니다.", "INFO");
+}
+
+function wakeKioskScreen() {
+  if (!kioskScreenOff) return;
+  kioskScreenOff = false;
+  const overlay = document.getElementById("kiosk-screen-off-overlay");
+  if (overlay) overlay.style.display = "none";
+  setKioskNativeScreenDimmed(false);
+  appendDebugLog("[화면] 화면 켜짐", "INFO");
+}
+
+// 덮개를 누른 터치가 아래 버튼까지 전달되지 않게 기본 동작을 막고 화면만 켠다.
+function onKioskScreenOffOverlayTouch(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  wakeKioskScreen();
+}
 
 // 설정 진입 PIN 화면 숫자 키패드(#redesign) - 위 등록 화면 키패드(initKioskRegisterPinKeypad)와
 // 동일한 패턴.

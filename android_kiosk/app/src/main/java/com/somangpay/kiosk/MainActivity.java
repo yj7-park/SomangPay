@@ -438,6 +438,12 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             );
             enterKioskLockTaskIfNeeded();
+            // "앱 고정됨" 안내를 확인하고 포커스가 돌아온 시점에 고정이 실제로 적용되므로, 잠시 뒤 자물쇠
+            // 아이콘을 다시 그리게 한다(startLockTask 직후엔 아직 상태가 안 바뀌어 있을 수 있음).
+            if (webView != null && mainHandler != null) {
+                mainHandler.postDelayed(() -> webView.evaluateJavascript(
+                        "window.refreshKioskPinButtonUi && window.refreshKioskPinButtonUi();", null), 500);
+            }
         }
         // 화면 고정 안내 다음에 USB 권한 창을 띄우도록, 포커스 변화를 카드 리더 관리자에 알린다
         // (포커스가 없을 때 미뤄둔 권한 요청을 여기서 이어감 - CardReaderManager.requestUsbPermission).
@@ -463,6 +469,14 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     // 카메라 종료 후 JS가 리더 재활성화를 요청할 때 KioskWebAppInterface에서 호출
     void reevaluateCardReaders() {
         cardReaderManager.evaluateAndActivate();
+    }
+
+    // 키오스크 "화면 끄기" 버튼(kiosk.js turnOffKioskScreen)이 호출 - 기기 관리자 권한 없이는 화면을 실제로
+    // 끌 수 없어서 이 창의 밝기만 최저로 내린다(웹이 검은 덮개를 함께 띄움). false면 시스템 밝기로 되돌린다.
+    void setScreenDimmed(boolean dim) {
+        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = dim ? 0.0f : android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        getWindow().setAttributes(lp);
     }
 
     // NFC 칩을 눌렀을 때 KioskWebAppInterface.retryCardReader()에서 호출
@@ -927,6 +941,12 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public void retryCardReader() {
         activity.runOnUiThread(() -> activity.retryCardReaderFromUser());
+    }
+
+    // 키오스크 "화면 끄기" 버튼 - 창 밝기를 최저로(true) / 시스템 밝기로(false). MainActivity.setScreenDimmed 참고.
+    @android.webkit.JavascriptInterface
+    public void setScreenDimmed(boolean dim) {
+        activity.runOnUiThread(() -> activity.setScreenDimmed(dim));
     }
 
     @android.webkit.JavascriptInterface

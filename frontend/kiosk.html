@@ -87,6 +87,8 @@
              해제), 꺼져 있으면 🔓(눌러서 고정)로 상태를 그대로 아이콘에 반영한다. -->
         <button id="kiosk-pin-toggle-btn" onclick="toggleKioskScreenPinning()" style="display: none; align-items: center; justify-content: center; background: none; border: none; color: var(--text-main); padding: 0.4rem 0.5rem; font-size: 1.3rem; cursor: pointer; min-height: 38px;" title="화면 고정"></button>
         <button onclick="openKioskAdminPinModal()" style="display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-main); padding: 0.4rem 0.5rem; font-size: 1.3rem; cursor: pointer; min-height: 38px;" title="단말기 관리자 설정" data-icon="settings"></button>
+        <!-- 화면 끄기(kiosk.js turnOffKioskScreen) - 검은 덮개 + 밝기 최저. 터치나 카드/QR 인식으로 켜진다. -->
+        <button id="kiosk-screen-off-btn" onclick="turnOffKioskScreen()" style="display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-main); padding: 0.4rem 0.5rem; font-size: 1.3rem; cursor: pointer; min-height: 38px;" title="화면 끄기" data-icon="power"></button>
       </div>
     </header>
 
@@ -450,6 +452,8 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <script src="src/kiosk.js?v=20261124_2330"></script>
+  <!-- 화면 끄기 덮개 - 모든 모달/카메라 뷰 위에 덮이고, 누르면 화면만 켜진다(아래로 터치 전달 안 함). -->
+  <div id="kiosk-screen-off-overlay" onclick="onKioskScreenOffOverlayTouch(event)" style="display: none; position: fixed; inset: 0; z-index: 2147483647; background: #000; align-items: flex-end; justify-content: center; padding-bottom: 2.5rem; color: rgba(255,255,255,0.18); font-size: 0.95rem; touch-action: none; user-select: none;">화면을 터치하면 켜집니다</div>
+  <script src="src/kiosk.js?v=20261124_2350"></script>
 </body>
 </html>
