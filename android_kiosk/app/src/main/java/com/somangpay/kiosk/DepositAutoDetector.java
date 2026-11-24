@@ -51,7 +51,9 @@ final class DepositAutoDetector {
     private static final String PREF_SEEN_KEYS = "seen_detection_keys";
     private static final String PREF_LOG_QUEUE = "native_log_queue";
 
-    private static final String SMS_SENDER_DEFAULT = "1588-2100";
+    // 하이픈 없이 - 실제 발신번호가 "15882100"으로 들어오고 processSms는 contains 비교라
+    // "1588-2100"이면 진짜 농협 문자가 걸러진다(admin.js SMS_DETECT_SENDER_DEFAULT와 동일).
+    private static final String SMS_SENDER_DEFAULT = "15882100";
     private static final String PUSH_PACKAGE_DEFAULT = "com.samsung.android.messaging";
     private static final String PUSH_TITLE_DEFAULT = "NH농협";
     // 실제 수신한 NH농협 문자 샘플 기준("농협 입금20,000원\n08/16 12:07 301-****-7807-01
