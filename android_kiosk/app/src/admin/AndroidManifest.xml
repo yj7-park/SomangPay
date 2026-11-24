@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 관리자 플레이버 전용 매니페스트 조각 - main의 MainActivity 선언에 병합된다.
+     키오스크와 같은 이유로 NFC-X 리더 USB 권한을 "항상 사용"으로 저장할 수 있게 한다
+     (src/kiosk/AndroidManifest.xml 참고). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="com.somangpay.kiosk.MainActivity">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
+        </activity>
+    </application>
+</manifest>

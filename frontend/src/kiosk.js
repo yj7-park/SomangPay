@@ -51,6 +51,19 @@ let barcodeTimeout = null;
 
 let videoStream = null;
 let isCameraScanning = false;
+// 앱을 백그라운드로 보냈다 오면 안드로이드가 WebView의 카메라를 빼앗아(cr_VideoCapture
+// "cameraDevice encountered an error" → CLOSED) 트랙이 끝나거나 "live"인 채 프레임만 끊겨, 미리보기가
+// 멈춘 채 QR이 안 읽혔다(2026-11-24 갤럭시 탭 A11+). 숨겨질 때 카메라를 완전히 끄고 다시 보일 때 새로
+// 여는데, 그 사이 상태를 아래 값들로 관리한다.
+let qrCameraStarting = null; // 진행 중인 startCameraScanner의 Promise - getUserMedia 중복 호출(이중 시작) 방지
+let qrCameraStartingGen = -1; // qrCameraStarting이 시작될 때의 qrCameraGen
+let qrCameraGen = 0; // stopCameraScanner마다 1씩 증가 - 끄는 사이 늦게 끝난 getUserMedia 결과를 버리는 데 씀
+let qrSuspendedForHidden = false; // 화면이 숨겨져서 꺼둔 것(돌아오면 다시 켬) - 사용자가/설정이 끈 것과 구분
+let qrReaderReenableTimer = null; // stopCameraScanner의 500ms 뒤 리더 재활성화 예약(곧바로 다시 켜면 취소)
+let qrLastFrameAt = 0; // 마지막으로 새 카메라 프레임이 들어온 시각(워치독이 멈춤 판단에 씀)
+let qrLastVideoTime = -1;
+let qrWatchdogTimer = null;
+let qrWatchdogRestarts = 0; // 프레임 없이 연달아 재시작한 횟수 - 멈춤 판단 시간을 늘려 무한 재시작 폭주를 막음
 let qrScanCooldown = false;
 let kioskFacingMode = "user"; // 기본 전면 카메라
 let currentDefaultProductId = null; // 기본 자동 결제 상품 ID
@@ -284,7 +297,39 @@ async function startCameraScanner(silent = false, facingMode) {
     startTestModeCameraView();
     return;
   }
+  // 이미 켜는 중이면 같은 시도를 기다린다 - 화면 복귀/워치독/배지 탭이 겹쳐 getUserMedia가 두 번 불리면
+  // 먼저 연 스트림이 고아로 남아 카메라를 계속 붙잡는다.
+  if (isQrStartPending()) return qrCameraStarting;
+  // 이미 꺼진(무효가 된) 이전 시도가 아직 getUserMedia를 기다리는 중이면 그게 끝나 카메라를 놓은 뒤에 연다
+  // - 같은 카메라를 두 번 열면 저가 태블릿에서 두 번째가 실패하곤 한다.
+  if (qrCameraStarting) {
+    await qrCameraStarting.catch(() => {});
+    if (isQrStartPending()) return qrCameraStarting;
+  }
+  if (isCameraScanning && videoStream) return;
+  // 백그라운드에서는 카메라를 열어도 곧 빼앗기므로 열지 않고, 다시 보일 때 켜도록 표시만 해 둔다.
+  if (document.hidden) {
+    qrSuspendedForHidden = true;
+    appendDebugLog("[QR 스캐너] 화면이 숨겨진 상태라 카메라는 화면 복귀 때 켭니다.", "INFO");
+    return;
+  }
+  const p = startCameraScannerInner(silent, facingMode);
+  qrCameraStarting = p;
+  qrCameraStartingGen = qrCameraGen;
+  try {
+    return await p;
+  } finally {
+    if (qrCameraStarting === p) qrCameraStarting = null;
+  }
+}
 
+// 지금 유효한(그 사이 stopCameraScanner로 무효가 되지 않은) 카메라 켜기 시도가 진행 중인지.
+function isQrStartPending() {
+  return !!qrCameraStarting && qrCameraStartingGen === qrCameraGen;
+}
+
+async function startCameraScannerInner(silent, facingMode) {
+  const gen = qrCameraGen;
   const video = document.getElementById("qr-video");
   const fm = facingMode || kioskFacingMode;
 
@@ -308,16 +353,47 @@ async function startCameraScanner(silent = false, facingMode) {
     // 초점이 맞는 20~30cm 거리에서는 QR 칸이 너무 작게 찍혀 한 번에 안 읽혔다(2026-10-27). 1280x720을
     // "ideal"로 요청한다 - 지원 안 하는 기기는 가능한 값으로 알아서 내려간다. 1080p는 저가 태블릿에서
     // jsQR 한 번에 수백 ms가 걸려 오히려 느려져서 720p로 둔다.
-    videoStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: fm, width: { ideal: 1280 }, height: { ideal: 720 } }
     });
-    video.srcObject = videoStream;
+    // 권한/장치 대기 중에 꺼졌거나(설정 진입, 배지 탭) 화면이 숨겨졌으면 받은 스트림을 바로 놓는다 -
+    // 안 그러면 아무도 안 쓰는 카메라가 켜진 채 남는다.
+    if (gen !== qrCameraGen || document.hidden) {
+      stream.getTracks().forEach(track => track.stop());
+      if (gen === qrCameraGen && document.hidden) qrSuspendedForHidden = true;
+      appendDebugLog("[QR 스캐너] 카메라를 여는 사이 꺼짐/화면 숨김 - 받은 스트림을 해제했습니다.", "INFO");
+      return;
+    }
+    videoStream = stream;
+    video.srcObject = stream;
     video.setAttribute("playsinline", true);
     await video.play();
+    if (gen !== qrCameraGen || videoStream !== stream) {
+      // play() 대기 중에 꺼진 경우 - stopCameraScanner가 이미 트랙을 멈췄으므로 여기선 손대지 않는다.
+      return;
+    }
+
+    // 카메라를 빼앗기면(백그라운드 진입, 다른 앱이 카메라 점유 등) 트랙이 ended로 끝난다 - 화면이 보이는
+    // 중이면 곧바로 새로 연다(숨겨진 상태면 visibilitychange 복귀 때 다시 켬).
+    stream.getVideoTracks().forEach(track => {
+      track.addEventListener("ended", () => {
+        if (videoStream !== stream || !isCameraScanning) return;
+        appendDebugLog("📷 [QR 스캐너] 카메라 트랙이 끊겼습니다(ended).", "WARN");
+        if (document.hidden) {
+          suspendQrScannerForHidden();
+        } else {
+          restartCameraScanner("트랙 종료");
+        }
+      });
+    });
 
     // 내장 리더(Web NFC/기기 자체 NFC)는 카메라와 상시 배제, 외부 리더는 관리자가 동시사용을
     // 허용한 경우에만 예외 — 그 외 경우엔 카메라 사용 중 리더 인식도 함께 멈춘다.
     if (shouldPauseReaderForCamera()) {
+      // 직전 stopCameraScanner가 예약해 둔 리더 재활성화가 지금 켠 카메라와 겹치지 않게 취소한다
+      // (끄자마자 다시 켜면 500ms 뒤 리더가 카메라 사용 중에 되살아났다).
+      clearTimeout(qrReaderReenableTimer);
+      qrReaderReenableTimer = null;
       if (currentReaderMode === "WEB_NFC") {
         stopKioskNfcScan();
         appendDebugLog("📷 [카메라] 내장 NFC 스캔을 일시 중단했습니다.", "INFO");
@@ -332,26 +408,49 @@ async function startCameraScanner(silent = false, facingMode) {
     }
 
     isCameraScanning = true;
+    qrSuspendedForHidden = false;
     kioskFacingMode = fm;
     updateQrScanStatusUI();
     appendDebugLog(`📷 [QR 스캐너] 백그라운드 QR 스캐너 구동 완료. (${video.videoWidth}x${video.videoHeight})`);
 
+    startQrFrameWatch(video, stream);
     scanQRCodeLoop(++qrLoopToken);
     updateQrAim();
   } catch (err) {
+    if (gen !== qrCameraGen) return; // 켜는 도중 의도적으로 끈 경우 - 실패 안내를 띄우지 않음
     console.warn("Camera init error:", err);
     appendDebugLog(`📷 [웹캠 에러] 카메라 구동 실패: ${err.name} - ${err.message}`, "ERROR");
     if (!silent) alert(`💡 [카메라 켜기 실패 안내]\n에러 타입: ${err.name}\n에러 메시지: ${err.message}\n\n* 만약 'NotAllowedError'인 경우 기기 설정이나 권한 허용을 다시 체크해 주세요.`);
+    // play() 단계에서 실패했으면 이미 받은 스트림이 남아 있다 - 카메라를 붙잡지 않게 놓는다.
+    if (videoStream && !isCameraScanning) {
+      videoStream.getTracks().forEach(track => track.stop());
+      videoStream = null;
+    }
     updateQrScanStatusUI();
   }
 }
 
-function stopCameraScanner() {
+// opts.keepReaderPaused: 곧바로 카메라를 다시 켤 예정(화면 숨김/워치독 재시작)이라 리더를 되살리지 않는다 -
+// 되살렸다가 바로 다시 멈추면 USB 리더 세션이 불필요하게 열고 닫힌다. 재시작이 실패하면
+// reenableReaderAfterCamera()를 따로 부른다.
+// opts.reason: 디버그 로그용.
+function stopCameraScanner(opts = {}) {
   const cameraBox = document.getElementById("kiosk-camera-viewport-container");
 
+  qrCameraGen++; // 진행 중인 getUserMedia가 있으면 그 결과는 버리게 한다
+  // 사용자/설정 흐름이 끈 경우엔 "숨김 때문에 꺼둠" 표시도 지운다 - 안 그러면 화면 복귀 때 의도와 달리
+  // 다시 켜진다. 숨김 경로(suspendQrScannerForHidden)는 이 호출 뒤에 다시 표시한다.
+  qrSuspendedForHidden = false;
+  stopQrFrameWatch();
   if (videoStream) {
     videoStream.getTracks().forEach(track => track.stop());
     videoStream = null;
+  }
+  // 멈춘 스트림을 물고 있으면 일부 WebView가 마지막 프레임을 계속 붙잡는다 - 연결을 끊어 둔다.
+  const video = document.getElementById("qr-video");
+  if (video && video.srcObject) {
+    try { video.pause(); } catch (e) { /* 무시 */ }
+    video.srcObject = null;
   }
   isCameraScanning = false;
   updateQrScanStatusUI();
@@ -368,21 +467,118 @@ function stopCameraScanner() {
   const testOverlay = document.getElementById("kiosk-camera-test-overlay");
   if (testOverlay) testOverlay.style.display = "none";
 
-  appendDebugLog("📷 [QR 스캐너] 카메라 구동 중지.");
+  appendDebugLog(`📷 [QR 스캐너] 카메라 구동 중지.${opts.reason ? ` (${opts.reason})` : ""}`);
 
+  clearTimeout(qrReaderReenableTimer);
+  qrReaderReenableTimer = null;
+  if (opts.keepReaderPaused) return;
   // 카메라 드라이버 완전 해제 후 500ms 지연 후 리더 재활성화
-  setTimeout(() => {
-    if (window.AndroidInterface && typeof window.AndroidInterface.reenableNfcReader === "function") {
-      // Android 래퍼: CCID/HID/내장 NFC 우선순위 재평가(일시정지했던 내장 NFC도 여기서 다시 켜짐)
-      window.AndroidInterface.reenableNfcReader();
-      appendDebugLog("⚡ [Android Native App] 네이티브 NFC 리더 모드 재활성화(Re-bind) 호출 완료!", "SUCCESS");
-    } else if (currentReaderMode === "WEB_NFC" && !kioskNdefReader) {
-      // 일반 브라우저: 카메라 사용을 위해 중단했던 Web NFC 스캔 재개
-      startKioskNfcScan();
-      appendDebugLog("⚡ [Web NFC] 카메라 종료 - NFC 스캔 재가동.", "SUCCESS");
-    }
-  }, 500);
+  qrReaderReenableTimer = setTimeout(reenableReaderAfterCamera, 500);
 }
+
+function reenableReaderAfterCamera() {
+  qrReaderReenableTimer = null;
+  if (isCameraScanning) return; // 그 사이 카메라가 다시 켜졌으면 리더는 계속 멈춰 둔다
+  if (window.AndroidInterface && typeof window.AndroidInterface.reenableNfcReader === "function") {
+    // Android 래퍼: CCID/HID/내장 NFC 우선순위 재평가(일시정지했던 내장 NFC도 여기서 다시 켜짐)
+    window.AndroidInterface.reenableNfcReader();
+    appendDebugLog("⚡ [Android Native App] 네이티브 NFC 리더 모드 재활성화(Re-bind) 호출 완료!", "SUCCESS");
+  } else if (currentReaderMode === "WEB_NFC" && !kioskNdefReader) {
+    // 일반 브라우저: 카메라 사용을 위해 중단했던 Web NFC 스캔 재개
+    startKioskNfcScan();
+    appendDebugLog("⚡ [Web NFC] 카메라 종료 - NFC 스캔 재가동.", "SUCCESS");
+  }
+}
+
+// 화면이 숨겨질 때(앱 백그라운드/화면 꺼짐) 카메라를 완전히 끈다 - 켜 둔 채로 두면 안드로이드가
+// 카메라를 강제로 회수하고, 돌아와도 멈춘 프레임만 남는다. 사용자의 "QR 켜짐" 기억값
+// (somang_kiosk_qr_enabled)은 건드리지 않고, 다시 보일 때 resumeQrScannerAfterHidden()이 새로 연다.
+// 리더는 되살리지 않는다 - 복귀하면 카메라가 곧 다시 켜져 또 멈출 것이므로.
+function suspendQrScannerForHidden() {
+  if (kioskTestMode) return; // 시뮬레이션은 실제 카메라를 안 쓴다
+  const wasOn = isCameraScanning || isQrStartPending();
+  if (!wasOn) return;
+  stopCameraScanner({ keepReaderPaused: true, reason: "화면 숨김" });
+  qrSuspendedForHidden = true;
+}
+
+function resumeQrScannerAfterHidden() {
+  if (document.hidden || kioskTestMode || !qrSuspendedForHidden) return;
+  qrSuspendedForHidden = false;
+  appendDebugLog("[QR 스캐너] 화면 복귀 - 카메라를 새로 엽니다.", "INFO");
+  startCameraScanner(true).then(() => {
+    // 다시 못 켰으면(권한 회수 등) 멈춰 두었던 리더라도 살린다. 숨김 때문에 미뤄진 경우는 제외.
+    if (!isCameraScanning && !qrSuspendedForHidden && !isQrStartPending()) reenableReaderAfterCamera();
+  });
+}
+
+// 워치독/트랙 종료 시 같은 방향·같은 상태로 카메라를 새로 연다. 리더는 그 사이 되살리지 않는다.
+async function restartCameraScanner(reason) {
+  if (kioskTestMode || document.hidden || isQrStartPending()) return;
+  appendDebugLog(`📷 [QR 스캐너] 카메라 재시작: ${reason}`, "WARN");
+  stopCameraScanner({ keepReaderPaused: true, reason });
+  await startCameraScanner(true, kioskFacingMode);
+  if (!isCameraScanning && !qrSuspendedForHidden && !isQrStartPending()) reenableReaderAfterCamera();
+}
+
+// 프레임 멈춤 감시 - 트랙이 "live"인 채로 프레임만 끊기는 경우(ended 이벤트 없음)를 잡는다.
+// requestVideoFrameCallback이 있으면 실제로 새 프레임이 그려질 때마다, 없으면 video.currentTime이
+// 늘어나는지로 판단한다. 화면이 숨겨진 동안엔 판단하지 않는다(그땐 프레임이 안 오는 게 정상).
+function startQrFrameWatch(video, stream) {
+  stopQrFrameWatch();
+  qrLastFrameAt = Date.now();
+  qrLastVideoTime = video.currentTime;
+  if (typeof video.requestVideoFrameCallback === "function") {
+    const onFrame = () => {
+      if (videoStream !== stream) return; // 이 스트림이 끝났으면 콜백 사슬도 끊는다
+      qrLastFrameAt = Date.now();
+      qrWatchdogRestarts = 0;
+      video.requestVideoFrameCallback(onFrame);
+    };
+    video.requestVideoFrameCallback(onFrame);
+  }
+  qrWatchdogTimer = setInterval(() => checkQrFrameWatch(video, stream), 1000);
+}
+
+function stopQrFrameWatch() {
+  if (qrWatchdogTimer) clearInterval(qrWatchdogTimer);
+  qrWatchdogTimer = null;
+}
+
+function checkQrFrameWatch(video, stream) {
+  if (videoStream !== stream || !isCameraScanning || isQrStartPending()) { stopQrFrameWatch(); return; }
+  const now = Date.now();
+  if (document.hidden) { qrLastFrameAt = now; return; } // 복귀 직후 바로 멈춤으로 오판하지 않게 기준을 미룸
+  const track = stream.getVideoTracks()[0];
+  if (!track || track.readyState === "ended") {
+    restartCameraScanner("트랙 종료 감지(워치독)");
+    return;
+  }
+  if (typeof video.requestVideoFrameCallback !== "function") {
+    const t = video.currentTime;
+    if (t !== qrLastVideoTime) {
+      qrLastVideoTime = t;
+      qrLastFrameAt = now;
+      qrWatchdogRestarts = 0;
+    }
+  }
+  // 재시작해도 계속 멈추면 판단 시간을 3s → 6s → 12s … 최대 60s로 늘린다(카메라를 계속 열고 닫는 폭주 방지).
+  const stallMs = Math.min(3000 * Math.pow(2, qrWatchdogRestarts), 60000);
+  if (now - qrLastFrameAt >= stallMs) {
+    qrWatchdogRestarts++;
+    restartCameraScanner(`${Math.round((now - qrLastFrameAt) / 1000)}초간 새 프레임 없음`);
+  }
+}
+
+// 화면 숨김/복귀에 맞춰 카메라를 끄고 다시 연다. 안드로이드 래퍼는 onPause/onResume에서
+// webView.onPause()/onResume()을 부르므로 여기 visibilitychange가 그대로 발생한다(별도 네이티브 훅 불필요).
+// 앱이 완전히 밀리는 경우 visibilitychange가 안 오는 기기가 있어 pagehide/pageshow도 함께 받는다.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) suspendQrScannerForHidden();
+  else resumeQrScannerAfterHidden();
+});
+window.addEventListener("pagehide", suspendQrScannerForHidden);
+window.addEventListener("pageshow", resumeQrScannerAfterHidden);
 
 // QR 인식 엔진(2026-11-16, "QR이 잘 안 찍힌다"): 안드로이드 크롬/웹뷰에 내장된 BarcodeDetector(구글 인식 엔진)를
 // 먼저 쓰고, 없거나 QR을 지원 안 하면 jsQR로 내려간다. 예전엔 jsQR로 1280x720 전체를 초당 4번만 훑었다.
@@ -2022,7 +2218,21 @@ function initWebNFC() {
 // (카메라 종료 후 "원래 켜져 있었으니 재가동" 판단 기준이 mode이므로), 여기서도 mode를
 // 안 건드리면 사용자가 수동으로 껐어도 다음 카메라 온/오프 사이클에서 되살아나 버린다.
 function toggleKioskNfcReader() {
-  if (window.AndroidInterface) return; // 네이티브 앱은 하드웨어 리더 자동 관리 - 이 배지는 상태 표시만
+  if (window.AndroidInterface) {
+    // 네이티브 앱은 하드웨어 리더를 자동 관리하지만, USB 권한 창이 화면 고정 안내와 겹쳐 닫히거나 거절되면
+    // 리더가 꺼진 채로 남는다 - 칩을 누르면 권한 창을 다시 띄우고 리더 세션을 새로 연다(2026-11-24).
+    // 끄는 동작은 없다(키오스크에서 리더를 끌 일이 없음). 구버전 APK엔 이 메서드가 없어 예전처럼 표시만 한다.
+    if (typeof window.AndroidInterface.retryCardReader === "function") {
+      appendDebugLog("[카드 리더] 탭으로 리더 재연결 요청", "INFO");
+      updateNfcReaderStatusUI("NONE");
+      try {
+        window.AndroidInterface.retryCardReader();
+      } catch (e) {
+        appendDebugLog(`⚠️ [카드 리더] 재연결 요청 실패: ${e}`, "WARN");
+      }
+    }
+    return;
+  }
   if (!('NDEFReader' in window)) return; // 브라우저가 Web NFC 자체를 미지원
 
   if (kioskNdefReader) {
@@ -2047,7 +2257,9 @@ function saveKioskQrEnabled(on) {
 }
 
 function toggleKioskQrScanner() {
-  if (isCameraScanning) {
+  // 카메라를 여는 중(권한/장치 대기)에 다시 탭하면 "끄기"로 본다 - 배지가 아직 비활성으로 보여도 곧 켜질
+  // 참이었으므로, 다시 켜기를 겹쳐 부르지 않고 진행 중인 시도를 무효로 만든다.
+  if (isCameraScanning || isQrStartPending()) {
     stopCameraScanner();
     saveKioskQrEnabled(false);
     appendDebugLog("[QR 스캐너] 탭으로 카메라를 껐습니다.", "INFO");

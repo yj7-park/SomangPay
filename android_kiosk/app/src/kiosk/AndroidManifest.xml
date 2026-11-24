@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 키오스크 플레이버 전용 매니페스트 조각 - main의 MainActivity 선언에 병합된다.
+     NFC-X 리더용 USB_DEVICE_ATTACHED 인텐트 필터: 이게 있어야 USB 권한 창에 "항상 사용"
+     체크박스가 생겨 권한이 영구 저장된다(없으면 앱을 켤 때마다 권한 창이 뜸).
+     회원 앱(user)엔 리더가 없으므로 main이 아니라 kiosk/admin 플레이버에만 넣는다. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="com.somangpay.kiosk.MainActivity">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
+        </activity>
+    </application>
+</manifest>

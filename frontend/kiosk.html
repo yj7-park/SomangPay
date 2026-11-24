@@ -77,7 +77,7 @@
              kiosk-admin-modal 참고)로 옮겼다 - 예전엔 여기 헤더에 떠 있었는데, 고객이 보는
              화면에 운영자용 정보가 떠 있을 이유가 없고 admin/user도 헤더가 아니라 설정 안에
              둔다(#redesign, 사용자 요청: "새로고침 버튼을 설정 안에"). -->
-        <span id="nfc-activate-btn" onclick="toggleKioskNfcReader()" title="탭하여 NFC 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
+        <span id="nfc-activate-btn" onclick="toggleKioskNfcReader()" title="탭하여 NFC 리더 다시 연결" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
           <span id="nfc-status-btn-text">NFC 스캔 비활성</span>
         </span>
         <span id="qr-status-indicator" onclick="toggleKioskQrScanner()" title="탭하여 QR 켜기/끄기" style="cursor: pointer; background: var(--surface-1); border: 1.5px solid var(--text-muted); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: bold; font-size: clamp(0.75rem, 1.1vw, 0.92rem); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
@@ -450,6 +450,6 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <script src="src/kiosk.js?v=20261121_2340"></script>
+  <script src="src/kiosk.js?v=20261124_2330"></script>
 </body>
 </html>

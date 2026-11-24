@@ -13,6 +13,7 @@ import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.util.Log;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -40,6 +41,12 @@ public class CardReaderManager {
     private static final long VENDOR_HID_WATCHDOG_INTERVAL_MS = 2_000L;
     private static final long VENDOR_HID_STUCK_THRESHOLD_MS = 4_000L;
     private static final long STOP_JOIN_TIMEOUT_MS = 700L;
+    // 권한 창을 띄운 뒤 이 시간 안에 다시 평가(onResume 등)가 오면 창이 아직 떠 있거나 결과가
+    // 오는 중이라고 보고 같은 요청을 또 보내지 않는다 - 겹쳐 뜨는 권한 창 방지.
+    private static final long PERMISSION_DIALOG_GRACE_MS = 15_000L;
+    // 화면 포커스를 되찾은 직후엔 화면 고정(startLockTask) 안내 창이 곧바로 뜰 수 있어서, 잠깐
+    // 기다렸다가 그때도 포커스가 있을 때만 USB 권한 창을 띄운다.
+    private static final long DEFERRED_PERMISSION_DELAY_MS = 1_000L;
 
     private enum ActiveMode { NONE, USB_CCID, USB_VENDOR_HID_NFC, USB_HID_KEYBOARD, BUILTIN_NFC }
 
@@ -52,6 +59,26 @@ public class CardReaderManager {
     private UsbPermissionReceiver permissionReceiver;
     private UsbHotplugReceiver hotplugReceiver;
     private boolean receiversRegistered = false;
+    private boolean permissionReceiverRegistered = false;
+    private boolean resumed = false;
+
+    // USB 권한 요청 상태(2026-11-24 "NFC 활성화가 안 될 때가 있다" 대응).
+    // permissionRequestedAtMs: 실제로 권한 창을 띄운 시각(0이면 아직 안 띄움/포커스 대기 중).
+    // permissionRequestDeferred: 포커스가 없어(화면 고정 안내 등) 창 띄우기를 미뤄둔 상태.
+    // permissionDeniedDevice: 사용자가 거절했거나 창이 닫혀버린 장치 - 자동으로 다시 묻지 않고
+    // (거절할 때마다 창이 또 뜨는 무한 반복 방지) NFC 칩을 눌러야(retryFromUser) 다시 묻는다.
+    private long permissionRequestedAtMs = 0L;
+    private boolean permissionRequestDeferred = false;
+    private UsbDevice permissionDeniedDevice;
+
+    private final Runnable deferredPermissionTask = new Runnable() {
+        @Override
+        public void run() {
+            if (!permissionRequestDeferred || pendingPermissionDevice == null) return;
+            if (!resumed || !activity.hasWindowFocus()) return; // 다음 포커스 획득 때 다시 시도
+            evaluateAndActivate();
+        }
+    };
 
     private ActiveMode currentMode = ActiveMode.NONE;
     private long lastErrorToastTime = 0L;
@@ -98,6 +125,11 @@ public class CardReaderManager {
         this.mainHandler = mainHandler;
         this.usbManager = usbManager;
         this.nfcController = nfcController;
+        // 권한 결과 수신기는 액티비티 수명 내내 등록해 둔다. 예전엔 onPause에서 해제했는데, 권한 창이
+        // 뜨는 순간 액티비티가 onPause되므로 사용자가 "확인"을 눌러도 결과 브로드캐스트를 받을 수신기가
+        // 없어 결과가 버려졌다 - 그 사이 화면 고정 안내까지 겹치면 권한 대기 상태로 영영 멈춰
+        // "NFC 활성화가 안 됨"이 됐다.
+        registerPermissionReceiverIfNeeded();
     }
 
     // JS가 페이지 로드 시점에 현재 리더 상태를 바로 조회할 수 있도록 제공.
@@ -112,44 +144,93 @@ public class CardReaderManager {
     }
 
     public void onResume() {
+        resumed = true;
         registerReceiversIfNeeded();
         evaluateAndActivate();
     }
 
     public void onPause() {
+        resumed = false;
+        mainHandler.removeCallbacks(deferredPermissionTask);
         stopCcidSession();
         stopVendorHidSession();
         nfcController.disable();
         unregisterReceivers();
         currentMode = ActiveMode.NONE;
+        // pendingPermissionDevice/permissionRequestedAtMs는 일부러 그대로 둔다 - 권한 창 때문에
+        // onPause된 경우가 대부분이라, 돌아왔을 때 같은 창을 또 띄우지 않아야 한다.
+    }
+
+    // MainActivity.onDestroy에서 호출 - 액티비티 수명 동안 유지하던 권한 수신기까지 정리한다.
+    public void release() {
+        onPause();
+        if (permissionReceiverRegistered) {
+            try {
+                activity.unregisterReceiver(permissionReceiver);
+            } catch (IllegalArgumentException ignored) {}
+            permissionReceiverRegistered = false;
+        }
+    }
+
+    // MainActivity.onWindowFocusChanged에서 호출 - 포커스가 없어서 미뤄둔 권한 요청을 이어서 한다.
+    public void onWindowFocusChanged(boolean hasFocus) {
+        mainHandler.removeCallbacks(deferredPermissionTask);
+        if (hasFocus && permissionRequestDeferred && pendingPermissionDevice != null) {
+            mainHandler.postDelayed(deferredPermissionTask, DEFERRED_PERMISSION_DELAY_MS);
+        }
+    }
+
+    // 키오스크 NFC 칩을 눌렀을 때(JS → KioskWebAppInterface.retryCardReader) 호출. 거절/창 닫힘으로
+    // 멈춘 권한 요청을 다시 띄우고, 이미 연결돼 있어도 세션을 새로 열어 "배지는 켜졌는데 안 읽힘"
+    // 상태도 칩 한 번으로 복구되게 한다. 사용자가 직접 누른 것이라 포커스가 있어 창이 바로 뜬다.
+    public void retryFromUser() {
+        Log.i(TAG, "Card reader retry requested by user");
+        mainHandler.removeCallbacks(deferredPermissionTask);
+        permissionDeniedDevice = null;
+        pendingPermissionDevice = null;
+        permissionRequestedAtMs = 0L;
+        permissionRequestDeferred = false;
+        stopCcidSession();
+        stopVendorHidSession();
+        if (currentMode == ActiveMode.BUILTIN_NFC) nfcController.disable();
+        lastLoggedHidDevice = null;
+        currentMode = ActiveMode.NONE;
+        evaluateAndActivate();
+    }
+
+    private void registerPermissionReceiverIfNeeded() {
+        if (permissionReceiverRegistered) return;
+        permissionReceiver = new UsbPermissionReceiver(this);
+        IntentFilter permissionFilter = new IntentFilter(UsbPermissionReceiver.ACTION_USB_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            activity.registerReceiver(permissionReceiver, permissionFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            activity.registerReceiver(permissionReceiver, permissionFilter);
+        }
+        permissionReceiverRegistered = true;
     }
 
     private void registerReceiversIfNeeded() {
+        registerPermissionReceiverIfNeeded();
         if (receiversRegistered) return;
 
-        permissionReceiver = new UsbPermissionReceiver(this);
         hotplugReceiver = new UsbHotplugReceiver(this);
 
-        IntentFilter permissionFilter = new IntentFilter(UsbPermissionReceiver.ACTION_USB_PERMISSION);
         IntentFilter hotplugFilter = new IntentFilter();
         hotplugFilter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         hotplugFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            activity.registerReceiver(permissionReceiver, permissionFilter, Context.RECEIVER_NOT_EXPORTED);
             activity.registerReceiver(hotplugReceiver, hotplugFilter, Context.RECEIVER_EXPORTED);
         } else {
-            activity.registerReceiver(permissionReceiver, permissionFilter);
             activity.registerReceiver(hotplugReceiver, hotplugFilter);
         }
         receiversRegistered = true;
     }
 
+    // 핫플러그 수신기만 해제한다(권한 수신기는 위 생성자 주석 이유로 release()에서만 해제).
     private void unregisterReceivers() {
         if (!receiversRegistered) return;
-        try {
-            activity.unregisterReceiver(permissionReceiver);
-        } catch (IllegalArgumentException ignored) {}
         try {
             activity.unregisterReceiver(hotplugReceiver);
         } catch (IllegalArgumentException ignored) {}
@@ -158,6 +239,9 @@ public class CardReaderManager {
 
     // USB 장치 목록을 훑어 CCID > HID 키보드 > 내장 NFC > 에러 순으로 활성화한다.
     public void evaluateAndActivate() {
+        // 화면이 내려간(onPause) 동안엔 세션을 열지 않는다 - 늦게 온 권한 결과나 JS 호출이 백그라운드에서
+        // 리더를 열면, onPause에서 닫는 짝이 없어 다음 onResume 때 이중 세션이 된다. onResume이 다시 평가한다.
+        if (!resumed) return;
         UsbDevice ccidDevice = null;
         UsbDevice vendorHidDevice = null;
         UsbDevice hidDevice = null;
@@ -206,46 +290,90 @@ public class CardReaderManager {
     }
 
     private void activateCcid(UsbDevice device) {
-        if (currentMode == ActiveMode.USB_CCID) {
-            if (device.equals(activeCcidDevice)) return; // 이미 스트리밍 중
-            if (device.equals(pendingPermissionDevice)) return; // 권한 응답 대기 중
-        }
+        if (currentMode == ActiveMode.USB_CCID && device.equals(activeCcidDevice)) return; // 이미 스트리밍 중
 
         nfcController.disable();
         currentMode = ActiveMode.USB_CCID;
 
         if (usbManager.hasPermission(device)) {
+            clearPermissionState();
             openCcidConnection(device);
         } else {
             requestUsbPermission(device);
         }
     }
 
+    private void clearPermissionState() {
+        mainHandler.removeCallbacks(deferredPermissionTask);
+        pendingPermissionDevice = null;
+        permissionRequestedAtMs = 0L;
+        permissionRequestDeferred = false;
+        permissionDeniedDevice = null;
+    }
+
+    // 권한 창은 (1) 사용자가 거절한 장치면 자동으로 다시 띄우지 않고, (2) 이미 띄운 창이 떠 있을
+    // 시간이면 또 띄우지 않고, (3) 화면 포커스가 없으면(앱 시작 직후, 화면 고정 안내가 떠 있을 때)
+    // 포커스를 되찾을 때까지 미룬다. 예전엔 onResume마다 무조건 다시 요청해서 화면 고정 안내와 겹치면
+    // 창이 엉뚱하게 닫히거나 결과가 사라져 리더가 안 켜진 채로 남았다.
     private void requestUsbPermission(UsbDevice device) {
+        if (device.equals(permissionDeniedDevice)) {
+            pendingPermissionDevice = null;
+            currentMode = ActiveMode.NONE;
+            Log.d(TAG, "USB permission previously denied for " + device.getDeviceName() + "; waiting for user retry");
+            notifyModeChange("NONE");
+            return;
+        }
+
+        long now = SystemClock.elapsedRealtime();
+        if (device.equals(pendingPermissionDevice) && permissionRequestedAtMs > 0L
+                && now - permissionRequestedAtMs < PERMISSION_DIALOG_GRACE_MS) {
+            return; // 이미 띄운 권한 창의 결과를 기다리는 중
+        }
+
         pendingPermissionDevice = device;
+        notifyModeChange("NONE"); // 권한 받기 전엔 실제로 안 읽히므로 배지를 꺼 둔다
+
+        if (!activity.hasWindowFocus()) {
+            permissionRequestDeferred = true;
+            permissionRequestedAtMs = 0L;
+            Log.d(TAG, "Deferring USB permission request until window focus: " + device.getDeviceName());
+            return;
+        }
+
+        permissionRequestDeferred = false;
+        permissionRequestedAtMs = now;
         Intent intent = new Intent(UsbPermissionReceiver.ACTION_USB_PERMISSION);
         intent.setPackage(activity.getPackageName());
         int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0;
         PendingIntent permissionIntent = PendingIntent.getBroadcast(activity, 0, intent, flags);
         usbManager.requestPermission(device, permissionIntent);
-        Log.d(TAG, "Requesting USB permission for CCID device: " + device.getDeviceName());
+        Log.d(TAG, "Requesting USB permission for device: " + device.getDeviceName());
     }
 
-    // UsbPermissionReceiver에서 호출
+    // UsbPermissionReceiver에서 호출. 권한 수신기가 항상 등록돼 있어서 화면이 내려가 있는 동안에도
+    // 결과가 들어온다 - 그때는 상태만 정리하고 실제 연결은 onResume의 재평가에 맡긴다.
     void onUsbPermissionResult(UsbDevice device, boolean granted) {
-        if (device == null || !device.equals(pendingPermissionDevice)) return;
+        if (device == null) return;
+        mainHandler.removeCallbacks(deferredPermissionTask);
         pendingPermissionDevice = null;
+        permissionRequestedAtMs = 0L;
+        permissionRequestDeferred = false;
 
         if (granted) {
-            if (UsbDeviceClassifier.classify(device) == UsbDeviceClassifier.Type.VENDOR_HID_NFC) {
-                openVendorHidConnection(device);
-            } else {
-                openCcidConnection(device);
-            }
-        } else {
-            Log.w(TAG, "USB permission denied for " + device.getDeviceName() + "; re-evaluating readers");
+            permissionDeniedDevice = null;
+            // onResume 재평가가 hasPermission()으로 먼저 열었으면 늦게 온 결과는 무시(이중 세션 방지)
+            if (device.equals(activeVendorHidDevice) || device.equals(activeCcidDevice)) return;
             currentMode = ActiveMode.NONE;
             evaluateAndActivate();
+        } else {
+            Log.w(TAG, "USB permission denied for " + device.getDeviceName() + "; waiting for user retry");
+            permissionDeniedDevice = device;
+            currentMode = ActiveMode.NONE;
+            notifyModeChange("NONE");
+            if (resumed) {
+                Toast.makeText(activity, "카드 리더 권한이 허용되지 않았습니다. NFC 버튼을 눌러 다시 연결해 주세요.",
+                        Toast.LENGTH_LONG).show();
+            }
         }
     }
 
@@ -379,15 +507,13 @@ public class CardReaderManager {
     }
 
     private void activateVendorHid(UsbDevice device) {
-        if (currentMode == ActiveMode.USB_VENDOR_HID_NFC) {
-            if (device.equals(activeVendorHidDevice)) return; // 이미 스트리밍 중
-            if (device.equals(pendingPermissionDevice)) return; // 권한 응답 대기 중
-        }
+        if (currentMode == ActiveMode.USB_VENDOR_HID_NFC && device.equals(activeVendorHidDevice)) return; // 이미 스트리밍 중
 
         nfcController.disable();
         currentMode = ActiveMode.USB_VENDOR_HID_NFC;
 
         if (usbManager.hasPermission(device)) {
+            clearPermissionState();
             openVendorHidConnection(device);
         } else {
             requestUsbPermission(device);
@@ -543,6 +669,14 @@ public class CardReaderManager {
         if (device == null) {
             evaluateAndActivate();
             return;
+        }
+        // 뽑았다 다시 꽂으면 새로 묻는 게 자연스럽다 - 거절/대기 기록을 지운다.
+        if (device.equals(permissionDeniedDevice)) permissionDeniedDevice = null;
+        if (device.equals(pendingPermissionDevice)) {
+            mainHandler.removeCallbacks(deferredPermissionTask);
+            pendingPermissionDevice = null;
+            permissionRequestedAtMs = 0L;
+            permissionRequestDeferred = false;
         }
         if (device.equals(activeCcidDevice)) {
             stopCcidSession();

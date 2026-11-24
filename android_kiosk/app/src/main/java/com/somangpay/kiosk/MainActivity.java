@@ -344,6 +344,8 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // 권한 결과 수신기는 액티비티 수명 내내 등록돼 있으므로 여기서 해제한다.
+        if (cardReaderManager != null) cardReaderManager.release();
         if (currentInstance != null && currentInstance.get() == this) {
             currentInstance = null;
         }
@@ -437,6 +439,9 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
             );
             enterKioskLockTaskIfNeeded();
         }
+        // 화면 고정 안내 다음에 USB 권한 창을 띄우도록, 포커스 변화를 카드 리더 관리자에 알린다
+        // (포커스가 없을 때 미뤄둔 권한 요청을 여기서 이어감 - CardReaderManager.requestUsbPermission).
+        if (cardReaderManager != null) cardReaderManager.onWindowFocusChanged(hasFocus);
     }
 
     // CardReaderManager.NativeNfcController 구현 - 기존 내장 NFC 메서드에 위임
@@ -458,6 +463,11 @@ public class MainActivity extends Activity implements NfcAdapter.ReaderCallback,
     // 카메라 종료 후 JS가 리더 재활성화를 요청할 때 KioskWebAppInterface에서 호출
     void reevaluateCardReaders() {
         cardReaderManager.evaluateAndActivate();
+    }
+
+    // NFC 칩을 눌렀을 때 KioskWebAppInterface.retryCardReader()에서 호출
+    void retryCardReaderFromUser() {
+        cardReaderManager.retryFromUser();
     }
 
     // 카메라 시작 시 JS가 리더 일시정지를 요청할 때 KioskWebAppInterface에서 호출
@@ -910,6 +920,13 @@ class KioskWebAppInterface implements Runnable {
     @android.webkit.JavascriptInterface
     public String getCurrentReaderMode() {
         return activity.getCurrentCardReaderMode();
+    }
+
+    // 키오스크 NFC 칩(nfc-activate-btn)을 눌렀을 때 kiosk.js가 호출 - 거절/창 닫힘으로 멈춘 USB 권한
+    // 요청을 다시 띄우고 리더 세션을 새로 연다(CardReaderManager.retryFromUser).
+    @android.webkit.JavascriptInterface
+    public void retryCardReader() {
+        activity.runOnUiThread(() -> activity.retryCardReaderFromUser());
     }
 
     @android.webkit.JavascriptInterface

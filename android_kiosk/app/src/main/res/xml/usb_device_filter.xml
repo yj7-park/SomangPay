@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 키오스크/관리자 앱의 USB_DEVICE_ATTACHED 인텐트 필터가 가리키는 장치 목록
+     (src/kiosk, src/admin의 AndroidManifest.xml). 이 필터가 있어야 USB 권한 창에
+     "이 USB 장치에 항상 사용" 체크박스가 생기고, 한 번 체크하면 OS가 권한을 기억해서
+     앱을 켤 때마다 권한 창이 다시 뜨지 않는다(2026-11-24).
+     NFC-X 리더: VID 0x0483(1155) / PID 0x4343(17219) - reader/UsbDeviceClassifier와 동일. -->
+<resources>
+    <usb-device vendor-id="1155" product-id="17219" />
+</resources>
