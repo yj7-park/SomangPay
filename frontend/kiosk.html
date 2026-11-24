@@ -32,6 +32,10 @@
   </script>
 </head>
 <body style="overflow: hidden;">
+  <!-- 화면 끄기 덮개 - 모든 모달/카메라 뷰 위에 덮이고, 누르면 화면만 켜진다(아래로 터치 전달 안 함).
+       body 맨 앞에 둔다: 파일 끝에 두면 닫히지 않은 #kiosk-admin-modal 안으로 들어가 숨겨진 설정 창과 함께
+       크기 0으로 그려졌다(2026-11-25 실기기 확인). kiosk.js turnOffKioskScreen도 body 직속으로 한 번 더 옮긴다. -->
+  <div id="kiosk-screen-off-overlay" onclick="onKioskScreenOffOverlayTouch(event)" style="display: none; position: fixed; inset: 0; z-index: 2147483647; background: #000; align-items: flex-end; justify-content: center; padding-bottom: 2.5rem; color: rgba(255,255,255,0.18); font-size: 0.95rem; touch-action: none; user-select: none;">화면을 터치하면 켜집니다</div>
   <!-- 화면이 그려지기 전에 저장된 테마를 먼저 얹어서 깜빡임(FOUC - 다크로 잠깐 그려졌다가
        라이트로 바뀌는 현상)을 막는다. 실제 토글 로직/버튼 UI는 kiosk.js의
        setKioskTheme()/initKioskTheme() 참고 - 저장값이 없으면(기본값 "시스템") 아무 속성도
@@ -452,8 +456,6 @@
        통일(#redesign) - formatHistoryTime(), kiosk.js의 loadRecentPaymentsHistory/
        addRecentPayment 참고. -->
   <script src="src/history-render.js?v=20260831_2306"></script>
-  <!-- 화면 끄기 덮개 - 모든 모달/카메라 뷰 위에 덮이고, 누르면 화면만 켜진다(아래로 터치 전달 안 함). -->
-  <div id="kiosk-screen-off-overlay" onclick="onKioskScreenOffOverlayTouch(event)" style="display: none; position: fixed; inset: 0; z-index: 2147483647; background: #000; align-items: flex-end; justify-content: center; padding-bottom: 2.5rem; color: rgba(255,255,255,0.18); font-size: 0.95rem; touch-action: none; user-select: none;">화면을 터치하면 켜집니다</div>
-  <script src="src/kiosk.js?v=20261124_2350"></script>
+  <script src="src/kiosk.js?v=20261125_0010"></script>
 </body>
 </html>

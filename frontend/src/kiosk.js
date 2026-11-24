@@ -1601,6 +1601,8 @@ function setKioskNativeScreenDimmed(dim) {
 function turnOffKioskScreen() {
   const overlay = document.getElementById("kiosk-screen-off-overlay");
   if (!overlay || kioskScreenOff) return;
+  // 숨겨진 모달 안에 들어가 있으면(kiosk.html 마크업이 꼬였을 때) 크기 0으로 그려져 안 보인다 - body 직속으로.
+  if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
   kioskScreenOff = true;
   overlay.style.display = "flex";
   setKioskNativeScreenDimmed(true);
